@@ -1,0 +1,2 @@
+git+https://github.com/xArm-Developer/xArm-Python-SDK
+pyrealsense2
