@@ -1,11 +1,23 @@
 """
 Shared object implemented with SharedMemory and synchronization
-version 0.0.1
+Careful optimization is taken to make it run as fast as possible
+version 0.0.2
 
 Written by Kolin Guo
+
+Implementation Notes:
+  * Methods `fetch()` and `assign()` are chosen to be distinctive from common python
+    class methods (e.g., get(), set(), update(), read(), write(), fill(), put(), etc.)
+
+Usage Notes:
+  * For processes that are fetching from a massive SharedObject (e.g., np.ndarray),
+    it's better to add tiny delay to avoid starving processes that are assigning to it.
+    Even better, use a bool to indicate whether the data is updated yet and
+      then only fetching the update flag inside the fetching processes to avoid this.
 """
 import struct
 from multiprocessing.shared_memory import SharedMemory
+from typing import Callable, Any, Optional, Union
 
 import numpy as np
 
@@ -81,7 +93,7 @@ class SharedObject:
       - D bytes: array data buffer
     """
 
-    _object_types = [None.__class__, bool, int, float, str, bytes, np.ndarray]
+    _object_types = (None.__class__, bool, int, float, str, bytes, np.ndarray)
 
     @staticmethod
     def _get_bytes_size(enc_str: bytes, init_size: int) -> int:
@@ -90,64 +102,95 @@ class SharedObject:
         else:
             return init_size + 2
 
-    _object_sizes = [
+    _object_sizes = (
         1, 2, 9, 9,  # NoneType, bool, int, float
         _get_bytes_size,  # str
         _get_bytes_size,  # bytes
         lambda array, ndim: array.nbytes + ndim * 8 + 10,  # ndarray
-    ]
+    )
 
     @staticmethod
-    def _fetch_shm_metas(shm: SharedMemory) -> tuple:
-        # nbytes, object_type_idx, np_metas
-        return shm._size, shm.buf[0], SharedObject._fetch_np_metas(shm.buf)
+    def _fetch_metas(shm: SharedMemory) -> tuple:
+        nbytes = shm._size
+        object_type_idx = shm.buf[0]
+        np_metas = ()
+        if object_type_idx == 6:  # np.ndarray
+            np_metas = SharedObject._fetch_np_metas(shm.buf)
+        return nbytes, object_type_idx, np_metas
 
     @staticmethod
     def _fetch_np_metas(buf) -> tuple:
         np_dtype_idx, data_ndim = struct.unpack_from("=BQ", buf, offset=1)
         data_shape = struct.unpack_from("Q" * data_ndim, buf, offset=10)
-        return (np_dtype_idx, data_ndim, data_shape)
+        return np_dtype_idx, data_ndim, data_shape
+
+    _fetch_fn_type = Optional[Callable[[Union[_object_types]], Any]]
 
     @staticmethod
-    def _fetch_None(*args) -> None:
-        return None
+    def _fetch_None(buf, fn: Optional[Callable[[None.__class__], Any]], *args) -> Any:
+        return None if fn is None else fn(None)
 
     @staticmethod
-    def _fetch_bool(buf, fn, *args) -> bool:
+    def _fetch_bool(buf, fn: Optional[Callable[[bool], Any]], *args) -> Any:
         return bool(buf[1]) if fn is None else fn(bool(buf[1]))
 
     @staticmethod
-    def _fetch_int(buf, fn, *args) -> int:
+    def _fetch_int(buf, fn: Optional[Callable[[int], Any]], *args) -> Any:
         v = struct.unpack_from('q', buf, offset=1)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_float(buf, fn, *args) -> float:
+    def _fetch_float(buf, fn: Optional[Callable[[float], Any]], *args) -> Any:
         v = struct.unpack_from('d', buf, offset=1)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_str(buf, fn, *args) -> str:
+    def _fetch_str(buf, fn: Optional[Callable[[str], Any]], *args) -> Any:
         v = buf[1:].tobytes().rstrip(b'\x00')[:-1].decode(_encoding)
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_bytes(buf, fn, *args) -> bytes:
+    def _fetch_bytes(buf, fn: Optional[Callable[[bytes], Any]], *args) -> Any:
         v = buf[1:].tobytes().rstrip(b'\x00')[:-1]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_ndarray(buf, fn, data_buf) -> np.ndarray:
-        """Always return a copy"""
-        if fn is None:
-            _logger.warning(
-                "Fetching ndarray with no applied function induces an extra copy"
-            )
-            return data_buf.copy()
-        else:
-            return fn(data_buf)
+    def _fetch_ndarray(buf, fn: Optional[Callable[[np.ndarray], Any]],
+                       data_buf_ro: np.ndarray) -> Any:
+        """Always return a copy of the underlying buffer
+        Examples (ordered from fastest to slowest):
 
-    _fetch_objects = [
+            # Apply operation only
+            so.fetch(lambda x: x.sum())  # contiguous sum (triggers a copy)
+            so.fetch().sum()  # contiguous copy => sum
+
+            # Apply operation only
+            so.fetch(lambda x: x + 1)  # contiguous add (triggers a copy)
+            so.fetch() + 1  # contiguous copy => add
+
+            # Slice only
+            so.fetch()[..., 0]  # contiguous copy => slice
+            so.fetch(lambda x: x[..., 0])  # non-contiguous copy
+
+            # Slice and apply operation
+            so.fetch(lambda x: x[..., 0]) + 1  # non-contiguous copy => add
+            so.fetch(lambda x: x[..., 0] + 1)  # non-contiguous add (triggers a copy)
+            so.fetch()[..., 0] + 1  # contiguous copy => non-contiguous add
+        """
+        if fn is not None:
+            data = fn(data_buf_ro)
+            if not isinstance(data, np.ndarray) or data.flags.owndata:
+                return data
+            else:
+                _logger.warning(
+                    "Fetching ndarray with fn that does not trigger a copy "
+                    "induces an extra copy. Consider changing to improve performance."
+                )
+                return data.copy()
+        else:
+            return data_buf_ro.copy()
+
+    _fetch_objects = (
         _fetch_None,
         _fetch_bool,
         _fetch_int,
@@ -155,7 +198,7 @@ class SharedObject:
         _fetch_str,
         _fetch_bytes,
         _fetch_ndarray,
-    ]
+    )
 
     @staticmethod
     def _assign_np_metas(buf, np_dtype_idx: int, data_ndim: int, data_shape: tuple):
@@ -186,7 +229,7 @@ class SharedObject:
     def _assign_ndarray(buf, data: np.ndarray, buf_nbytes: int, data_buf: np.ndarray):
         data_buf[:] = data
 
-    _assign_objects = [
+    _assign_objects = (
         _assign_None,
         _assign_bool,
         _assign_int,
@@ -194,17 +237,17 @@ class SharedObject:
         _assign_bytes,
         _assign_bytes,
         _assign_ndarray,
-    ]
-    _np_dtypes = [
+    )
+    _np_dtypes = (
         np.bool_, np.int8, np.uint8, np.int16, np.uint16, np.int32, np.uint32,
         np.int64, np.uint64,
         np.float16, np.float32, np.float64, np.float128,
         np.complex64, np.complex128, np.complex256
-    ]
+    )
 
-    def __init__(self, name, *, data=None, init_size=100):
+    def __init__(self, name: str, *, data: Union[_object_types] = None, init_size=100):
         """
-        Example:
+        Examples:
             # Mounts SharedMemory "test" if exists,
             # Else creates SharedMemory "test" which holds None by default
             so = SharedObject("test")
@@ -241,17 +284,20 @@ class SharedObject:
         else:
             self._readers_lock.acquire()
             self.nbytes, self.object_type_idx, self.np_metas \
-                = self._fetch_shm_metas(self.shm)
+                = self._fetch_metas(self.shm)
             self._readers_lock.release()
 
         # Create np.ndarray here to save frequent np.ndarray construction
-        self.np_ndarray = None
+        self.np_ndarray, self.np_ndarray_ro = None, None
         if self.object_type_idx == 6:  # np.ndarray
             np_dtype_idx, data_ndim, data_shape = self.np_metas
             self.np_ndarray = np.ndarray(
                 data_shape, dtype=self._np_dtypes[np_dtype_idx],
                 buffer=self.shm.buf, offset=data_ndim * 8 + 10
             )
+            # Create a read-only view for fetch()
+            self.np_ndarray_ro = self.np_ndarray.view()
+            self.np_ndarray_ro.setflags(write=False)
 
         # fill data
         if data is not None:
@@ -259,7 +305,7 @@ class SharedObject:
                 _logger.warning(f"Implicitly overwriting data of {self!r}")
             self._assign(data, object_type_idx, nbytes, np_metas)
 
-    def _preprocess_data(self, data):
+    def _preprocess_data(self, data: Union[_object_types]) -> tuple:
         """Preprocess object data and return useful informations
 
         :return data: processed data. Only changed for str (=> encoded bytes)
@@ -295,18 +341,25 @@ class SharedObject:
 
         return data, object_type_idx, nbytes, np_metas
 
-    def fetch(self, fn=None):
+    def fetch(self, fn: _fetch_fn_type = None) -> Any:
         """Fetch a copy of data from SharedMemory (protected by readers lock)
+        See SharedObject._fetch_ndarray() for best practices of fn with np.ndarray
+
         :param fn: function to apply on data, e.g., lambda x: x + 1.
+                   If fn is None or does not trigger a copy for ndarray
+                     (e.g., slicing, masking), a manual copy is applied.
+                   Thus, the best practices are ordered as:
+                   fn (triggers a copy) > fn = None >> fn (does not trigger a copy)
+                     because copying non-contiguous ndarray takes much longer time.
         :return data: a copy of data read from SharedMemory
         """
         self._readers_lock.acquire()
         data = self._fetch_objects[self.object_type_idx](self.shm.buf, fn,
-                                                         self.np_ndarray)
+                                                         self.np_ndarray_ro)
         self._readers_lock.release()
         return data
 
-    def assign(self, data) -> None:
+    def assign(self, data: Union[_object_types]) -> None:
         """Assign data to SharedMemory (protected by writer lock)"""
         self._assign(*self._preprocess_data(data))
 
@@ -314,10 +367,10 @@ class SharedObject:
         """Inner function for assigning data (protected by writer lock)"""
         if (object_type_idx != self.object_type_idx or nbytes > self.nbytes
                 or np_metas != self.np_metas):
-            raise ValueError(
+            raise BufferError(
                 f"Casting object type (new={self._object_types[object_type_idx]}, "
                 f"old={self._object_types[self.object_type_idx]}) or "
-                f"Buffer overflow (data_nbytes={nbytes} > {self.nbytes}) or "
+                f"Buffer overflow (new={nbytes} > {self.nbytes}=old) or "
                 f"Changed numpy meta (new={np_metas}, old={self.np_metas}) in {self!r}"
             )
 
@@ -331,6 +384,22 @@ class SharedObject:
         self._assign_objects[self.object_type_idx](self.shm.buf, data,
                                                    self.nbytes, self.np_ndarray)
         self._writer_lock.release()
+
+    def close(self):
+        """Closes access to the shared memory from this instance but does
+        not destroy the shared memory block."""
+        self.shm.close()
+
+    def unlink(self):
+        """Requests that the underlying shared memory block be destroyed.
+
+        In order to ensure proper cleanup of resources, unlink should be
+        called once (and only once) across all processes which have access
+        to the shared memory block."""
+        self.shm.unlink()
+
+    def __del__(self):
+        self.close()
 
     def __reduce__(self):
         return self.__class__, (self.name,)
@@ -348,31 +417,32 @@ class SharedDynamicObject(SharedObject):
     """
 
     @staticmethod
-    def _fetch_shm_metas(shm: SharedMemory) -> tuple:
+    def _fetch_metas(shm: SharedMemory) -> tuple:
         nbytes = shm._mmap.size()  # _mmap size will be updated by os.ftruncate()
         object_type_idx = shm.buf[0]
-        np_metas = SharedObject._fetch_np_metas(shm.buf)
+        np_metas = ()
+        if object_type_idx == 6:  # np.ndarray
+            np_metas = SharedObject._fetch_np_metas(shm.buf)
         return nbytes, object_type_idx, np_metas
 
     def __init__(self, *args, **kwargs):
         raise NotImplementedError("Implementation not complete")
 
-    def fetch(self, fn=None):
+    def fetch(self, fn: SharedObject._fetch_fn_type = None) -> Any:
         """Fetch a copy of data from SharedMemory (protected by readers lock)
         :param fn: function to apply on data, e.g., lambda x: x + 1.
         :return data: a copy of data read from SharedMemory
         """
         self._readers_lock.acquire()
         # Fetch shm info
-        self.nbytes, self.object_type_idx, self.np_metas \
-            = self._fetch_shm_metas(self.shm)
+        self.nbytes, self.object_type_idx, self.np_metas = self._fetch_metas(self.shm)
 
         data = self._fetch_objects[self.object_type_idx](self.shm.buf, fn,
-                                                         self.np_ndarray)
+                                                         self.np_ndarray_ro)
         self._readers_lock.release()
         return data
 
-    def assign(self, data, reallocate=False) -> None:
+    def assign(self, data: Union[SharedObject._object_types], reallocate=False) -> None:
         """Assign data to SharedMemory (protected by writer lock)
         :param reallocate: whether to force reallocation
         """
@@ -381,8 +451,7 @@ class SharedDynamicObject(SharedObject):
 
         self._writer_lock.acquire()
         # Fetch shm info
-        self.nbytes, self.object_type_idx, self.np_metas \
-            = self._fetch_shm_metas(self.shm)
+        self.nbytes, self.object_type_idx, self.np_metas = self._fetch_metas(self.shm)
 
         # Reallocate if necessary
         if reallocate or nbytes > self.nbytes or np_metas != self.np_metas:
