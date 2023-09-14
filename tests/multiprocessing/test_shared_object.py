@@ -733,9 +733,9 @@ class TestMultiProcess:
     """Test multiple processes"""
 
     @staticmethod
-    def test_race_condition_child_fn():
+    def child_test_race_condition():
         # NOTE:
-        # For processes that are fetching from a massive SharedObject (np.ndarray),
+        # For processes that are always waiting for a massive SharedObject (np.ndarray),
         # it's crucial to include a small delay to
         #   avoid starving processes that are assigning to it.
         # Better, use a bool to indicate whether the data is updated yet and
@@ -751,8 +751,8 @@ class TestMultiProcess:
 
             if so_data_updated.fetch():
                 res = float(so_data.fetch(lambda x: x.sum()))
-                # res = float(so_data.np_ndarray.sum())
-                # print(f"[Child] {res}", flush=True)
+                # res = float(so_data.np_ndarray.sum())  # Not protected by lock
+                # print(f"[Child] {res} {perf_counter()}", flush=True)
                 so_result.assign(res)
                 so_data_updated.assign(False)
 
@@ -765,7 +765,7 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [_ctx.Process(target=self.test_race_condition_child_fn, args=())
+        procs = [_ctx.Process(target=self.child_test_race_condition, args=())
                  for _ in range(n_iters)]
         start_time = perf_counter()
         for i in range(n_iters):
@@ -777,8 +777,8 @@ class TestMultiProcess:
             for _ in range(5):
                 data += 1
                 so_data.assign(data)
-                # so_data.np_ndarray[:] = data
-                # print("[Main]", data.sum(), flush=True)
+                # so_data.np_ndarray[:] = data  # Not protected by lock
+                # print("[Main]", data[0], flush=True)
                 so_data_updated.assign(True)
                 result = so_result.fetch()
 

@@ -1,0 +1,78 @@
+---------- Benchmark creating SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.03492 seconds
+<class 'bool'>: 1000 iterations take 0.01403 seconds
+<class 'int'>: 1000 iterations take 0.01386 seconds
+<class 'float'>: 1000 iterations take 0.01499 seconds
+<class 'str'> (len=50): 1000 iterations take 0.01539 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.01416 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.318 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 500 iterations take 3.882 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 10 iterations take 2.475 seconds
+
+---------- Benchmark fetching SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.0009278 seconds
+<class 'bool'>: 1000 iterations take 0.0009007 seconds
+<class 'int'>: 1000 iterations take 0.0009901 seconds
+<class 'float'>: 1000 iterations take 0.0009493 seconds
+<class 'str'> (len=50): 1000 iterations take 0.00111 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.001062 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.0403 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 1.302 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 20 iterations take 1.796 seconds
+
+---------- Benchmark assigning SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.001912 seconds
+<class 'bool'>: 1000 iterations take 0.001276 seconds
+<class 'int'>: 1000 iterations take 0.00128 seconds
+<class 'float'>: 1000 iterations take 0.001336 seconds
+<class 'str'> (len=50): 1000 iterations take 0.00174 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.001651 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.04149 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 1.288 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 50 iterations take 1.953 seconds
+
+---------- Benchmark creating from existing SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.008249 seconds
+<class 'bool'>: 1000 iterations take 0.008641 seconds
+<class 'int'>: 1000 iterations take 0.008052 seconds
+<class 'float'>: 1000 iterations take 0.008189 seconds
+<class 'str'> (len=50): 1000 iterations take 0.0079 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.008019 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.0507 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 0.7913 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 50 iterations take 1.228 seconds
+
+---------- Benchmark fetching/assigning SharedObject with 2 processes ----------
+<class 'NoneType'>: 100 iterations take 6.89 seconds
+<class 'bool'>: 100 iterations take 7.169 seconds
+<class 'int'>: 100 iterations take 7.23 seconds
+<class 'float'>: 100 iterations take 7.372 seconds
+<class 'str'> (len=50): 100 iterations take 7.16 seconds
+<class 'bytes'> (len=50): 100 iterations take 7.303 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 100 iterations take 7.207 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 100 iterations take 7.469 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 10 iterations take 6.288 seconds
+
+---------- Benchmark fetching/assigning SharedObject with 5 processes ----------
+<class 'NoneType'>: 50 iterations take 7.118 seconds
+<class 'bool'>: 50 iterations take 6.879 seconds
+<class 'int'>: 50 iterations take 6.978 seconds
+<class 'float'>: 50 iterations take 7.007 seconds
+<class 'str'> (len=50): 50 iterations take 6.944 seconds
+<class 'bytes'> (len=50): 50 iterations take 6.894 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 50 iterations take 7.055 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 50 iterations take 7.147 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 10 iterations take 7.49 seconds
++------------------------------------------------+-----------------------+-----------------------+-----------------------+-----------------------+---------------------+---------------------+
+| Object Type / Duration for 1 obj (mean ± std)  |         create        |         fetch         |         assign        |       create_ref      | 2 proc fetch_assign | 5 proc fetch_assign |
++------------------------------------------------+-----------------------+-----------------------+-----------------------+-----------------------+---------------------+---------------------+
+|               <class 'NoneType'>               | 3.49186e-05 ± 0.00044 | 9.27804e-07 ± 2.4e-07 | 1.91241e-06 ± 1.3e-06 | 8.24879e-06 ± 2.2e-06 |   0.068898 ± 0.015  |    0.14236 ± 0.02   |
+|                 <class 'bool'>                 | 1.40317e-05 ± 1.9e-06 |  9.00671e-07 ± 1e-07  | 1.27637e-06 ± 3.4e-06 | 8.64063e-06 ± 2.4e-05 |  0.0716902 ± 0.0097 |  0.137585 ± 0.0068  |
+|                 <class 'int'>                  | 1.38648e-05 ± 1.1e-06 | 9.90098e-07 ± 1.5e-07 | 1.28039e-06 ± 1.6e-07 | 8.05161e-06 ± 4.2e-06 |  0.072298 ± 0.0099  |  0.139555 ± 0.0071  |
+|                <class 'float'>                 |  1.4993e-05 ± 1.7e-05 | 9.49313e-07 ± 8.4e-08 | 1.33568e-06 ± 2.4e-07 | 8.18933e-06 ± 9.4e-06 |  0.0737174 ± 0.012  |  0.140148 ± 0.0068  |
+|                 <class 'str'>                  | 1.53907e-05 ± 1.7e-05 | 1.10983e-06 ± 1.9e-07 | 1.74012e-06 ± 5.6e-07 | 7.90026e-06 ± 5.2e-07 |  0.0715996 ± 0.009  |  0.138889 ± 0.0062  |
+|                <class 'bytes'>                 |  1.4155e-05 ± 1.7e-06 | 1.06192e-06 ± 1.9e-07 | 1.65104e-06 ± 1.5e-07 | 8.01868e-06 ± 3.8e-06 |  0.0730331 ± 0.011  |   0.13788 ± 0.0072  |
+|  ndarray <class 'numpy.uint8'> (480, 848, 3)   | 0.000317976 ± 3.6e-05 | 4.03013e-05 ± 8.8e-06 |  4.149e-05 ± 3.6e-06  | 5.07039e-05 ± 6.2e-06 |  0.0720702 ± 0.0098 |  0.141102 ± 0.0085  |
+| ndarray <class 'numpy.float64'> (720, 1280, 3) |  0.00776491 ± 0.00045 |  0.00130166 ± 0.00018 |  0.00128828 ± 0.00022 | 0.000791332 ± 8.6e-05 |  0.0746907 ± 0.013  |  0.142934 ± 0.0058  |
+| ndarray <class 'numpy.float64'> (10000, 10000) |    0.24746 ± 0.011    |   0.0897949 ± 0.0043  |   0.0390549 ± 0.0052  |   0.0245523 ± 0.004   |   0.628822 ± 0.026  |   0.749003 ± 0.029  |
++------------------------------------------------+-----------------------+-----------------------+-----------------------+-----------------------+---------------------+---------------------+
