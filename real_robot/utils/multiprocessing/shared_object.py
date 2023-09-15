@@ -12,13 +12,25 @@ Implementation Notes:
     lock). It's chosen over `multiprocessing.Lock` / `multiprocessing.Condition` so that
     no lock needs to be explicitly passed to child processes.
     However, note that acquiring `flock` locks are not guaranteed to be in order.
+  * An object modified timestamp is maintained using `time.time_ns()` which is
+    system-wide and has highest resolution. (https://peps.python.org/pep-0564/#linux)
 
 Usage Notes:
   * For processes that are always waiting for a massive SharedObject (e.g., np.ndarray),
-    it's better to add tiny delay to avoid starving processes that are assigning to it.
-    Even better, use a bool to indicate whether the data is updated yet and
-      then only fetching the update flag inside the fetching processes to avoid this.
-  * `time.time_ns()`  https://peps.python.org/pep-0564/#linux
+    it's best to use so.modified to check whether the data has been updated yet to avoid
+    starving processes that are assigning to it (only fetch when so.modified is True).
+    Alternatively, a separate boolean update flag can be used to achieve the same.
+  * Examples:
+    # Creates SharedObject with data
+    >>> so = SharedObject("test", data=np.ones((480, 848, 3)))
+    # Mounts existing SharedObject
+    >>> so = SharedObject("test")
+  * Best practices when fetching np.ndarray (see `SharedObject._fetch_ndarray()`):
+    >>> so.fetch(lambda x: x.sum())  # Apply operation only
+    >>> so.fetch(lambda x: x + 1)    # Apply operation only
+    >>> so.fetch()  # If different operations need to be applied on the same data
+    >>> so.fetch()[..., 0]           # Slice only
+    >>> so.fetch(lambda x: x[..., 0]) + 1  # Slice and apply operation
 """
 import struct
 import time
@@ -267,8 +279,8 @@ class SharedObject:
             # Else creates SharedMemory "test" and assigns data
             so = SharedObject("test", data=np.ones(10))
 
-        :param init_size: only used for str, bytes and np.ndarray shape segment,
-                          initial buffer size to save frequent reallocation
+        :param init_size: only used for str and bytes,
+                          initial buffer size to save frequent reallocation.
                           The buffer is expanded with exponential growth rate of 2
         """
         self.init_size = init_size
@@ -397,8 +409,8 @@ class SharedObject:
                 or np_metas != self.np_metas):
             raise BufferError(
                 f"Casting object type (new={self._object_types[object_type_idx]}, "
-                f"old={self._object_types[self.object_type_idx]}) or "
-                f"Buffer overflow (new={nbytes} > {self.nbytes}=old) or "
+                f"old={self._object_types[self.object_type_idx]}) OR "
+                f"Buffer overflow (new={nbytes} > {self.nbytes}=old) OR "
                 f"Changed numpy meta (new={np_metas}, old={self.np_metas}) in {self!r}"
             )
 
