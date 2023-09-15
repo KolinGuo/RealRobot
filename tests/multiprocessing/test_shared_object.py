@@ -86,59 +86,71 @@ class TestCreate:
     def test_None(self):
         so = SharedObject(uuid.uuid4().hex, data=None)
         assert so.fetch() is None
+        assert not so.modified
 
     def test_bool(self):
         so = SharedObject(uuid.uuid4().hex, data=False)
         assert so.fetch() is False
+        assert not so.modified
         so = SharedObject(uuid.uuid4().hex, data=True)
         assert so.fetch() is True
+        assert not so.modified
 
     def test_int(self):
         for _ in range(500):
             data = random.randint(-9223372036854775808, 9223372036854775807)
             so = SharedObject(uuid.uuid4().hex, data=data)
             assert so.fetch() == data
+            assert not so.modified
 
     def test_float(self):
         for _ in range(500):
             data = random.uniform(-100, 100)
             so = SharedObject(uuid.uuid4().hex, data=data)
             assert so.fetch() == data
+            assert not so.modified
 
         for _ in range(500):
             data = random.uniform(-1e307, 1e308)
             so = SharedObject(uuid.uuid4().hex, data=data)
             assert so.fetch() == data
+            assert not so.modified
 
     def test_str(self):
         data = ""
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch() == data
+        assert not so.modified
 
         for _ in range(500):
             str_len = random.randrange(100)
             data = ''.join(random.choices(string.printable, k=str_len))
             so = SharedObject(uuid.uuid4().hex, data=data)
             assert so.fetch() == data
+            assert not so.modified
 
     def test_bytes(self):
         data = b""
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch() == data
+        assert not so.modified
 
         data = b"\x00"
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch() == data
+        assert not so.modified
 
         data = b"asdlkj123\x01asd\x00\x00"
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch() == data
+        assert not so.modified
 
         for _ in range(500):
             bytes_len = random.randrange(100)
             data = random.randbytes(bytes_len)
             so = SharedObject(uuid.uuid4().hex, data=data)
             assert so.fetch() == data
+            assert not so.modified
 
     def test_ndarray(self):
         data = np.ones(1)
@@ -147,6 +159,7 @@ class TestCreate:
         np.testing.assert_equal(data_fetched, data)
         assert data_fetched.flags.owndata
         assert data_fetched.flags.writeable
+        assert not so.modified
 
         for _ in range(500):
             size = NDARRAY_NBYTES_LIMIT + 1
@@ -163,6 +176,7 @@ class TestCreate:
             np.testing.assert_equal(data_fetched, data)
             assert data_fetched.flags.owndata
             assert data_fetched.flags.writeable
+            assert not so.modified
 
 
 class TestFetch:
@@ -407,68 +421,84 @@ class TestAssign:
     def test_None(self):
         so = SharedObject(uuid.uuid4().hex, data=None)
         assert so.fetch() is None
+        assert not so.modified
 
         so.assign(None)
+        assert not so.modified
         assert so.fetch() is None
 
     def test_bool(self):
         so = SharedObject(uuid.uuid4().hex, data=False)
         assert so.fetch() is False
+        assert not so.modified
         so.assign(True)
+        assert not so.modified
         assert so.fetch() is True
         so.assign(False)
+        assert not so.modified
         assert so.fetch() is False
 
         so = SharedObject(uuid.uuid4().hex, data=True)
         assert so.fetch() is True
+        assert not so.modified
         so.assign(False)
+        assert not so.modified
         assert so.fetch() is False
 
     def test_int(self):
         data = random.randint(-999999, 999999)
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch() == data
+        assert not so.modified
 
         for _ in range(500):
             data = random.randint(-9223372036854775808, 9223372036854775807)
             so.assign(data)
+            assert not so.modified
             assert so.fetch() == data
 
     def test_float(self):
         data = random.uniform(-100, 100)
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch() == data
+        assert not so.modified
 
         for _ in range(500):
             data = random.uniform(-100, 100)
             so.assign(data)
+            assert not so.modified
             assert so.fetch() == data
 
         for _ in range(500):
             data = random.uniform(-1e307, 1e308)
             so.assign(data)
+            assert not so.modified
             assert so.fetch() == data
 
     def test_str(self):
         data = ""
         so = SharedObject(uuid.uuid4().hex, data=data, init_size=200)
         assert so.fetch() == data
+        assert not so.modified
 
         for _ in range(500):
             str_len = random.randrange(100)
             data = ''.join(random.choices(string.printable, k=str_len))
             so.assign(data)
+            assert not so.modified
             assert so.fetch() == data
 
     def test_str_overflow(self):
         data = ""
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch() == data
+        assert not so.modified
 
         str_len = 50
         data = ''.join(random.choices(string.printable, k=str_len))
         so.assign(data)
         assert so.fetch() == data
+        assert not so.modified
 
         str_len = 51
         data = ''.join(random.choices(string.printable, k=str_len))
@@ -493,30 +523,36 @@ class TestAssign:
         data = b""
         so = SharedObject(uuid.uuid4().hex, data=data, init_size=200)
         assert so.fetch() == data
+        assert not so.modified
 
         data = b"\x00"
         so.assign(data)
         assert so.fetch() == data
+        assert not so.modified
 
         data = b"asdlkj123\x01asd\x00\x00"
         so.assign(data)
         assert so.fetch() == data
+        assert not so.modified
 
         for _ in range(500):
             bytes_len = random.randrange(100)
             data = random.randbytes(bytes_len)
             so.assign(data)
+            assert not so.modified
             assert so.fetch() == data
 
     def test_bytes_overflow(self):
         data = b""
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch() == data
+        assert not so.modified
 
         bytes_len = 50
         data = random.randbytes(bytes_len)
         so.assign(data)
         assert so.fetch() == data
+        assert not so.modified
 
         bytes_len = 51
         data = random.randbytes(bytes_len)
@@ -544,9 +580,11 @@ class TestAssign:
         np.testing.assert_equal(data_fetched, data)
         assert data_fetched.flags.owndata
         assert data_fetched.flags.writeable
+        assert not so.modified
 
         data = np.ones(1) * random.uniform(-100, 100)
         so.assign(data)
+        assert not so.modified
         data_fetched = so.fetch()
         np.testing.assert_equal(data_fetched, data)
         assert data_fetched.flags.owndata
@@ -567,6 +605,7 @@ class TestAssign:
                     so = SharedObject(uuid.uuid4().hex, data=data)
                 else:
                     so.assign(data)
+                assert not so.modified
                 data_fetched = so.fetch()
                 np.testing.assert_equal(data_fetched, data)
                 assert data_fetched.flags.owndata
@@ -654,6 +693,8 @@ class TestMultiSharedObject:
             data = create_random_object(object_type_idx)
             so = SharedObject(uuid.uuid4().hex, data=data)
             so2 = SharedObject(so.name)
+            assert not so.modified
+            assert not so2.modified
             check_object_equal(so, so2, data)
 
             if object_type_idx == 6:  # np.ndarray
@@ -661,6 +702,8 @@ class TestMultiSharedObject:
             else:
                 new_data = create_random_object(object_type_idx)
             so2.assign(new_data)
+            assert so.modified
+            assert not so2.modified
             check_object_equal(so, so2, new_data)
 
             if object_type_idx == 6:  # np.ndarray
@@ -668,6 +711,8 @@ class TestMultiSharedObject:
             else:
                 new_data = create_random_object(object_type_idx)
             so.assign(new_data)
+            assert not so.modified
+            assert so2.modified
             check_object_equal(so, so2, new_data)
 
             so.close()
@@ -678,6 +723,8 @@ class TestMultiSharedObject:
             else:
                 new_data = create_random_object(object_type_idx)
             so2.assign(new_data)
+            assert so.modified
+            assert not so2.modified
             check_object_equal(so, so2, new_data)
 
             if object_type_idx == 6:  # np.ndarray
@@ -685,6 +732,8 @@ class TestMultiSharedObject:
             else:
                 new_data = create_random_object(object_type_idx)
             so.assign(new_data)
+            assert not so.modified
+            assert so2.modified
             check_object_equal(so, so2, new_data)
 
             del so2
@@ -695,6 +744,8 @@ class TestMultiSharedObject:
             else:
                 new_data = create_random_object(object_type_idx)
             so2.assign(new_data)
+            assert so.modified
+            assert not so2.modified
             check_object_equal(so, so2, new_data)
 
             if object_type_idx == 6:  # np.ndarray
@@ -702,14 +753,18 @@ class TestMultiSharedObject:
             else:
                 new_data = create_random_object(object_type_idx)
             so.assign(new_data)
+            assert not so.modified
+            assert so2.modified
             check_object_equal(so, so2, new_data)
 
     def test_five_instances(self):
         for object_type_idx in range(len(SharedObject._object_types)):
             data = create_random_object(object_type_idx)
             so = SharedObject(uuid.uuid4().hex, data=data)
+            assert not so.modified
             sos = [SharedObject(so.name) for _ in range(4)]
             for so2 in sos:
+                assert not so2.modified
                 check_object_equal(so, so2, data)
 
             if object_type_idx == 6:  # np.ndarray
@@ -717,7 +772,9 @@ class TestMultiSharedObject:
             else:
                 new_data = create_random_object(object_type_idx)
             so.assign(new_data)
+            assert not so.modified
             for so2 in sos:
+                assert so2.modified
                 check_object_equal(so, so2, new_data)
 
             for so2 in sos:
@@ -726,6 +783,83 @@ class TestMultiSharedObject:
                 else:
                     new_data = create_random_object(object_type_idx)
                 so2.assign(new_data)
+                assert so.modified
+                assert not so2.modified
+                check_object_equal(so, so2, new_data)
+
+
+class TestModified:
+    """Test so.modified with multiple SharedObject"""
+
+    def test_two_instances(self):
+        for object_type_idx in range(len(SharedObject._object_types)):
+            data = create_random_object(object_type_idx)
+            so = SharedObject(uuid.uuid4().hex, data=data)
+            so2 = SharedObject(so.name)
+            assert not so.modified
+            assert not so2.modified
+            check_object_equal(so, so2, data)
+
+            if object_type_idx == 6:  # np.ndarray
+                new_data = create_random_ndarray(data.dtype, data.shape)
+            else:
+                new_data = create_random_object(object_type_idx)
+            so2.assign(new_data)
+            assert so.modified
+            assert not so2.modified
+            so.fetch()
+            assert not so.modified
+            so2.fetch()
+            assert not so2.modified
+            check_object_equal(so, so2, new_data)
+
+            if object_type_idx == 6:  # np.ndarray
+                new_data = create_random_ndarray(data.dtype, data.shape)
+            else:
+                new_data = create_random_object(object_type_idx)
+            so.assign(new_data)
+            assert not so.modified
+            assert so2.modified
+            so2.fetch()
+            assert not so2.modified
+            so.fetch()
+            assert not so.modified
+            check_object_equal(so, so2, new_data)
+
+    def test_five_instances(self):
+        for object_type_idx in range(len(SharedObject._object_types)):
+            data = create_random_object(object_type_idx)
+            so = SharedObject(uuid.uuid4().hex, data=data)
+            assert not so.modified
+            sos = [SharedObject(so.name) for _ in range(4)]
+            for so2 in sos:
+                assert not so2.modified
+                check_object_equal(so, so2, data)
+
+            if object_type_idx == 6:  # np.ndarray
+                new_data = create_random_ndarray(data.dtype, data.shape)
+            else:
+                new_data = create_random_object(object_type_idx)
+            so.assign(new_data)
+            assert not so.modified
+            so.fetch()
+            assert not so.modified
+            for so2 in sos:
+                assert so2.modified
+                so2.fetch()
+                assert not so2.modified
+                check_object_equal(so, so2, new_data)
+
+            for so2 in sos:
+                if object_type_idx == 6:  # np.ndarray
+                    new_data = create_random_ndarray(data.dtype, data.shape)
+                else:
+                    new_data = create_random_object(object_type_idx)
+                so2.assign(new_data)
+                assert not so2.modified
+                assert so.modified
+                so.fetch()
+                assert not so.modified
                 check_object_equal(so, so2, new_data)
 
 
@@ -733,12 +867,11 @@ class TestMultiProcess:
     """Test multiple processes"""
 
     @staticmethod
-    def child_test_race_condition():
+    def child_test_race_condition_with_extra_bool():
         # NOTE:
-        # For processes that are always waiting for a massive SharedObject (np.ndarray),
-        # it's crucial to include a small delay to
-        #   avoid starving processes that are assigning to it.
-        # Better, use a bool to indicate whether the data is updated yet and
+        # For processes that are always waiting for a massive SharedObject (e.g., np.ndarray),
+        # it's better to add tiny delay to avoid starving processes that are assigning to it.
+        # Even better, use a bool to indicate whether the data is updated yet and
         #   then only fetching the update flag inside the fetching processes to avoid this.
         so_data = SharedObject("data")
         so_data_updated = SharedObject("data_updated")
@@ -756,7 +889,7 @@ class TestMultiProcess:
                 so_result.assign(res)
                 so_data_updated.assign(False)
 
-    def test_race_condition(self):
+    def test_2_proc_race_condition_with_extra_bool(self):
         data = np.ones((10000, 10000))
         so_data = SharedObject("data", data=data)
         so_data_updated = SharedObject("data_updated", data=False)
@@ -765,8 +898,8 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [_ctx.Process(target=self.child_test_race_condition, args=())
-                 for _ in range(n_iters)]
+        procs = [_ctx.Process(target=self.child_test_race_condition_with_extra_bool,
+                              args=()) for _ in range(n_iters)]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))
@@ -796,7 +929,142 @@ class TestMultiProcess:
         so_result.unlink()
         so_joined.unlink()
 
+    def test_5_proc_race_condition_with_extra_bool(self):
+        data = np.ones((10000, 10000))
+        so_data = SharedObject("data", data=data)
+        so_data_updated = SharedObject("data_updated", data=False)
+        so_result = SharedObject("result", data=0.0)
+        so_joined = SharedObject("joined", data=False)
+
+        results = []
+        n_iters = 10
+        procs = [_ctx.Process(target=self.child_test_race_condition_with_extra_bool,
+                              args=()) for _ in range(n_iters*5)]
+        start_time = perf_counter()
+        for i in range(n_iters):
+            data = np.ones((10000, 10000))
+            so_joined.assign(False)
+            so_data_updated.assign(False)
+
+            [proc.start() for proc in procs[5*i:5*(i+1)]]
+            for _ in range(5):
+                data += 1
+                so_data.assign(data)
+                # so_data.np_ndarray[:] = data  # Not protected by lock
+                # print("[Main]", data[0], flush=True)
+                so_data_updated.assign(True)
+                result = so_result.fetch()
+
+                results.append(result)
+
+            so_joined.assign(True)
+            [proc.join() for proc in procs[5*i:5*(i+1)]]
+        _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
+
+        print(results, flush=True)
+        assert not np.any(np.array(results) % data.size), results
+
+        so_data.unlink()
+        so_data_updated.unlink()
+        so_result.unlink()
+        so_joined.unlink()
+
+    @staticmethod
+    def child_test_race_condition_with_modified():
+        # NOTE:
+        # For processes that are always waiting for a massive SharedObject (e.g., np.ndarray),
+        # it's best to use so.modified to check whether the data is updated yet.
+        so_data = SharedObject("data")
+        so_result = SharedObject("result")
+        so_joined = SharedObject("joined")
+
+        while True:
+            if so_joined.fetch():
+                break
+
+            if so_data.modified:
+                res = float(so_data.fetch(lambda x: x.sum()))
+                # res = float(so_data.np_ndarray.sum())  # Not protected by lock
+                # print(f"[Child] {res} {perf_counter()}", flush=True)
+                so_result.assign(res)
+
+    def test_2_proc_race_condition_with_modified(self):
+        data = np.ones((10000, 10000))
+        so_data = SharedObject("data", data=data)
+        so_result = SharedObject("result", data=0.0)
+        so_joined = SharedObject("joined", data=False)
+
+        results = []
+        n_iters = 10
+        procs = [_ctx.Process(target=self.child_test_race_condition_with_modified,
+                              args=()) for _ in range(n_iters)]
+        start_time = perf_counter()
+        for i in range(n_iters):
+            data = np.ones((10000, 10000))
+            so_joined.assign(False)
+
+            procs[i].start()
+            for _ in range(5):
+                data += 1
+                so_data.assign(data)
+                # so_data.np_ndarray[:] = data  # Not protected by lock
+                # print("[Main]", data[0], flush=True)
+                result = so_result.fetch()
+
+                results.append(result)
+
+            so_joined.assign(True)
+            procs[i].join()
+        _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
+
+        print(results, flush=True)
+        assert not np.any(np.array(results) % data.size), results
+
+        so_data.unlink()
+        so_result.unlink()
+        so_joined.unlink()
+
+    def test_5_proc_race_condition_with_modified(self):
+        data = np.ones((10000, 10000))
+        so_data = SharedObject("data", data=data)
+        so_result = SharedObject("result", data=0.0)
+        so_joined = SharedObject("joined", data=False)
+
+        results = []
+        n_iters = 10
+        procs = [_ctx.Process(target=self.child_test_race_condition_with_modified,
+                              args=()) for _ in range(n_iters*5)]
+        start_time = perf_counter()
+        for i in range(n_iters):
+            data = np.ones((10000, 10000))
+            so_joined.assign(False)
+
+            [proc.start() for proc in procs[5*i:5*(i+1)]]
+            for _ in range(5):
+                data += 1
+                so_data.assign(data)
+                # so_data.np_ndarray[:] = data  # Not protected by lock
+                # print("[Main]", data[0], flush=True)
+                result = so_result.fetch()
+
+                results.append(result)
+
+            so_joined.assign(True)
+            [proc.join() for proc in procs[5*i:5*(i+1)]]
+        _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
+
+        print(results, flush=True)
+        assert not np.any(np.array(results) % data.size), results
+
+        so_data.unlink()
+        so_result.unlink()
+        so_joined.unlink()
+
 
 if __name__ == '__main__':
     t = TestMultiProcess()
-    t.test_race_condition()
+    t.test_2_proc_race_condition_with_extra_bool()
+    t.test_2_proc_race_condition_with_modified()
+
+    t.test_5_proc_race_condition_with_extra_bool()
+    t.test_5_proc_race_condition_with_modified()
