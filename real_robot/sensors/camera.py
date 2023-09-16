@@ -6,8 +6,7 @@ from typing import Dict, Callable
 import numpy as np
 from sapien.core import Pose
 from gym import spaces
-import pyrealsense2 as rs
-from real_robot.utils.realsense import RSDevice, get_connected_rs_devices
+from real_robot.utils.realsense import RSDevice
 
 
 T_CV_CAM = np.array([[0, -1, 0, 0],
@@ -35,6 +34,7 @@ class CameraConfig:
         pose: Pose,
         width: int = 848,
         height: int = 480,
+        fps: int = 30,
         preset="Default",
         depth_option_kwargs={},
         color_option_kwargs={},
@@ -51,6 +51,7 @@ class CameraConfig:
                             this is pose relative to actor_pose
             width (int): width of the camera
             height (int): height of the camera
+            fps (int): camera streaming fps
             preset (str): depth sensor presets
             depth_option_kwargs (dict): depth sensor optional keywords
             color_option_kwargs (dict): color sensor optional keywords
@@ -63,6 +64,7 @@ class CameraConfig:
         self.pose = pose
         self.width = width
         self.height = height
+        self.fps = fps
 
         self.preset = preset
         self.depth_option_kwargs = depth_option_kwargs
@@ -90,12 +92,12 @@ class Camera:
     def __init__(self, camera_cfg: CameraConfig):
         self.camera_cfg = camera_cfg
 
-        rs_config = self.get_rs_config(camera_cfg.width, camera_cfg.height)
-
-        device = get_connected_rs_devices(camera_cfg.device_sn)
+        config = (camera_cfg.width, camera_cfg.height, camera_cfg.fps)
         self.device = RSDevice(
-            device, rs_config, camera_cfg.preset,
-            camera_cfg.depth_option_kwargs, camera_cfg.color_option_kwargs
+            camera_cfg.device_sn, color_config=config, depth_config=config,
+            preset=camera_cfg.preset,
+            color_option_kwargs=camera_cfg.color_option_kwargs,
+            depth_option_kwargs=camera_cfg.depth_option_kwargs
         )
         self.device.start()
 
@@ -103,15 +105,6 @@ class Camera:
 
     def __del__(self):
         self.device.stop()
-
-    @staticmethod
-    def get_rs_config(width=848, height=480, fps=30) -> rs.config:
-        config = rs.config()
-        config.enable_stream(rs.stream.depth, width, height,
-                             rs.format.z16, fps)
-        config.enable_stream(rs.stream.color, width, height,
-                             rs.format.rgb8, fps)
-        return config
 
     @property
     def uid(self):
