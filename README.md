@@ -11,6 +11,8 @@ Real robot interface to connect with ManiSkill2
 
 ### New features
 * Added `SharedObject` to create/mount objects stored in `SharedMemory`
+* Enabled `RSDevice` to run as a separate process (now `Camera` will create
+  `RSDevice` as a separate process)
 
 ### API changes
 * `real_robot.sensors.camera`

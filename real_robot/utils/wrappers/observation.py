@@ -29,6 +29,7 @@ class RGBDObservationWrapper(gym.ObservationWrapper):
              for cam_space in self.observation_space["image"].spaces.values()]
 
     def observation(self, observation: dict):
+        """Applied on obs before returning from self.reset() and self.step()"""
         image_obs = observation["image"]
         if self.obs_mode == "rgb":
             [cam_obs.pop("depth", None) for cam_obs in image_obs.values()]

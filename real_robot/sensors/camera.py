@@ -1,12 +1,16 @@
 import os
+import time
 from pathlib import Path
+import multiprocessing as mp
 from collections import OrderedDict
 from typing import Dict, Callable
 
 import numpy as np
 from sapien.core import Pose
 from gym import spaces
-from real_robot.utils.realsense import RSDevice
+
+from ..utils.realsense import RSDevice
+from ..utils.multiprocessing import SharedObject
 
 
 T_CV_CAM = np.array([[0, -1, 0, 0],
@@ -24,6 +28,9 @@ CALIB_CAMERA_POSES = {
         CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230726_CSE4144_front.npy"
     ) @ T_CV_CAM)
 }
+
+ctx = mp.get_context("forkserver" if "forkserver" in mp.get_all_start_methods()
+                     else "spawn")
 
 
 class CameraConfig:
@@ -87,47 +94,62 @@ def parse_camera_cfgs(camera_cfgs):
 
 
 class Camera:
-    """Wrapper for RealSense camera."""
+    """Wrapper for RealSense camera (RSDevice)"""
 
     def __init__(self, camera_cfg: CameraConfig):
         self.camera_cfg = camera_cfg
+        self.uid = camera_cfg.uid
+        self.device_sn = camera_cfg.device_sn
+        self.width = camera_cfg.width
+        self.height = camera_cfg.height
+        self.fps = camera_cfg.fps
 
-        config = (camera_cfg.width, camera_cfg.height, camera_cfg.fps)
-        self.device = RSDevice(
-            camera_cfg.device_sn, color_config=config, depth_config=config,
-            preset=camera_cfg.preset,
-            color_option_kwargs=camera_cfg.color_option_kwargs,
-            depth_option_kwargs=camera_cfg.depth_option_kwargs
+        config = (self.width, self.height, self.fps)
+        self.device_proc = ctx.Process(
+            target=RSDevice, args=(self.device_sn,),
+            kwargs=dict(
+                color_config=config,
+                depth_config=config,
+                preset=camera_cfg.preset,
+                color_option_kwargs=camera_cfg.color_option_kwargs,
+                depth_option_kwargs=camera_cfg.depth_option_kwargs,
+                run_as_process=True
+            )
         )
-        self.device.start()
+        self.device_proc.start()
+        time.sleep(1.0)  # sleep for 1 second to wait for SharedObject creation
 
-        self.frame_buffer = None  # for self.take_picture()
+        # Create SharedObject to control RSDevice and fetch data
+        self.so_start = SharedObject(f"rs_{self.device_sn}_start")
+        self.so_joined = SharedObject(f"rs_{self.device_sn}_joined")
+        self.so_color = SharedObject(f"rs_{self.device_sn}_color")
+        self.so_depth = SharedObject(f"rs_{self.device_sn}_depth")
+        self.so_intr = SharedObject(f"rs_{self.device_sn}_intr")
 
-    def __del__(self):
-        self.device.stop()
-
-    @property
-    def uid(self):
-        return self.camera_cfg.uid
+        self.so_start.assign(True)  # start the RSDevice
+        # Wait for intrinsic matrix
+        while not self.so_intr.modified:
+            pass
+        self.intrinsic_matrix = self.so_intr.fetch()
 
     def take_picture(self):
-        self.frame_buffer = self.device.wait_for_frames()
+        pass
 
     def get_images(self, take_picture=False) -> Dict[str, np.ndarray]:
-        """Get (raw) images from the camera.
+        """Get (raw) images from the camera. Takes ~300 us
         :return rgb: color image, [H, W, 3] np.uint8 array
         :return depth: depth image, [H, W, 1] np.float32 array
         """
-        if take_picture:
-            self.take_picture()
+        # if take_picture:
+        #     self.take_picture()
 
-        rgb, depth = self.frame_buffer
+        rgb = self.so_color.fetch()
+        depth = self.so_depth.fetch(lambda d: d[..., None].astype(np.float32)) / 1000.0
 
-        images = {
+        return {
             "rgb": rgb,
-            "depth": depth[..., None].astype(np.float32) / 1000.0
+            "depth": depth,
         }
-        return images
 
     @property
     def pose(self) -> Pose:
@@ -158,12 +180,12 @@ class Camera:
         return dict(
             extrinsic_cv=self.get_extrinsic_matrix(),
             cam2world_cv=self.get_model_matrix(),
-            intrinsic_cv=self.device.get_intrinsic_matrix(),
+            intrinsic_cv=self.intrinsic_matrix,
         )
 
     @property
     def observation_space(self) -> spaces.Dict:
-        height, width = self.camera_cfg.height, self.camera_cfg.width
+        height, width = self.height, self.width
         obs_spaces = OrderedDict(
             rgb=spaces.Box(
                 low=0, high=255, shape=(height, width, 3), dtype=np.uint8
@@ -173,3 +195,11 @@ class Camera:
             ),
         )
         return spaces.Dict(obs_spaces)
+
+    def __del__(self):
+        self.so_joined.assign(True)
+        self.device_proc.join()
+
+    def __repr__(self):
+        return (f"<{self.__class__.__name__}: {self.uid} (S/N: {self.device_sn}) "
+                f"{self.width}x{self.height} @ {self.fps}fps>")

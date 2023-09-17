@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Union, Optional
 import pyrealsense2 as rs
 import numpy as np
 
+from .multiprocessing import SharedObject
 from .logger import get_logger
 
 
@@ -57,8 +58,9 @@ class RSDevice:
     """
 
     def __init__(self, device_sn: str,
-                 color_config=(848, 480, 30), depth_config=(848, 480, 30),
-                 preset="Default", color_option_kwargs={}, depth_option_kwargs={}):
+                 color_config=(848, 480, 30), depth_config=(848, 480, 30), *,
+                 preset="Default", color_option_kwargs={}, depth_option_kwargs={},
+                 run_as_process=False):
         """
         :param device_sn: realsense device serial number
         :param color_config: color sensor config, (width, height, fps)
@@ -70,6 +72,14 @@ class RSDevice:
                                     Available options see self.supported_color_options
         :param depth_option_kwargs: depth sensor options kwargs.
                                     Available options see self.supported_depth_options
+        :param run_as_process: whether to run RSDevice as a separate process.
+            If True, RSDevice needs to be created as a `mp.Process`.
+            Several SharedObject are created to control RSDevice and fetch data:
+            * "rs_<device_sn>_start": If True, starts the RSDevice; else, stops it.
+            * "rs_<device_sn>_joined": If True, the RSDevice process is joined.
+            * "rs_<device_sn>_color": color image, [H, W, 3] np.uint8 np.ndarray
+            * "rs_<device_sn>_depth": depth image, [H, W] np.uint16 np.ndarray
+            * "rs_<device_sn>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
         """
         self.logger = get_logger("RSDevice")
 
@@ -82,6 +92,7 @@ class RSDevice:
 
         self.config = self._create_rs_config(color_config, depth_config)
         self.align = rs.align(rs.stream.color)
+        self.width, self.height = color_config[0], color_config[1]
 
         self.pipeline = None
         self.pipeline_profile = None
@@ -90,6 +101,9 @@ class RSDevice:
 
         self._load_depth_preset(preset)
         self._set_sensor_options(color_option_kwargs, depth_option_kwargs)
+
+        if run_as_process:
+            self.run_as_process()
 
     def _create_rs_config(self, color_config: tuple, depth_config: tuple) -> rs.config:
         config = rs.config()
@@ -129,7 +143,13 @@ class RSDevice:
         """Returns a 3x3 camera intrinsics matrix, available after self.start()"""
         return self.intrinsic_matrix
 
-    def start(self):
+    def start(self) -> bool:
+        """Start the streaming pipeline"""
+        if self.is_running:
+            self.logger.warning(f"Device {self!r} is already running. "
+                                "Please call stop() before calling start() again")
+            return False
+
         self.pipeline = rs.pipeline()
 
         self.config.enable_device(self.serial_number)
@@ -140,8 +160,8 @@ class RSDevice:
 
         streams = self.pipeline_profile.get_streams()
         self.logger.info(f"Started device {self!r} with {len(streams)} streams")
-        for stream in streams:
-            self.logger.info(f"{stream}")
+        for i, stream in enumerate(streams):
+            self.logger.info(f"Stream {i+1}: {stream}")
 
         # with rs.align, camera intrinsics is color sensor intrinsics
         stream_profile = self.pipeline_profile.get_stream(rs.stream.color)
@@ -149,9 +169,11 @@ class RSDevice:
         self.intrinsic_matrix = np.array([[intrinsics.fx, 0, intrinsics.ppx],
                                           [0, intrinsics.fy, intrinsics.ppy],
                                           [0, 0, 1]])
+        return True
 
     def wait_for_frames(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
+        """Wait until a new set of frames becomes available.
+        Each enabled stream in the pipeline is time-synchronized.
         :return color_image: color image, [H, W, 3] np.uint8 array
         :return depth_image: depth image, [H, W] np.uint16 array
         """
@@ -165,18 +187,74 @@ class RSDevice:
         color_frame = frames.get_color_frame()
         depth_frame = frames.get_depth_frame()
 
-        depth_image = np.asanyarray(depth_frame.get_data()).copy()
-        color_image = np.asanyarray(color_frame.get_data()).copy()
+        # Need to copy() so the device can release the frame from its internal memory
+        depth_image = np.asarray(depth_frame.data).copy()
+        color_image = np.asarray(color_frame.data).copy()
 
         return color_image, depth_image
 
-    def stop(self):
+    def stop(self) -> bool:
+        """Stop the streaming pipeline"""
+        if not self.is_running:
+            self.logger.warning(f"Device {self!r} is not running. Ignoring stop()")
+            return False
+
         self.pipeline.stop()
         self.pipeline = None
         self.pipeline_profile = None
         self.intrinsic_matrix = None
         self.last_frame_num = None
         self.logger.info(f"Stopped device {self!r}")
+        return True
+
+    def run_as_process(self):
+        """Run RSDevice as a separate process"""
+        self.logger.info(f"Running {self!r} as a separate process")
+
+        # RSDevice control
+        device_started = False
+        so_start = SharedObject(f"rs_{self.serial_number}_start", data=False)
+        so_joined = SharedObject(f"rs_{self.serial_number}_joined", data=False)
+        # data
+        so_color = SharedObject(
+            f"rs_{self.serial_number}_color",
+            data=np.zeros((self.height, self.width, 3), dtype=np.uint8)
+        )
+        so_depth = SharedObject(
+            f"rs_{self.serial_number}_depth",
+            data=np.zeros((self.height, self.width), dtype=np.uint16)
+        )
+        so_intr = SharedObject(f"rs_{self.serial_number}_intr", data=np.zeros((3, 3)))
+
+        while not so_joined.fetch():
+            start = so_start.fetch()
+            if not device_started and start:
+                self.start()
+                so_intr.assign(self.intrinsic_matrix)
+                device_started = True
+            elif device_started and not start:
+                self.stop()
+                device_started = False
+
+            if device_started:
+                # wait for frames
+                frames = self.pipeline.wait_for_frames()
+                frames = self.align.process(frames)
+                so_color.assign(np.asarray(frames.get_color_frame().data))
+                so_depth.assign(np.asarray(frames.get_depth_frame().data))
+
+        self.logger.info(f"Process running {self!r} is joined")
+        # Unlink SharedObject
+        so_start.unlink()
+        so_joined.unlink()
+        so_color.unlink()
+        so_depth.unlink()
+        so_intr.unlink()
+
+    @property
+    def is_running(self) -> bool:
+        """Returns whether the streaming pipeline is running"""
+        return self.pipeline is not None
 
     @property
     def supported_color_configs(self) -> List[Tuple[int]]:
@@ -236,7 +314,7 @@ class RSDevice:
         self.stop()
 
     def __repr__(self):
-        return f"<RSDevice: {self.name} (S/N: {self.serial_number})>"
+        return f"<{self.__class__.__name__}: {self.name} (S/N: {self.serial_number})>"
 
 
 class RealSenseAPI:
