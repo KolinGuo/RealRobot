@@ -7,7 +7,7 @@ import numpy as np
 from sapien.core import Pose
 from gym import spaces
 
-from ..utils.realsense import RSDevice
+from ..utils.realsense import _default_bag_path, RSDevice
 from ..utils.multiprocessing import SharedObject
 from .. import REPO_ROOT
 
@@ -92,13 +92,21 @@ def parse_camera_cfgs(camera_cfgs):
 class Camera:
     """Wrapper for RealSense camera (RSDevice)"""
 
-    def __init__(self, camera_cfg: CameraConfig):
+    def __init__(self, camera_cfg: CameraConfig,
+                 record_bag: bool = False, bag_path=_default_bag_path):
+        """
+        :param record_bag: whether to record camera streams as a rosbag file.
+        :param bag_path: path to save bag recording. Must end with ".bag" if it's a file
+        """
         self.camera_cfg = camera_cfg
         self.uid = camera_cfg.uid
         self.device_sn = camera_cfg.device_sn
         self.width = camera_cfg.width
         self.height = camera_cfg.height
         self.fps = camera_cfg.fps
+
+        self.record_bag = record_bag
+        self.bag_path = bag_path
 
         config = (self.width, self.height, self.fps)
         self.device_proc = ctx.Process(
@@ -109,6 +117,8 @@ class Camera:
                 preset=camera_cfg.preset,
                 color_option_kwargs=camera_cfg.color_option_kwargs,
                 depth_option_kwargs=camera_cfg.depth_option_kwargs,
+                record_bag=record_bag,
+                bag_path=bag_path,
                 run_as_process=True
             )
         )

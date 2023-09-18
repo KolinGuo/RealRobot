@@ -52,7 +52,39 @@ class TestCameraFPS:
             print(f"{elapsed = :.6g} {iter_max_time = :.6g} {(width, height, fps)}")
             del camera
 
+    def test_record_bag_fps(self):
+        device_sn = get_connected_rs_devices()[0]
+
+        for width, height, fps in self._configs:
+            camera_cfg = CameraConfig(
+                "front_camera", device_sn, Pose(),
+                width, height, fps, preset="High Accuracy",
+                depth_option_kwargs={rs.option.exposure: 1500}
+            )
+            camera = Camera(camera_cfg, record_bag=True, bag_path="/tmp")
+
+            n_iters = fps * 5
+            start_time_ns = perf_counter_ns()
+            for _ in range(n_iters):
+                while not camera.so_depth.modified:
+                    pass
+                images = camera.get_images()
+            elapsed_ns = perf_counter_ns() - start_time_ns
+
+            rgb, depth = images["rgb"], images["depth"]
+            assert rgb.shape == (height, width, 3), rgb.shape
+            assert rgb.dtype == np.uint8, rgb.dtype
+            assert depth.shape == (height, width, 1), depth.shape
+            assert depth.dtype == np.float32, depth.dtype
+
+            elapsed = elapsed_ns / n_iters / 1e9
+            iter_max_time = 1.0 / fps + 300e-6
+            assert elapsed <= iter_max_time, \
+                f"{elapsed:.4g} > {iter_max_time} for {(width, height, fps)}"
+            print(f"{elapsed = :.6g} {iter_max_time = :.6g} {(width, height, fps)}")
+            del camera
+
 
 if __name__ == "__main__":
     t = TestCameraFPS()
-    t.test_fps()
+    t.test_record_bag_fps()

@@ -27,6 +27,7 @@ if not installing from source.
 * Added `SharedObject` to create/mount objects stored in `SharedMemory`
 * Enabled `RSDevice` to run as a separate process (now `Camera` will create
   `RSDevice` as a separate process)
+* Enabled `RSDevice` to record camera streams as a rosbag file
 
 ### API changes
 * `real_robot.sensors.camera`

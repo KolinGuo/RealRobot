@@ -1,3 +1,5 @@
+from pathlib import Path
+from datetime import datetime
 from typing import Dict, List, Tuple, Union, Optional
 
 import pyrealsense2 as rs
@@ -5,9 +7,11 @@ import numpy as np
 
 from .multiprocessing import SharedObject
 from .logger import get_logger
+from .. import REPO_ROOT
 
 
 _logger = get_logger("realsense.py")
+_default_bag_path = REPO_ROOT / "rosbag_recordings"
 RS_DEVICES = None  # {device_sn: rs.device}
 
 
@@ -60,7 +64,7 @@ class RSDevice:
     def __init__(self, device_sn: str,
                  color_config=(848, 480, 30), depth_config=(848, 480, 30), *,
                  preset="Default", color_option_kwargs={}, depth_option_kwargs={},
-                 run_as_process=False):
+                 record_bag=False, bag_path=_default_bag_path, run_as_process=False):
         """
         :param device_sn: realsense device serial number
         :param color_config: color sensor config, (width, height, fps)
@@ -72,6 +76,8 @@ class RSDevice:
                                     Available options see self.supported_color_options
         :param depth_option_kwargs: depth sensor options kwargs.
                                     Available options see self.supported_depth_options
+        :param record_bag: whether to record camera streams as a rosbag file.
+        :param bag_path: path to save bag recording. Must end with ".bag" if it's a file
         :param run_as_process: whether to run RSDevice as a separate process.
             If True, RSDevice needs to be created as a `mp.Process`.
             Several SharedObject are created to control RSDevice and fetch data:
@@ -89,6 +95,13 @@ class RSDevice:
         assert "D435" in self.name, f"Only support D435 currently, get {self!r}"
         self.color_sensor = self.device.first_color_sensor()
         self.depth_sensor = self.device.first_depth_sensor()
+        # Record to a rosbag file
+        self.record_bag = record_bag
+        self.bag_path = Path(bag_path)
+        if self.bag_path.suffix != ".bag":
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.bag_path = self.bag_path / f"rs_{device_sn}_{timestamp}.bag"
+        self.bag_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.config = self._create_rs_config(color_config, depth_config)
         self.align = rs.align(rs.stream.color)
@@ -117,8 +130,10 @@ class RSDevice:
                 f"Not supported {depth_config = }"
             width, height, fps = depth_config
             config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
-        # TODO: Record to file
-        # config.enable_record_to_file()
+        # Record camera streams as a rosbag file
+        if self.record_bag:
+            self.logger.info(f'Enable recording {self!r} to file "{self.bag_path}"')
+            config.enable_record_to_file(str(self.bag_path))
         return config
 
     def _load_depth_preset(self, preset="Default"):
