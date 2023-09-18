@@ -1,6 +1,4 @@
-import os
 import time
-from pathlib import Path
 import multiprocessing as mp
 from collections import OrderedDict
 from typing import Dict, Callable
@@ -11,6 +9,7 @@ from gym import spaces
 
 from ..utils.realsense import RSDevice
 from ..utils.multiprocessing import SharedObject
+from .. import REPO_ROOT
 
 
 T_CV_CAM = np.array([[0, -1, 0, 0],
@@ -19,10 +18,7 @@ T_CV_CAM = np.array([[0, -1, 0, 0],
                      [0, 0, 0, 1]], dtype=np.float32)
 T_CAM_CV = np.linalg.inv(T_CV_CAM)
 
-CALIB_CAMERA_POSE_DIR = Path(
-    os.getenv("HEC_CAMERA_POSE_DIR",
-              "/rl_benchmark/real_robot/hec_camera_poses")
-)
+CALIB_CAMERA_POSE_DIR = REPO_ROOT / "hec_camera_poses"
 CALIB_CAMERA_POSES = {
     "front_camera": Pose().from_transformation_matrix(np.load(
         CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230726_CSE4144_front.npy"

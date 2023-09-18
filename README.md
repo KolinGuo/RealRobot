@@ -3,6 +3,20 @@ Real robot interface to connect with ManiSkill2
 
 :exclamation: This repo is still under heavy development, so API might be changed without notice
 
+## Installation
+
+```bash
+git clone git@github.com:KolinGuo/RealRobot.git
+cd RealRobot && pip install -e .
+```
+
+---
+
+Calibrated camera poses are stored in [hec_camera_poses/](hec_camera_poses) and
+loaded in [real_robot/sensors/camera.py](real_robot/sensors/camera.py).
+You will need to specify the environment variable `REAL_ROBOT_ROOT`
+if not installing from source.
+
 ## Changelog
 
 <details>
