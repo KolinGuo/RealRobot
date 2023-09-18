@@ -136,7 +136,7 @@ class Camera:
         pass
 
     def get_images(self, take_picture=False) -> Dict[str, np.ndarray]:
-        """Get (raw) images from the camera. Takes ~300 us
+        """Get (raw) images from the camera. Takes ~300 us for 848x480 @ 60fps
         :return rgb: color image, [H, W, 3] np.uint8 array
         :return depth: depth image, [H, W, 1] np.float32 array
         """
