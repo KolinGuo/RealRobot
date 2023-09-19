@@ -40,15 +40,15 @@ def transform_points(pts: np.ndarray, H: np.ndarray) -> np.ndarray:
     return pts @ H[:3, :3].T + H[:3, 3]
 
 
-def resize_obs_image(rgb_image, depth_image, intr_params: Tuple, new_shape,
+def resize_obs_image(rgb_image, depth_image, intr_params: Tuple, new_size,
                      interpolation=cv2.INTER_NEAREST_EXACT):
     """Resize rgb/depth images into shape=(width, height)
     :param rgb_image: [H, W, 3] np.uint8 np.ndarray
     :param depth_image: [H, W] np.uint16 np.ndarray
     :param intr_params: (fx, fy, cx, cy) tuple
-    :param new_shape: (width, height) tuple
+    :param new_size: (width, height) tuple
     """
-    new_width, new_height = new_shape
+    new_width, new_height = new_size
     fx, fy, cx, cy = intr_params
 
     # Update intrinsics
@@ -58,6 +58,6 @@ def resize_obs_image(rgb_image, depth_image, intr_params: Tuple, new_shape,
     intr_params = fx * u_ratio, fy * v_ratio, cx * u_ratio, cy * v_ratio
 
     # Resize images
-    rgb_image = cv2.resize(rgb_image, new_shape, interpolation=interpolation)
-    depth_image = cv2.resize(depth_image, new_shape, interpolation=interpolation)
+    rgb_image = cv2.resize(rgb_image, new_size, interpolation=interpolation)
+    depth_image = cv2.resize(depth_image, new_size, interpolation=interpolation)
     return rgb_image, depth_image, intr_params
