@@ -1,4 +1,5 @@
 import math
+import time
 from typing import List, Tuple
 
 import numpy as np
@@ -6,8 +7,11 @@ import cv2
 
 
 class CV2Visualizer:
+    """OpenCV visualizer for RGB and depth images, fps is updated in window title"""
+
     def __init__(self, window_name="Images"):
         self.window_name = window_name
+        self.last_timestamp_ns = time.time_ns()
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
     @staticmethod
@@ -80,6 +84,13 @@ class CV2Visualizer:
                         break
                     vis_image[max_H*r:max_H*(r+1),
                               max_W*c:max_W*(c+1)] = images[idx]
+
+        # Add fps to window title (overlay with cv2.putText is slower)
+        cur_timestamp_ns = time.time_ns()
+        fps = 1e9 / (cur_timestamp_ns - self.last_timestamp_ns)
+        self.last_timestamp_ns = cur_timestamp_ns
+        cv2.setWindowTitle(self.window_name,
+                           f"{self.window_name} {max_W}x{max_H} @ {fps:6.2f}fps")
 
         cv2.imshow(self.window_name, vis_image)
         cv2.pollKey()
