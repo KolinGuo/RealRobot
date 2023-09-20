@@ -110,7 +110,7 @@ class Camera:
 
         config = (self.width, self.height, self.fps)
         self.device_proc = ctx.Process(
-            target=RSDevice, args=(self.device_sn,),
+            target=RSDevice, args=(self.device_sn, self.uid),
             kwargs=dict(
                 color_config=config,
                 depth_config=config,
@@ -126,11 +126,11 @@ class Camera:
         time.sleep(1.0)  # sleep for 1 second to wait for SharedObject creation
 
         # Create SharedObject to control RSDevice and fetch data
-        self.so_start = SharedObject(f"rs_{self.device_sn}_start")
-        self.so_joined = SharedObject(f"rs_{self.device_sn}_joined")
-        self.so_color = SharedObject(f"rs_{self.device_sn}_color")
-        self.so_depth = SharedObject(f"rs_{self.device_sn}_depth")
-        self.so_intr = SharedObject(f"rs_{self.device_sn}_intr")
+        self.so_start = SharedObject(f"rs_{self.uid}_start")
+        self.so_joined = SharedObject(f"rs_{self.uid}_joined")
+        self.so_color = SharedObject(f"rs_{self.uid}_color")
+        self.so_depth = SharedObject(f"rs_{self.uid}_depth")
+        self.so_intr = SharedObject(f"rs_{self.uid}_intr")
 
         self.so_start.assign(True)  # start the RSDevice
         # Wait for intrinsic matrix

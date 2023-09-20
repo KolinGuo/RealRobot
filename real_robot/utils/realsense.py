@@ -61,12 +61,13 @@ class RSDevice:
     * https://dev.intelrealsense.com/docs/tuning-depth-cameras-for-best-performance
     """
 
-    def __init__(self, device_sn: str,
+    def __init__(self, device_sn: str, uid: str = None,
                  color_config=(848, 480, 30), depth_config=(848, 480, 30), *,
                  preset="Default", color_option_kwargs={}, depth_option_kwargs={},
                  record_bag=False, bag_path=_default_bag_path, run_as_process=False):
         """
         :param device_sn: realsense device serial number
+        :param uid: unique camera id, e.g. "hand_camera", "front_camera"
         :param color_config: color sensor config, (width, height, fps)
         :param depth_config: depth sensor config, (width, height, fps)
         :param preset: depth sensor preset, available options:
@@ -81,17 +82,18 @@ class RSDevice:
         :param run_as_process: whether to run RSDevice as a separate process.
             If True, RSDevice needs to be created as a `mp.Process`.
             Several SharedObject are created to control RSDevice and fetch data:
-            * "rs_<device_sn>_start": If True, starts the RSDevice; else, stops it.
-            * "rs_<device_sn>_joined": If True, the RSDevice process is joined.
-            * "rs_<device_sn>_color": color image, [H, W, 3] np.uint8 np.ndarray
-            * "rs_<device_sn>_depth": depth image, [H, W] np.uint16 np.ndarray
-            * "rs_<device_sn>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
+            * "rs_<device_uid>_start": If True, starts the RSDevice; else, stops it.
+            * "rs_<device_uid>_joined": If True, the RSDevice process is joined.
+            * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
+            * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
+            * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
         """
         self.logger = get_logger("RSDevice")
 
         self.device = get_connected_rs_devices(device_sn)
         self.name = self.device.get_info(rs.camera_info.name)
         self.serial_number = device_sn
+        self.uid = device_sn if uid is None else uid.replace(' ', '_')
         assert "D435" in self.name, f"Only support D435 currently, get {self!r}"
         self.color_sensor = self.device.first_color_sensor()
         self.depth_sensor = self.device.first_depth_sensor()
@@ -100,7 +102,7 @@ class RSDevice:
         self.bag_path = Path(bag_path)
         if self.bag_path.suffix != ".bag":
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.bag_path = self.bag_path / f"rs_{device_sn}_{timestamp}.bag"
+            self.bag_path = self.bag_path / f"rs_{self.uid}_{timestamp}.bag"
         self.bag_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.config = self._create_rs_config(color_config, depth_config)
@@ -192,7 +194,7 @@ class RSDevice:
         :return color_image: color image, [H, W, 3] np.uint8 array
         :return depth_image: depth image, [H, W] np.uint16 array
         """
-        assert self.pipeline is not None, "Device is not started"
+        assert self.pipeline is not None, f"Device {self!r} is not started"
 
         frames = self.pipeline.wait_for_frames()
         frames = self.align.process(frames)
@@ -228,18 +230,18 @@ class RSDevice:
 
         # RSDevice control
         device_started = False
-        so_start = SharedObject(f"rs_{self.serial_number}_start", data=False)
-        so_joined = SharedObject(f"rs_{self.serial_number}_joined", data=False)
+        so_start = SharedObject(f"rs_{self.uid}_start", data=False)
+        so_joined = SharedObject(f"rs_{self.uid}_joined", data=False)
         # data
         so_color = SharedObject(
-            f"rs_{self.serial_number}_color",
+            f"rs_{self.uid}_color",
             data=np.zeros((self.height, self.width, 3), dtype=np.uint8)
         )
         so_depth = SharedObject(
-            f"rs_{self.serial_number}_depth",
+            f"rs_{self.uid}_depth",
             data=np.zeros((self.height, self.width), dtype=np.uint16)
         )
-        so_intr = SharedObject(f"rs_{self.serial_number}_intr", data=np.zeros((3, 3)))
+        so_intr = SharedObject(f"rs_{self.uid}_intr", data=np.zeros((3, 3)))
 
         while not so_joined.fetch():
             start = so_start.fetch()
@@ -329,7 +331,9 @@ class RSDevice:
         self.stop()
 
     def __repr__(self):
-        return f"<{self.__class__.__name__}: {self.name} (S/N: {self.serial_number})>"
+        return (f"<{self.__class__.__name__}: "
+                f"{self.name if self.uid == self.serial_number else self.uid} "
+                f"(S/N: {self.serial_number})>")
 
 
 class RealSenseAPI:
