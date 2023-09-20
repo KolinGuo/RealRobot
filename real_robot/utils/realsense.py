@@ -82,8 +82,8 @@ class RSDevice:
         :param run_as_process: whether to run RSDevice as a separate process.
             If True, RSDevice needs to be created as a `mp.Process`.
             Several SharedObject are created to control RSDevice and fetch data:
+            * "join_rs_<device_uid>": If True, the RSDevice process is joined.
             * "rs_<device_uid>_start": If True, starts the RSDevice; else, stops it.
-            * "rs_<device_uid>_joined": If True, the RSDevice process is joined.
             * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
             * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
             * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
@@ -230,8 +230,8 @@ class RSDevice:
 
         # RSDevice control
         device_started = False
+        so_joined = SharedObject(f"join_rs_{self.uid}", data=False)
         so_start = SharedObject(f"rs_{self.uid}_start", data=False)
-        so_joined = SharedObject(f"rs_{self.uid}_joined", data=False)
         # data
         so_color = SharedObject(
             f"rs_{self.uid}_color",
