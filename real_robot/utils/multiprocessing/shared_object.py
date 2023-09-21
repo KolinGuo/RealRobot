@@ -1,7 +1,7 @@
 """
 Shared object implemented with SharedMemory and synchronization
 Careful optimization is done to make it run as fast as possible
-version 0.0.4
+version 0.0.5
 
 Written by Kolin Guo
 
@@ -127,8 +127,8 @@ class SharedObject:
 
     _object_sizes = (
         9, 10, 17, 17,  # NoneType, bool, int, float
-        _get_bytes_size,  # str
-        _get_bytes_size,  # bytes
+        _get_bytes_size.__func__,  # str
+        _get_bytes_size.__func__,  # bytes
         lambda array, ndim: array.nbytes + ndim * 8 + 18,  # ndarray
     )
 
@@ -214,13 +214,13 @@ class SharedObject:
             return data_buf_ro.copy()
 
     _fetch_objects = (
-        _fetch_None,
-        _fetch_bool,
-        _fetch_int,
-        _fetch_float,
-        _fetch_str,
-        _fetch_bytes,
-        _fetch_ndarray,
+        _fetch_None.__func__,
+        _fetch_bool.__func__,
+        _fetch_int.__func__,
+        _fetch_float.__func__,
+        _fetch_str.__func__,
+        _fetch_bytes.__func__,
+        _fetch_ndarray.__func__,
     )
 
     @staticmethod
@@ -253,13 +253,13 @@ class SharedObject:
         data_buf[:] = data
 
     _assign_objects = (
-        _assign_None,
-        _assign_bool,
-        _assign_int,
-        _assign_float,
-        _assign_bytes,
-        _assign_bytes,
-        _assign_ndarray,
+        _assign_None.__func__,
+        _assign_bool.__func__,
+        _assign_int.__func__,
+        _assign_float.__func__,
+        _assign_bytes.__func__,
+        _assign_bytes.__func__,
+        _assign_ndarray.__func__,
     )
     _np_dtypes = (
         np.bool_, np.int8, np.uint8, np.int16, np.uint16, np.int32, np.uint32,
