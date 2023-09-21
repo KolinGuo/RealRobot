@@ -127,7 +127,7 @@ class Camera:
 
         # Create SharedObject to control RSDevice and fetch data
         self.so_joined = SharedObject(f"join_rs_{self.uid}")
-        self.so_start = SharedObject(f"rs_{self.uid}_start")
+        self.so_start = SharedObject(f"start_rs_{self.uid}")
         self.so_color = SharedObject(f"rs_{self.uid}_color")
         self.so_depth = SharedObject(f"rs_{self.uid}_depth")
         self.so_intr = SharedObject(f"rs_{self.uid}_intr")
