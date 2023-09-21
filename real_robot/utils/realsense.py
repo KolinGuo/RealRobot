@@ -261,7 +261,7 @@ class RSDevice:
                 so_depth.assign(np.asarray(frames.get_depth_frame().data))
 
         self.logger.info(f"Process running {self!r} is joined")
-        # Unlink SharedObject
+        # Unlink created SharedObject
         so_start.unlink()
         so_joined.unlink()
         so_color.unlink()

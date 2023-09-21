@@ -1,3 +1,4 @@
+import os
 import math
 import time
 from typing import List, Tuple
@@ -5,14 +6,51 @@ from typing import List, Tuple
 import numpy as np
 import cv2
 
+from .utils import draw_mask, colorize_mask
+from ..multiprocessing import SharedObject
+from ..logger import get_logger
+
 
 class CV2Visualizer:
     """OpenCV visualizer for RGB and depth images, fps is updated in window title"""
 
-    def __init__(self, window_name="Images"):
+    def __init__(self, window_name="Images", run_as_process=False, stream_camera=False):
+        """
+        :param window_name: window name
+        :param run_as_process: whether to run CV2Visualizer as a separate process.
+            If True, CV2Visualizer needs to be created as a `mp.Process`.
+            Several SharedObject are mounted to control CV2Visualizer and feed data:
+              * "join_viscv2" (created): If True, the CV2Visualizer process is joined.
+              * "draw_vis": If True, redraw the images.
+              * "sync_rs_<device_uid>": If True, capture from RSDevice.
+              Data unique to CV2Visualizer:
+              * "viscv2_<image_uid>_color": rgb color image
+              * "viscv2_<image_uid>_depth": depth image
+              * "viscv2_<image_uid>_mask": object mask
+              Data shared with O3DGUIVisualizer
+              * "vis_<image_uid>_color": rgb color image
+              * "vis_<image_uid>_depth": depth image
+              * "vis_<image_uid>_mask": object mask
+              RSDevice camera feeds
+              * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
+              * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
+              Corresponding object mask
+              * "rs_<device_uid>_mask": object mask, [H, W] bool/np.uint8 np.ndarray
+            Acceptable visualization data format:
+            * RGB color images: [H, W, 3] np.uint8 np.ndarray
+            * Depth images: [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
+            * Object mask images: [H, W] bool/np.uint8 np.ndarray
+        :param stream_camera: whether to redraw camera stream when a new frame arrives
+        """
+        self.logger = get_logger("CV2Visualizer")
+
         self.window_name = window_name
+        self.stream_camera = stream_camera
         self.last_timestamp_ns = time.time_ns()
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+        if run_as_process:
+            self.run_as_process()
 
     @staticmethod
     def preprocess_image(image: np.ndarray, depth_scale=1000.0) -> np.ndarray:
@@ -95,6 +133,48 @@ class CV2Visualizer:
         cv2.imshow(self.window_name, vis_image)
         cv2.pollKey()
 
+    def run_as_process(self):
+        """Run CV2Visualizer as a separate process"""
+        self.logger.info(f"Running {self!r} as a separate process")
+
+        # CV2Visualizer control
+        so_joined = SharedObject("join_viscv2", data=False)
+        so_draw = SharedObject("draw_vis")
+
+        so_vis_data = {}
+
+        while not so_joined.fetch():
+            # Sort names so they are ordered as color, depth, mask
+            exist_so_data_names = sorted([
+                p for p in os.listdir("/dev/shm")
+                if p.startswith(("rs_", "vis_", "viscv2_"))
+                and p.endswith(("_color", "_depth", "_mask"))
+            ])
+
+            if so_draw.fetch():  # triggers redraw
+                images = []
+                for so_name in exist_so_data_names:
+                    if so_name in so_vis_data:
+                        so_data = so_vis_data[so_name]
+                    else:
+                        so_data = so_vis_data[so_name] = SharedObject(so_name)
+
+                    image = so_data.fetch()
+                    if so_name.endswith("_color"):
+                        color_image = image
+                    if so_name.endswith("_mask"):
+                        images.append(draw_mask(color_image, image))
+                        images.append(colorize_mask(image))
+                    else:
+                        images.append(image)
+                self.show_images(images)
+
+            self.render()
+
+        self.logger.info(f"Process running {self!r} is joined")
+        # Unlink created SharedObject
+        so_joined.unlink()
+
     def clear_image(self):
         """Show a black image"""
         cv2.imshow(self.window_name, np.zeros((128, 128, 3), dtype=np.uint8))
@@ -109,3 +189,6 @@ class CV2Visualizer:
 
     def __del__(self):
         self.close()
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}: {self.window_name})>"
