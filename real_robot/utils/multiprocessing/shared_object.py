@@ -34,7 +34,7 @@ Usage Notes:
     >>> so.fetch(lambda x: x + 1)    # Apply operation only
     >>> so.fetch()  # If different operations need to be applied on the same data
     >>> so.fetch()[..., 0]           # Slice only
-    >>> so.fetch(lambda x: x[..., 0]) + 1  # Slice and apply operation
+    >>> so.fetch(lambda x: x[..., 0].copy()) + 1  # Slice and apply operation
 """
 import struct
 import time
@@ -181,7 +181,7 @@ class SharedObject:
     def _fetch_ndarray(buf, fn: Optional[Callable[[np.ndarray], Any]],
                        data_buf_ro: np.ndarray) -> Any:
         """Always return a copy of the underlying buffer
-        Examples (ordered from fastest to slowest):
+        Examples (ordered from fastest to slowest, benchmarked with 480x848x3 np.uint8):
 
             # Apply operation only
             so.fetch(lambda x: x.sum())  # contiguous sum (triggers a copy)
@@ -191,12 +191,12 @@ class SharedObject:
             so.fetch(lambda x: x + 1)  # contiguous add (triggers a copy)
             so.fetch() + 1  # contiguous copy => add
 
-            # Slice only
+            # Slice only (results might vary depending on array size)
             so.fetch()[..., 0]  # contiguous copy => slice
-            so.fetch(lambda x: x[..., 0])  # non-contiguous copy
+            so.fetch(lambda x: x[..., 0].copy())  # non-contiguous copy
 
-            # Slice and apply operation
-            so.fetch(lambda x: x[..., 0]) + 1  # non-contiguous copy => add
+            # Slice and apply operation (results might vary depending on array size)
+            so.fetch(lambda x: x[..., 0].copy()) + 1  # non-contiguous copy => add
             so.fetch(lambda x: x[..., 0] + 1)  # non-contiguous add (triggers a copy)
             so.fetch()[..., 0] + 1  # contiguous copy => non-contiguous add
         """
