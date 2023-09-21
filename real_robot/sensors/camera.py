@@ -203,7 +203,7 @@ class Camera:
         return spaces.Dict(obs_spaces)
 
     def __del__(self):
-        self.so_joined.assign(True)
+        self.so_joined.trigger()
         self.device_proc.join()
 
     def __repr__(self):

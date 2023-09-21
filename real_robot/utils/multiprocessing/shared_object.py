@@ -1,7 +1,7 @@
 """
 Shared object implemented with SharedMemory and synchronization
 Careful optimization is done to make it run as fast as possible
-version 0.0.3
+version 0.0.4
 
 Written by Kolin Guo
 
@@ -25,6 +25,10 @@ Usage Notes:
     >>> so = SharedObject("test", data=np.ones((480, 848, 3)))
     # Mounts existing SharedObject
     >>> so = SharedObject("test")
+    # Creates a trigger SharedObject (data is None, can be used for joining processes)
+    >>> so = SharedObject("trigger")
+    >>> so.trigger()  # trigger the SharedObject
+    >>> so.triggered  # check if triggered
   * Best practices when fetching np.ndarray (see `SharedObject._fetch_ndarray()`):
     >>> so.fetch(lambda x: x.sum())  # Apply operation only
     >>> so.fetch(lambda x: x + 1)    # Apply operation only
@@ -370,12 +374,25 @@ class SharedObject:
     @property
     def modified(self) -> bool:
         """Returns whether the object's data has been modified by another process.
-        Check by fetching object modified timestamp and compare with self.mtime
+        Check by fetching object modified timestamp and comparing with self.mtime
         """
         self._readers_lock.acquire()
         mtime = struct.unpack_from("Q", self.shm.buf, offset=0)[0]
         self._readers_lock.release()
         return mtime > self.mtime
+
+    @property
+    def triggered(self) -> bool:
+        """Returns whether the object is triggered (protected by readers lock)
+        Check by fetching object modified timestamp, comparing with self.mtime
+        and updating self.mtime
+        """
+        self._readers_lock.acquire()
+        mtime = struct.unpack_from("Q", self.shm.buf, offset=0)[0]
+        self._readers_lock.release()
+        modified = mtime > self.mtime
+        self.mtime = mtime
+        return modified
 
     def fetch(self, fn: _fetch_fn_type = None) -> Any:
         """Fetch a copy of data from SharedMemory (protected by readers lock)
@@ -396,6 +413,13 @@ class SharedObject:
                                                          self.np_ndarray_ro)
         self._readers_lock.release()
         return data
+
+    def trigger(self) -> None:
+        """Trigger by modifying object mtime (protected by writer lock)"""
+        self._writer_lock.acquire()
+        # Update mtime
+        struct.pack_into("Q", self.shm.buf, 0, time.time_ns())
+        self._writer_lock.release()
 
     def assign(self, data: Union[_object_types]) -> None:
         """Assign data to SharedMemory (protected by writer lock)"""

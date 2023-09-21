@@ -20,9 +20,9 @@ class CV2Visualizer:
         :param run_as_process: whether to run CV2Visualizer as a separate process.
             If True, CV2Visualizer needs to be created as a `mp.Process`.
             Several SharedObject are mounted to control CV2Visualizer and feed data:
-              * "join_viscv2" (created): If True, the CV2Visualizer process is joined.
-              * "draw_vis": If True, redraw the images.
-              * "sync_rs_<device_uid>": If True, capture from RSDevice.
+              * "join_viscv2" (created): If triggered, the CV2Visualizer process is joined.
+              * "draw_vis": If triggered, redraw the images.
+              * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
               Data unique to CV2Visualizer:
               * "viscv2_<image_uid>_color": rgb color image
               * "viscv2_<image_uid>_depth": depth image
@@ -138,12 +138,12 @@ class CV2Visualizer:
         self.logger.info(f"Running {self!r} as a separate process")
 
         # CV2Visualizer control
-        so_joined = SharedObject("join_viscv2", data=False)
+        so_joined = SharedObject("join_viscv2")
         so_draw = SharedObject("draw_vis")
 
         so_vis_data = {}
 
-        while not so_joined.fetch():
+        while not so_joined.triggered:
             # Sort names so they are ordered as color, depth, mask
             exist_so_data_names = sorted([
                 p for p in os.listdir("/dev/shm")
@@ -151,7 +151,7 @@ class CV2Visualizer:
                 and p.endswith(("_color", "_depth", "_mask"))
             ])
 
-            if so_draw.fetch():  # triggers redraw
+            if so_draw.triggered:  # triggers redraw
                 images = []
                 for so_name in exist_so_data_names:
                     if so_name in so_vis_data:
