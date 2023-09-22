@@ -1,6 +1,8 @@
 import os
 import math
 import time
+import functools
+from collections import defaultdict
 from typing import List, Tuple
 
 import numpy as np
@@ -20,6 +22,7 @@ class CV2Visualizer:
         :param run_as_process: whether to run CV2Visualizer as a separate process.
             If True, CV2Visualizer needs to be created as a `mp.Process`.
             Several SharedObject are mounted to control CV2Visualizer and feed data:
+                Only "join_viscv2" is created by this process.
               * "join_viscv2": If triggered, the CV2Visualizer process is joined.
               * "draw_vis": If triggered, redraw the images.
               * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
@@ -142,7 +145,9 @@ class CV2Visualizer:
         so_draw = SharedObject("draw_vis")
         so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
 
-        vis_data = {}  # {"rs_<device_uid>_color": image}
+        # {"rs_<device_uid>_color": image}
+        vis_data = defaultdict(functools.partial(np.full, shape=(480, 848, 3),
+                                                 fill_value=255, dtype=np.uint8))
 
         while not so_joined.triggered:
             # Sort names so they are ordered as color, depth, mask
@@ -155,15 +160,21 @@ class CV2Visualizer:
             ]
 
             if self.stream_camera:
-                for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
-                    if ((so_data_name := f"{so_name[5:]}_color") in all_so_names and
-                            (so := so_dict[so_data_name]).modified):
-                        vis_data[so_data_name] = so.fetch()
-                    if ((so_data_name := f"{so_name[5:]}_depth") in all_so_names and
-                            (so := so_dict[so_data_name]).modified):
-                        vis_data[so_data_name] = so.fetch()
-                images = [vis_data[so_data_name] for so_data_name in so_data_names]
-                self.show_images(images)
+                updated = False
+                for so_data_name in [p for p in all_so_names if p.startswith("rs_")
+                                     and p.endswith(("_color", "_depth"))]:
+                    if (so_data := so_dict[so_data_name]).modified:
+                        vis_data[so_data_name] = so_data.fetch()
+                        updated = True
+                if updated:
+                    images = []
+                    for so_data_name in so_data_names:
+                        if so_data_name.endswith("_mask"):
+                            images += [vis_data[f"{so_data_name}_overlay"],
+                                       vis_data[f"{so_data_name}_colorized"]]
+                        else:
+                            images.append(vis_data[so_data_name])
+                    self.show_images(images)
             else:
                 # for each camera sync, check if capture is triggered
                 for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
