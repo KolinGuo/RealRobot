@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 
 from .utils import draw_mask, colorize_mask
-from ..multiprocessing import SharedObject
+from ..multiprocessing import SharedObject, SharedObjectDefaultDict
 from ..logger import get_logger
 
 
@@ -20,7 +20,7 @@ class CV2Visualizer:
         :param run_as_process: whether to run CV2Visualizer as a separate process.
             If True, CV2Visualizer needs to be created as a `mp.Process`.
             Several SharedObject are mounted to control CV2Visualizer and feed data:
-              * "join_viscv2" (created): If triggered, the CV2Visualizer process is joined.
+              * "join_viscv2": If triggered, the CV2Visualizer process is joined.
               * "draw_vis": If triggered, redraw the images.
               * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
               Data unique to CV2Visualizer:
@@ -62,20 +62,20 @@ class CV2Visualizer:
         ndim = image.ndim
         channels = image.shape[-1]
         dtype = image.dtype
-        if ndim == 2 or (ndim == 3 and channels == 1):  # depth
+        if ndim == 3 and channels == 3 and dtype == np.uint8:  # rgb
+            return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        elif ndim == 2 or (ndim == 3 and channels == 1):  # depth
             # Depth image colormap is taken from
             # https://github.com/IntelRealSense/librealsense/blob/8ffb17b027e100c2a14fa21f01f97a1921ec1e1b/wrappers/python/examples/opencv_viewer_example.py#L56
-            if np.issubdtype(dtype, np.floating):
-                alpha = 0.03 * depth_scale
-            elif dtype == np.uint16:
+            if dtype == np.uint16:
                 alpha = 0.03
+            elif np.issubdtype(dtype, np.floating):
+                alpha = 0.03 * depth_scale
             else:
                 raise TypeError(f"Unknown depth image dtype: {dtype}")
             return cv2.applyColorMap(
                 cv2.convertScaleAbs(image, alpha=alpha), cv2.COLORMAP_JET
             )
-        elif ndim == 3 and channels == 3 and dtype == np.uint8:  # rgb
-            return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         else:
             raise NotImplementedError(f"Unknown image type: {image.shape=} {dtype=}")
 
@@ -140,31 +140,62 @@ class CV2Visualizer:
         # CV2Visualizer control
         so_joined = SharedObject("join_viscv2")
         so_draw = SharedObject("draw_vis")
+        so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
 
-        so_vis_data = {}
+        vis_data = {}  # {"rs_<device_uid>_color": image}
 
         while not so_joined.triggered:
             # Sort names so they are ordered as color, depth, mask
-            exist_so_data_names = sorted([
-                p for p in os.listdir("/dev/shm")
+            all_so_names = sorted(os.listdir("/dev/shm"))
+
+            so_data_names = [
+                p for p in all_so_names
                 if p.startswith(("rs_", "vis_", "viscv2_"))
                 and p.endswith(("_color", "_depth", "_mask"))
-            ])
+            ]
+
+            if self.stream_camera:
+                for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
+                    if ((so_data_name := f"{so_name[5:]}_color") in all_so_names and
+                            (so := so_dict[so_data_name]).modified):
+                        vis_data[so_data_name] = so.fetch()
+                    if ((so_data_name := f"{so_name[5:]}_depth") in all_so_names and
+                            (so := so_dict[so_data_name]).modified):
+                        vis_data[so_data_name] = so.fetch()
+                images = [vis_data[so_data_name] for so_data_name in so_data_names]
+                self.show_images(images)
+            else:
+                # for each camera sync, check if capture is triggered
+                for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
+                    if so_dict[so_name].triggered:
+                        if (so_data_name := f"{so_name[5:]}_color") in all_so_names:
+                            vis_data[so_data_name] = so_dict[so_data_name].fetch()
+                        if (so_data_name := f"{so_name[5:]}_depth") in all_so_names:
+                            vis_data[so_data_name] = so_dict[so_data_name].fetch()
 
             if so_draw.triggered:  # triggers redraw
                 images = []
-                for so_name in exist_so_data_names:
-                    if so_name in so_vis_data:
-                        so_data = so_vis_data[so_name]
+                for so_data_name in so_data_names:
+                    # Fetch data or use captured RSDevice data
+                    if so_data_name.endswith("_color"):
+                        if so_data_name.startswith("rs_"):
+                            color_image = image = vis_data[so_data_name]
+                        else:
+                            vis_data[so_data_name] = color_image = image \
+                                = so_dict[so_data_name].fetch()
+                    elif (so_data_name.endswith("_depth") and
+                          so_data_name.startswith("rs_")):
+                        image = vis_data[so_data_name]
                     else:
-                        so_data = so_vis_data[so_name] = SharedObject(so_name)
+                        vis_data[so_data_name] = image = so_dict[so_data_name].fetch()
 
-                    image = so_data.fetch()
-                    if so_name.endswith("_color"):
-                        color_image = image
-                    if so_name.endswith("_mask"):
-                        images.append(draw_mask(color_image, image))
-                        images.append(colorize_mask(image))
+                    # Visualize mask by overlaying to color_image and colorizing mask
+                    if so_data_name.endswith("_mask"):
+                        vis_data[f"{so_data_name}_overlay"] = mask_overlay \
+                            = draw_mask(color_image, image)
+                        vis_data[f"{so_data_name}_colorized"] = mask_colorized \
+                            = colorize_mask(image)
+                        images += [mask_overlay, mask_colorized]
                     else:
                         images.append(image)
                 self.show_images(images)

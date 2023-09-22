@@ -83,6 +83,8 @@ class RSDevice:
             If True, RSDevice needs to be created as a `mp.Process`.
             Several SharedObject are created to control RSDevice and fetch data:
             * "join_rs_<device_uid>": If triggered, the RSDevice process is joined.
+            * "sync_rs_<device_uid>": If triggered, all processes should fetch data.
+                                      Used for synchronizing camera capture.
             * "start_rs_<device_uid>": If True, starts the RSDevice; else, stops it.
             * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
             * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
@@ -231,6 +233,7 @@ class RSDevice:
         # RSDevice control
         device_started = False
         so_joined = SharedObject(f"join_rs_{self.uid}")
+        so_sync = SharedObject(f"sync_rs_{self.uid}")
         so_start = SharedObject(f"start_rs_{self.uid}", data=False)
         # data
         so_color = SharedObject(
@@ -263,6 +266,7 @@ class RSDevice:
         self.logger.info(f"Process running {self!r} is joined")
         # Unlink created SharedObject
         so_joined.unlink()
+        so_sync.unlink()
         so_start.unlink()
         so_color.unlink()
         so_depth.unlink()

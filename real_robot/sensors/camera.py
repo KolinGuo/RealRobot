@@ -127,6 +127,7 @@ class Camera:
 
         # Create SharedObject to control RSDevice and fetch data
         self.so_joined = SharedObject(f"join_rs_{self.uid}")
+        self.so_sync = SharedObject(f"sync_rs_{self.uid}")
         self.so_start = SharedObject(f"start_rs_{self.uid}")
         self.so_color = SharedObject(f"rs_{self.uid}_color")
         self.so_depth = SharedObject(f"rs_{self.uid}_depth")
@@ -148,6 +149,9 @@ class Camera:
         """
         # if take_picture:
         #     self.take_picture()
+
+        # Trigger camera capture in other processes
+        self.so_sync.trigger()
 
         rgb = self.so_color.fetch()
         depth = self.so_depth.fetch(lambda d: d[..., None].astype(np.float32)) / 1000.0
