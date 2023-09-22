@@ -94,6 +94,29 @@ class CV2Visualizer:
         else:
             return s+1, s+1
 
+    @staticmethod
+    def resize_image(image: np.ndarray, max_H: int, max_W: int,
+                     interpolation=cv2.INTER_NEAREST_EXACT) -> np.ndarray:
+        """Resize image to the requested size while preserving its aspect ratio"""
+        # background is white
+        new_image = np.full((max_H, max_W, 3), 255, np.uint8)
+
+        h, w, _ = image.shape
+        if (h_ratio := (max_H / h)) < (w_ratio := (max_W / w)):
+            new_w = math.floor(w * h_ratio)
+            start_i = (max_W - new_w) // 2
+            new_image[:, start_i:start_i+new_w] = cv2.resize(
+                image, (new_w, max_H), interpolation=interpolation
+            )
+            return new_image
+        else:
+            new_h = math.floor(h * w_ratio)
+            start_i = (max_H - new_h) // 2
+            new_image[start_i:start_i+new_h, :] = cv2.resize(
+                image, (max_W, new_h), interpolation=interpolation
+            )
+            return new_image
+
     def show_images(self, images: List[np.ndarray]):
         """Show the list of images, support non-equal size (cv2.rerize to max size)
         :param images: List of np.ndarray images. Supports depth or RGB color images.
@@ -108,9 +131,7 @@ class CV2Visualizer:
         max_shape = images[np.argmax([image.size for image in images])].shape
         max_H, max_W, _ = max_shape
         images = [image if image.shape == max_shape
-                  else cv2.resize(image, (max_W, max_H),
-                                  interpolation=cv2.INTER_NEAREST_EXACT)
-                  for image in images]
+                  else self.resize_image(image, max_H, max_W) for image in images]
 
         if n_image == 1:
             vis_image = images[0]
