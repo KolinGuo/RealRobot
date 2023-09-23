@@ -8,10 +8,33 @@ from typing import List, Union, Optional
 
 import numpy as np
 import open3d as o3d
+from open3d.utility import Vector3dVector
 import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 
+from ..camera import depth2xyz
+from ..multiprocessing import SharedObject, SharedObjectDefaultDict
+from ..logger import get_logger
+
 isMacOS = (platform.system() == "Darwin")
+
+_o3d_geometry_type = Union[o3d.geometry.Geometry3D,
+                           o3d.t.geometry.Geometry,
+                           rendering.TriangleMeshModel]
+
+
+class O3DGeometryDefaultDict(dict):
+    """This defaultdict helps to store open3d geometries by name (only known at runtime)
+    so we don't need to frequently create them.
+    Used in O3DGUIVisualizer.run_as_process()
+    """
+
+    def __missing__(self, name: str) -> _o3d_geometry_type:
+        if name.endswith("_pcd"):
+            geometry = self[name] = o3d.geometry.PointCloud()
+        else:
+            pass
+        return geometry
 
 
 class Settings:
@@ -254,11 +277,45 @@ class O3DGUIVisualizer:
         Settings.NORMALS, Settings.DEPTH
     ]
 
-    def __init__(self, window_name="Point Clouds", window_size=(1920, 1080)):
+    def __init__(self, window_name="Point Clouds", window_size=(1920, 1080),
+                 run_as_process=False, stream_camera=False):
         """
         :param window_name: window name
         :param window_size: (width, height)
+        :param run_as_process: whether to run O3DGUIVisualizer as a separate process.
+          If True, O3DGUIVisualizer needs to be created as a `mp.Process`.
+          Several SharedObject are mounted to control O3DGUIVisualizer and feed data:
+              Only "join_viso3d" is created by this process.
+            * "join_viso3d": If triggered, the O3DGUIVisualizer process is joined.
+            * "draw_vis": If triggered, redraw the images.
+            * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
+            Corresponding data have the same prefix (implemented as sorting)
+            * Data unique to O3DGUIVisualizer have prefix "viso3d_<data_uid>_"
+            * Data shared with CV2Visualizer have prefix "vis_<data_uid>_"
+            * RSDevice camera feeds have prefix "rs_<device_uid>_"
+              * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
+              * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
+              * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
+              * "rs_<device_uid>_pose": camera pose, [4, 4] np.float64 np.ndarray
+            Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
+              <device_uid> and <data_uid> must not be the same
+          Acceptable <data_uid> suffixes with its acceptable data member suffixes:
+          * "_pcd": PointCloud: ("_color", "_depth", "_intr", "_pose"),
+                    ("_color", "_pts", "_pose"), ("_color", "_xyzimg", "_pose")
+          * "_bbox": bounding box pts (xyz_min, xyz_max), [2, 3] np.float64 np.ndarray
+
+          Acceptable visualization SharedObject data formats:
+          * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
+                      or pts color, [N, 3] np.uint8 np.ndarray
+          * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
+          * "_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
+          * "_pose": object pose drawn as coord frame, [4, 4] np.float64 np.ndarray
+          * "_xyzimg": xyz image, [H, W, 3] np.float64 np.ndarray
+          * "_pts": points, [N, 3] np.float64 np.ndarray
+        :param stream_camera: whether to redraw camera stream when a new frame arrives
         """
+        self.logger = get_logger("O3DGUIVisualizer")
+
         # We need to initialize the application, which finds the necessary shaders
         # for rendering and prepares the cross-platform window abstraction.
         gui.Application.instance.initialize()
@@ -291,6 +348,10 @@ class O3DGUIVisualizer:
         self._scene.scene.add_geometry(self.picked_pts_pcd_name,
                                        self.picked_pts_pcd,
                                        self.picked_pts_pcd_mat)
+
+        if run_as_process:
+            self.stream_camera = stream_camera
+            self.run_as_process()
 
     def construct_gui(self):
         """Construct the GUI visualizer"""
@@ -1113,9 +1174,7 @@ class O3DGUIVisualizer:
                     # ---- Update picked_points scene geometry ----
                     self._scene.scene.remove_geometry(self.picked_pts_pcd_name)
                     # Update points and color
-                    self.picked_pts_pcd.points = o3d.utility.Vector3dVector(
-                        self.picked_pts
-                    )
+                    self.picked_pts_pcd.points = Vector3dVector(self.picked_pts)
                     self.picked_pts_pcd.paint_uniform_color([1.0, 0.0, 1.0])
                     # Update material point_size
                     self.picked_pts_pcd_mat.point_size = int(
@@ -1165,11 +1224,7 @@ class O3DGUIVisualizer:
             self.add_geometry(geometry_name,
                               geometry if mesh is None else mesh)
 
-    def add_geometry(self, name: str,
-                     geometry: Union[o3d.geometry.Geometry3D,
-                                     o3d.t.geometry.Geometry,
-                                     rendering.TriangleMeshModel],
-                     show: bool = True):
+    def add_geometry(self, name: str, geometry: _o3d_geometry_type, show: bool = True):
         """Add a geometry to scene and update the _geometries_tree
         :param name: geometry name separated by '/', str.
                      Group names are nested starting from root.
@@ -1350,6 +1405,122 @@ class O3DGUIVisualizer:
 
         self.camera_poses[name] = T
 
+    def run_as_process(self):
+        """Run O3DGUIVisualizer as a separate process"""
+        # NOTE: size-variable pointcloud support is not implemented yet,
+        #       Need support for size-variable np.ndarray in SharedObject
+        self.logger.info(f"Running {self!r} as a separate process")
+
+        # O3DGUIVisualizer control
+        so_joined = SharedObject("join_viso3d")
+        so_draw = SharedObject("draw_vis")
+        so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
+
+        data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
+
+        while not so_joined.triggered:
+            # Sort names so they are ordered as color, depth, mask
+            all_so_names = sorted(os.listdir("/dev/shm"))
+
+            so_data_names = [
+                p for p in all_so_names
+                if p.startswith(("rs_", "vis_", "viso3d_"))
+                and p.endswith(("_color", "_depth", "_pose"))
+            ]
+
+            if self.stream_camera:
+                updated = False
+                geometry_names = set()
+                for so_data_name in [p for p in all_so_names if p.startswith("rs_")
+                                     and p.endswith(("_color", "_depth"))]:
+                    if (so_data := so_dict[so_data_name]).modified:
+                        if so_data_name.endswith("_color"):
+                            data_dict[f"{so_data_name[:-6]}"].colors = Vector3dVector(
+                                so_dict.fetch().reshape(-1, 3)
+                            )
+                            geometry_names.add(so_data_name[:-6])
+                        elif so_data_name.endswith("_depth"):
+                            K = so_dict[f"{so_data_name[:-6]}_intr"].fetch()
+                            depth_image = so_data.fetch()
+                            xyz_image = depth2xyz(
+                                depth_image, K,
+                                1000.0 if depth_image.dtype == np.uint16 else 1.0
+                            )
+                            data_dict[f"{so_data_name[:-6]}"].points = Vector3dVector(
+                                xyz_image.reshape(-1, 3)
+                            )
+                            geometry_names.add(so_data_name[:-6])
+                        updated = True
+                if updated:
+                    for name in geometry_names:
+                        self.add_geometry(name, data_dict[name], show=True)
+            else:
+                # for each camera sync, check if capture is triggered
+                for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
+                    if so_dict[so_name].triggered:
+                        if (so_data_name := f"{so_name[5:]}_color") in all_so_names:
+                            data_dict[f"{so_name[5:]}"].colors = Vector3dVector(
+                                so_dict[so_data_name].fetch().reshape(-1, 3)
+                            )
+                        if (so_data_name := f"{so_name[5:]}_depth") in all_so_names:
+                            K = so_dict[f"{so_data_name[:-6]}_intr"].fetch()
+                            depth_image = so_dict[so_data_name].fetch()
+                            xyz_image = depth2xyz(
+                                depth_image, K,
+                                1000.0 if depth_image.dtype == np.uint16 else 1.0
+                            )
+                            data_dict[f"{so_name[5:]}"].points = Vector3dVector(
+                                xyz_image.reshape(-1, 3)
+                            )
+
+            if so_draw.triggered:  # triggers redraw
+                geometry_names = set()
+                for so_data_name in so_data_names:
+                    data_source, data_uid = so_data_name.split('_', 1)
+                    data_uid, data_fmt = data_uid.replace('|', '/').rsplit('_', 1)
+
+                    # Fetch data or use captured RSDevice data
+                    if data_fmt == "color":  # PointCloud.colors
+                        if data_source != "rs":
+                            data_dict[data_uid].colors = Vector3dVector(
+                                so_dict[so_data_name].fetch().reshape(-1, 3)
+                            )
+                    elif data_fmt == "depth":
+                        if data_source != "rs":
+                            K = so_dict[f"{so_data_name[:-6]}_intr"].fetch()
+                            depth_image = so_dict[so_data_name].fetch()
+                            xyz_image = depth2xyz(
+                                depth_image, K,
+                                1000.0 if depth_image.dtype == np.uint16 else 1.0
+                            )
+                            data_dict[data_uid].points = Vector3dVector(
+                                xyz_image.reshape(-1, 3)
+                            )
+                    elif data_fmt == "pose":
+                        # NOTE: Geometry3D.transform is faster than transform_points
+                        data_dict[data_uid].transform(so_dict[so_data_name].fetch())
+                    elif data_fmt == "pts":
+                        data_dict[data_uid].points = Vector3dVector(
+                            so_dict[so_data_name].fetch()
+                        )
+                    elif data_fmt == "xyzimg":
+                        data_dict[data_uid].points = Vector3dVector(
+                            so_dict[so_data_name].fetch().reshape(-1, 3)
+                        )
+                    else:
+                        raise ValueError(f"Unknown {so_data_name = }")
+
+                    geometry_names.add(data_uid)
+
+                for name in geometry_names:
+                    self.add_geometry(name, data_dict[name], show=True)
+
+            self.render()
+
+        self.logger.info(f"Process running {self!r} is joined")
+        # Unlink created SharedObject
+        so_joined.unlink()
+
     def render(self, render_step_fn=None):
         """Update GUI and respond to mouse and keyboard events for one tick
         :param render_step_fn: additional render step function to call.
@@ -1378,6 +1549,9 @@ class O3DGUIVisualizer:
     def __del__(self):
         """Can segfault if not closed before delete"""
         self.close()
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}: {self.window_name})>"
 
 
 if __name__ == "__main__":
