@@ -7,7 +7,7 @@ def depth2xyz(depth_image, intrinsics, depth_scale=1000.0) -> np.ndarray:
     """Use camera intrinsics to convert depth_image to xyz_image
     :param depth_image: [H, W] or [H, W, 1] np.uint16 np.ndarray
     :param intrinsics: [3, 3] camera intrinsics matrix
-    :return xyz_image: [H, W, 3] float np.ndarray
+    :return xyz_image: [H, W, 3] np.float64 np.ndarray
     """
     if intrinsics.size == 4:
         fx, fy, cx, cy = intrinsics

@@ -477,6 +477,8 @@ class SharedDynamicObject(SharedObject):
     """Shared object implemented with SharedMemory and synchronization
     Allow reallocating SharedMemory.
         Need more checks and thus is slower than SharedObject.
+        In fact, this should never be implemented.
+        For size-variable np.ndarray, just implement similar support as str/bytes
     """
 
     @staticmethod

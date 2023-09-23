@@ -20,39 +20,33 @@ class CV2Visualizer:
         """
         :param window_name: window name
         :param run_as_process: whether to run CV2Visualizer as a separate process.
-            If True, CV2Visualizer needs to be created as a `mp.Process`.
-            Several SharedObject are mounted to control CV2Visualizer and feed data:
-                Only "join_viscv2" is created by this process.
-              * "join_viscv2": If triggered, the CV2Visualizer process is joined.
-              * "draw_vis": If triggered, redraw the images.
-              * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
-              Data unique to CV2Visualizer:
-              * "viscv2_<image_uid>_color": rgb color image
-              * "viscv2_<image_uid>_depth": depth image
-              * "viscv2_<image_uid>_mask": object mask
-              Data shared with O3DGUIVisualizer
-              * "vis_<image_uid>_color": rgb color image
-              * "vis_<image_uid>_depth": depth image
-              * "vis_<image_uid>_mask": object mask
-              RSDevice camera feeds
+          If True, CV2Visualizer needs to be created as a `mp.Process`.
+          Several SharedObject are mounted to control CV2Visualizer and feed data:
+              Only "join_viscv2" is created by this process.
+            * "join_viscv2": If triggered, the CV2Visualizer process is joined.
+            * "draw_vis": If triggered, redraw the images.
+            * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
+            Corresponding data have the same prefix (implemented as sorting)
+            * Data unique to CV2Visualizer have prefix "viscv2_<image_uid>_"
+            * Data shared with O3DGUIVisualizer have prefix "vis_<image_uid>_"
+            * RSDevice camera feeds have prefix "rs_<device_uid>_"
               * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
               * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
-              Corresponding object mask
               * "rs_<device_uid>_mask": object mask, [H, W] bool/np.uint8 np.ndarray
-            Acceptable visualization data format:
-            * RGB color images: [H, W, 3] np.uint8 np.ndarray
-            * Depth images: [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
-            * Object mask images: [H, W] bool/np.uint8 np.ndarray
+          Acceptable visualization SharedObject data formats and suffixes:
+          * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
+          * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
+          * "_mask": Object mask images, [H, W] bool/np.uint8 np.ndarray
         :param stream_camera: whether to redraw camera stream when a new frame arrives
         """
         self.logger = get_logger("CV2Visualizer")
 
         self.window_name = window_name
-        self.stream_camera = stream_camera
         self.last_timestamp_ns = time.time_ns()
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
         if run_as_process:
+            self.stream_camera = stream_camera
             self.run_as_process()
 
     @staticmethod
