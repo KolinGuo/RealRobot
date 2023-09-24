@@ -1199,6 +1199,7 @@ class O3DGUIVisualizer:
     # Methods
     # ---------------------------------------------------------------------- #
     def load(self, path: str):
+        """Load and add a geometry from file"""
         geometry_name = Path(path).stem
 
         geometry = None
@@ -1397,6 +1398,14 @@ class O3DGUIVisualizer:
             o3d.io.write_image(path, img, quality)
 
         self._scene.scene.scene.render_to_image(on_image)
+
+    def set_focused_camera(self, name: str):
+        """Set the camera view to look at
+        :param name: existing camera name in self._camera_list
+        """
+        assert name in self.camera_poses, f"Camera {name=} does not exist"
+        self._camera_list.selected_text = name
+        self._on_camera_list(name, list(self.camera_poses.keys()).index(name))
 
     def add_camera_pose(self, name: str, T: np.ndarray, fmt: str = "GL"):
         """Add a camera pose to render from (OpenGL convention)
