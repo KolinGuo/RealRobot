@@ -12,7 +12,7 @@ from open3d.utility import Vector3dVector
 import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 
-from ..camera import depth2xyz
+from ..camera import T_CV_GL, T_ROS_GL, depth2xyz
 from ..multiprocessing import SharedObject, SharedObjectDefaultDict
 from ..logger import get_logger
 
@@ -296,7 +296,9 @@ class O3DGUIVisualizer:
               * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
               * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
               * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
-              * "rs_<device_uid>_pose": camera pose, [4, 4] np.float64 np.ndarray
+              * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
+                                        forward(x), left(y) and up(z)
+                                        [4, 4] np.float32 np.ndarray
             Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
               <device_uid> and <data_uid> must not be the same
           Acceptable <data_uid> suffixes with its acceptable data member suffixes:
@@ -1396,16 +1398,23 @@ class O3DGUIVisualizer:
 
         self._scene.scene.scene.render_to_image(on_image)
 
-    def add_camera_pose(self, name: str, T: np.ndarray):
-        """Add a camera pose to render from
+    def add_camera_pose(self, name: str, T: np.ndarray, fmt: str = "GL"):
+        """Add a camera pose to render from (OpenGL convention)
         Camera frame is right(x), up(y), backwards(z)
-        :param T: np.ndarray, a 4x4 transformation matrix
+        :param T: camera pose in world frame, [4, 4] np.floating np.ndarray
         """
         # New camera pose
         if name not in self.camera_poses:
             self._camera_list.add_item(name)
 
-        self.camera_poses[name] = T
+        if fmt == "GL":
+            self.camera_poses[name] = T
+        elif fmt == "ROS":
+            self.camera_poses[name] = T @ T_ROS_GL
+        elif fmt == "CV":
+            self.camera_poses[name] = T @ T_CV_GL
+        else:
+            raise ValueError(f"Unknown camera pose format {fmt=}")
 
     def run_as_process(self):
         """Run O3DGUIVisualizer as a separate process"""
@@ -1496,7 +1505,10 @@ class O3DGUIVisualizer:
                             ).reshape(-1, 3))
                     elif data_fmt == "pose":
                         # NOTE: Geometry3D.transform is faster than transform_points
-                        data_dict[data_uid].transform(so_dict[so_data_name].fetch())
+                        T = so_dict[so_data_name].fetch()
+                        data_dict[data_uid].transform(T)
+                        if data_source == "rs":
+                            self.add_camera_pose(data_uid[:-13], T, fmt="ROS")
                     elif data_fmt == "xyzimg":
                         data_dict[data_uid].points = Vector3dVector(
                             so_dict[so_data_name].fetch().reshape(-1, 3)

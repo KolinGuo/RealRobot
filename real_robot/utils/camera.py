@@ -1,6 +1,34 @@
 from typing import Tuple
 import numpy as np
 import cv2
+from sapien.core import Pose
+
+# Convert between camera frame conventions
+#   OpenCV frame convention: right(x), down(y), forward(z)
+#   OpenGL frame convention: right(x), up(y), backwards(z)
+#   ROS/Sapien frame convention: forward(x), left(y) and up(z)
+# For ROS frame conventions, see https://www.ros.org/reps/rep-0103.html#axis-orientation
+T_CV_GL = np.array([[1, 0, 0, 0],
+                    [0, -1, 0, 0],
+                    [0, 0, -1, 0],
+                    [0, 0, 0, 1]], dtype=np.float32)
+pose_CV_GL = Pose.from_transformation_matrix(T_CV_GL)
+pose_GL_CV = pose_CV_GL.inv()
+T_GL_CV = pose_GL_CV.to_transformation_matrix()
+T_CV_ROS = np.array([[0, -1, 0, 0],
+                     [0, 0, -1, 0],
+                     [1, 0, 0, 0],
+                     [0, 0, 0, 1]], dtype=np.float32)
+pose_CV_ROS = Pose.from_transformation_matrix(T_CV_ROS)
+pose_ROS_CV = pose_CV_ROS.inv()
+T_ROS_CV = pose_ROS_CV.to_transformation_matrix()
+T_GL_ROS = np.array([[0, -1, 0, 0],
+                     [0, 0, 1, 0],
+                     [-1, 0, 0, 0],
+                     [0, 0, 0, 1]], dtype=np.float32)
+pose_GL_ROS = Pose.from_transformation_matrix(T_GL_ROS)
+pose_ROS_GL = pose_GL_ROS.inv()
+T_ROS_GL = pose_ROS_GL.to_transformation_matrix()
 
 
 def depth2xyz(depth_image, intrinsics, depth_scale=1000.0) -> np.ndarray:

@@ -7,21 +7,11 @@ import numpy as np
 from sapien.core import Pose
 from gym import spaces
 
+from ..utils.camera import pose_CV_ROS, pose_ROS_CV
 from ..utils.realsense import _default_bag_path, RSDevice
 from ..utils.multiprocessing import SharedObject
 from .. import REPO_ROOT
 
-
-# pose_CV_ROS converts from opencv frame (right(x), down(y), forward(z))
-# to ROS camera frame (forward(x), left(y) and up(z))
-# For ROS frame conventions, see https://www.ros.org/reps/rep-0103.html#axis-orientation
-pose_CV_ROS = Pose.from_transformation_matrix(
-    np.array([[0, -1, 0, 0],
-              [0, 0, -1, 0],
-              [1, 0, 0, 0],
-              [0, 0, 0, 1]], dtype=np.float32)
-)
-pose_ROS_CV = pose_CV_ROS.inv()
 
 CALIB_CAMERA_POSE_DIR = REPO_ROOT / "hec_camera_poses"
 CALIB_CAMERA_POSES = {
