@@ -1,7 +1,7 @@
 import time
 import multiprocessing as mp
 from collections import OrderedDict
-from typing import Dict, Callable
+from typing import Dict, Callable, Optional
 
 import numpy as np
 from sapien.core import Pose
@@ -12,17 +12,22 @@ from ..utils.multiprocessing import SharedObject
 from .. import REPO_ROOT
 
 
-T_CV_CAM = np.array([[0, -1, 0, 0],
-                     [0, 0, -1, 0],
-                     [1, 0, 0, 0],
-                     [0, 0, 0, 1]], dtype=np.float32)
-T_CAM_CV = np.linalg.inv(T_CV_CAM)
+# pose_CV_ROS converts from opencv frame (right(x), down(y), forward(z))
+# to ROS camera frame (forward(x), left(y) and up(z))
+# For ROS frame conventions, see https://www.ros.org/reps/rep-0103.html#axis-orientation
+pose_CV_ROS = Pose.from_transformation_matrix(
+    np.array([[0, -1, 0, 0],
+              [0, 0, -1, 0],
+              [1, 0, 0, 0],
+              [0, 0, 0, 1]], dtype=np.float32)
+)
+pose_ROS_CV = pose_CV_ROS.inv()
 
 CALIB_CAMERA_POSE_DIR = REPO_ROOT / "hec_camera_poses"
 CALIB_CAMERA_POSES = {
-    "front_camera": Pose().from_transformation_matrix(np.load(
+    "front_camera": Pose.from_transformation_matrix(np.load(
         CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230726_CSE4144_front.npy"
-    ) @ T_CV_CAM)
+    )) * pose_CV_ROS
 }
 
 ctx = mp.get_context("forkserver" if "forkserver" in mp.get_all_start_methods()
@@ -41,26 +46,23 @@ class CameraConfig:
         preset="Default",
         depth_option_kwargs={},
         color_option_kwargs={},
-        actor_pose_fn: Callable[..., Pose] = None,
+        parent_pose_fn: Optional[Callable[[], Pose]] = None,
     ):
         """Camera configuration.
 
-        Args:
-            uid (str): unique id of the camera
-            device_sn (str): unique serial number of the camera
-            pose (Pose): camera pose in world frame.
-                         Format is is forward(x), left(y) and up(z)
-                         If actor_pose_fn is not None,
-                            this is pose relative to actor_pose
-            width (int): width of the camera
-            height (int): height of the camera
-            fps (int): camera streaming fps
-            preset (str): depth sensor presets
-            depth_option_kwargs (dict): depth sensor optional keywords
-            color_option_kwargs (dict): color sensor optional keywords
-            actor_pose_fn (Callable, optional): function to get actor pose
-                                                where the camera is mounted to.
-                                                Defaults to None.
+        :param uid: unique id of the camera
+        :param device_sn: unique serial number of the camera
+        :param pose: camera pose in world frame, following ROS frame conventions.
+                     Format is forward(x), left(y) and up(z)
+                     If parent_pose_fn is not None, this is pose relative to parent link
+        :param width: width of the camera
+        :param height: height of the camera
+        :param fps: camera streaming fps
+        :param preset: depth sensor presets
+        :param depth_option_kwargs: depth sensor optional keywords
+        :param color_option_kwargs: color sensor optional keywords
+        :param parent_pose_fn: function to get camera's parent link pose
+                               Defaults to None (camera has no mounting parent link).
         """
         self.uid = uid
         self.device_sn = device_sn
@@ -72,7 +74,7 @@ class CameraConfig:
         self.preset = preset
         self.depth_option_kwargs = depth_option_kwargs
         self.color_option_kwargs = color_option_kwargs
-        self.actor_pose_fn = actor_pose_fn
+        self.parent_pose_fn = parent_pose_fn
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + "(" + str(self.__dict__) + ")"
@@ -101,9 +103,11 @@ class Camera:
         self.camera_cfg = camera_cfg
         self.uid = camera_cfg.uid
         self.device_sn = camera_cfg.device_sn
+        self.local_pose = camera_cfg.pose
         self.width = camera_cfg.width
         self.height = camera_cfg.height
         self.fps = camera_cfg.fps
+        self.parent_pose_fn = camera_cfg.parent_pose_fn
 
         self.record_bag = record_bag
         self.bag_path = bag_path
@@ -132,6 +136,7 @@ class Camera:
         self.so_color = SharedObject(f"rs_{self.uid}_color")
         self.so_depth = SharedObject(f"rs_{self.uid}_depth")
         self.so_intr = SharedObject(f"rs_{self.uid}_intr")
+        self.so_pose = SharedObject(f"rs_{self.uid}_pose")
 
         self.so_start.assign(True)  # start the RSDevice
         # Wait for intrinsic matrix
@@ -140,6 +145,7 @@ class Camera:
         self.intrinsic_matrix = self.so_intr.fetch()
 
     def take_picture(self):
+        # TODO: need to take picture to fetch synchronized camera pose
         pass
 
     def get_images(self, take_picture=False) -> Dict[str, np.ndarray]:
@@ -163,33 +169,42 @@ class Camera:
 
     @property
     def pose(self) -> Pose:
-        """Camera pose in world frame
-        Format is is forward(x), left(y) and up(z)
+        """Camera pose in world frame, following ROS frame conventions
+        Format is forward(x), left(y) and up(z)
         """
-        if self.camera_cfg.actor_pose_fn is not None:
-            return self.camera_cfg.actor_pose_fn() * self.camera_cfg.pose
+        if self.parent_pose_fn is not None:
+            pose = self.parent_pose_fn() * self.local_pose
         else:
-            return self.camera_cfg.pose
+            pose = self.local_pose
+        self.so_pose.assign(pose.to_transformation_matrix())
+        return pose
 
-    def get_extrinsic_matrix(self) -> np.ndarray:
+    def get_extrinsic_matrix(self, pose: Pose = None) -> np.ndarray:
         """Returns a 4x4 extrinsic camera matrix in OpenCV format
         right(x), down(y), forward(z)
         """
-        return T_CV_CAM @ self.pose.inv().to_transformation_matrix()
+        if pose is not None:
+            return (pose_CV_ROS * pose.inv()).to_transformation_matrix()
+        else:
+            return (pose_CV_ROS * self.pose.inv()).to_transformation_matrix()
 
-    def get_model_matrix(self) -> np.ndarray:
+    def get_model_matrix(self, pose: Pose = None) -> np.ndarray:
         """Returns a 4x4 camera model matrix in OpenCV format
         right(x), down(y), forward(z)
         Note: this impl is different from sapien where the format is
               right(x), up(y), back(z)
         """
-        return self.pose.to_transformation_matrix() @ T_CAM_CV
+        if pose is not None:
+            return (pose * pose_ROS_CV).to_transformation_matrix()
+        else:
+            return (self.pose * pose_ROS_CV).to_transformation_matrix()
 
     def get_params(self):
         """Get camera parameters."""
+        pose = self.pose
         return dict(
-            extrinsic_cv=self.get_extrinsic_matrix(),
-            cam2world_cv=self.get_model_matrix(),
+            extrinsic_cv=self.get_extrinsic_matrix(pose),
+            cam2world_cv=self.get_model_matrix(pose),
             intrinsic_cv=self.intrinsic_matrix,
         )
 

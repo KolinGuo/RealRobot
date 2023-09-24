@@ -89,6 +89,9 @@ class RSDevice:
             * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
             * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
             * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
+            * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
+                                      forward(x), left(y) and up(z)
+                                      [4, 4] np.float32 np.ndarray
         """
         self.logger = get_logger("RSDevice")
 
@@ -245,6 +248,7 @@ class RSDevice:
             data=np.zeros((self.height, self.width), dtype=np.uint16)
         )
         so_intr = SharedObject(f"rs_{self.uid}_intr", data=np.zeros((3, 3)))
+        so_pose = SharedObject(f"rs_{self.uid}_pose", data=np.eye(4, dtype=np.float32))
 
         while not so_joined.triggered:
             start = so_start.fetch()
@@ -271,6 +275,7 @@ class RSDevice:
         so_color.unlink()
         so_depth.unlink()
         so_intr.unlink()
+        so_pose.unlink()
 
     @property
     def is_running(self) -> bool:

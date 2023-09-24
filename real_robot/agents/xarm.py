@@ -443,17 +443,17 @@ class XArm7:
     @property
     def cameras(self) -> CameraConfig:
         """CameraConfig of cameras attached to agent"""
-        T_tcp_cam = Pose(p=[0, 0, 0.177]).inv() * Pose(
+        pose_tcp_cam = Pose(p=[0, 0, 0.177]).inv() * Pose(
             p=[-0.06042734, 0.0175, 0.02915237],
             q=euler2quat(np.pi, -np.pi/2-np.pi/12, np.pi)
         ) * Pose(p=[0, 0.015, 0])  # camera_color_frame
         return CameraConfig(
             uid="hand_camera",
             device_sn="146322076186",
-            pose=T_tcp_cam,
+            pose=pose_tcp_cam,
             width=848,
             height=480,
             preset="High Accuracy",
             depth_option_kwargs={rs.option.exposure: 1500},
-            actor_pose_fn=self.get_tcp_pose,
+            parent_pose_fn=self.get_tcp_pose,
         )
