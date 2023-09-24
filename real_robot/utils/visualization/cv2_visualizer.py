@@ -174,7 +174,8 @@ class CV2Visualizer:
                 and p.endswith(("_color", "_depth", "_mask"))
             ]
 
-            if self.stream_camera:
+            # ----- Capture from RSDevice stream -----
+            if self.stream_camera:  # capture whenever a new frame comes in
                 updated = False
                 for so_data_name in [p for p in all_so_names if p.startswith("rs_")
                                      and p.endswith(("_color", "_depth"))]:
@@ -190,7 +191,7 @@ class CV2Visualizer:
                         else:
                             images.append(vis_data[so_data_name])
                     self.show_images(images)
-            else:
+            else:  # synchronized capturing with env
                 # for each camera sync, check if capture is triggered
                 for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
                     if so_dict[so_name].triggered:
@@ -199,6 +200,7 @@ class CV2Visualizer:
                         if (so_data_name := f"{so_name[5:]}_depth") in all_so_names:
                             vis_data[so_data_name] = so_dict[so_data_name].fetch()
 
+            # ----- Fetch data and draw -----
             if so_draw.triggered:  # triggers redraw
                 images = []
                 for so_data_name in so_data_names:
