@@ -303,8 +303,10 @@ class O3DGUIVisualizer:
             Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
               <device_uid> and <data_uid> must not be the same
           Acceptable <data_uid> suffixes with its acceptable data member suffixes:
-          * "_pcd": PointCloud: ("_color", "_depth", "_intr", "_pose"),
-                    ("_color", "_pts", "_pose"), ("_color", "_xyzimg", "_pose")
+            (data members in brackets are optional)
+          * "_pcd": PointCloud: ("_depth", "_intr", ["_color", "_pose"]),
+                    ("_pts", ["_color", "_pose"]), ("_xyzimg", ["_color", "_pose"])
+          * "_frame": Coordinate frame: ("_pose",)
           * "_bbox": bounding box pts (xyz_min, xyz_max), [2, 3] np.float64 np.ndarray
 
           Acceptable visualization SharedObject data formats:
@@ -1523,16 +1525,20 @@ class O3DGUIVisualizer:
                 for so_data_name in [p for p in all_so_names if p.startswith("rs_")
                                      and p.endswith(("_color", "_depth"))]:
                     if (so_data := so_dict[so_data_name]).modified:
-                        data_uid = f"{so_data_name[3:-6]}/captured_pcd"
-                        if so_data_name.endswith("_color"):
+                        camera_name = so_data_name[3:-6]
+                        data_uid = f"{camera_name}/captured_pcd"
+                        if so_data_name.endswith("_color"):  # color
                             data_dict[data_uid].colors = Vector3dVector(
                                 so_data.fetch(lambda x: x/255.0).reshape(-1, 3)
                             )
-                        else:
-                            data_dict[data_uid].points = Vector3dVector(depth2xyz(
-                                depth_image=so_data.fetch(),
-                                intrinsics=so_dict[f"{so_data_name[:-6]}_intr"].fetch()
-                            ).reshape(-1, 3))
+                        else:  # depth
+                            # TODO: fetch pose stream and add_camera with pose
+                            K = so_dict[f"{so_data_name[:-6]}_intr"].fetch()
+                            depth_image = so_data.fetch()
+                            data_dict[data_uid].points = Vector3dVector(
+                                depth2xyz(depth_image, K).reshape(-1, 3)
+                            )
+                            self.add_camera(camera_name, *depth_image.shape[::-1], K)
                         geometry_uids.add(data_uid)
                 for data_uid in geometry_uids:
                     self.add_geometry(data_uid, data_dict[data_uid])
@@ -1543,16 +1549,19 @@ class O3DGUIVisualizer:
                 # for each camera sync, check if capture is triggered
                 for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
                     if so_dict[so_name].triggered:
-                        data_uid = f"{so_name[8:]}/captured_pcd"
+                        camera_name = so_name[8:]
+                        data_uid = f"{camera_name}/captured_pcd"
                         if (so_data_name := f"{so_name[5:]}_color") in all_so_names:
                             data_dict[data_uid].colors = Vector3dVector(
                                 so_dict[so_data_name].fetch(lambda x: x/255.0).reshape(-1, 3)
                             )
                         if (so_data_name := f"{so_name[5:]}_depth") in all_so_names:
-                            data_dict[data_uid].points = Vector3dVector(depth2xyz(
-                                depth_image=so_dict[so_data_name].fetch(),
-                                intrinsics=so_dict[f"{so_name[5:]}_intr"].fetch()
-                            ).reshape(-1, 3))
+                            K = so_dict[f"{so_name[5:]}_intr"].fetch()
+                            depth_image = so_dict[so_data_name].fetch()
+                            data_dict[data_uid].points = Vector3dVector(
+                                depth2xyz(depth_image, K).reshape(-1, 3)
+                            )
+                            self.add_camera(camera_name, *depth_image.shape[::-1], K)
 
             # ----- Fetch data and draw -----
             if so_draw.triggered:  # triggers redraw
@@ -1576,6 +1585,8 @@ class O3DGUIVisualizer:
                                 so_dict[so_data_name].fetch(lambda x: x/255.0).reshape(-1, 3)
                             )
                     elif data_fmt == "depth":
+                        camera_name = data_uid[:-13]
+
                         if data_source != "rs":
                             K = so_dict[f"{so_data_name[:-6]}_intr"].fetch()
                             depth_image = so_dict[so_data_name].fetch()
@@ -1583,12 +1594,15 @@ class O3DGUIVisualizer:
                                 depth_image, K,
                                 1000.0 if depth_image.dtype == np.uint16 else 1.0
                             ).reshape(-1, 3))
+                            self.add_camera(camera_name, *depth_image.shape[::-1], K)
+
+                        # Update camera pose
+                        T = so_dict[f"{so_data_name[:-6]}_pose"].fetch()
+                        self.update_camera_pose(camera_name, T, fmt="ROS")
                     elif data_fmt == "pose":
                         # NOTE: Geometry3D.transform is faster than transform_points
                         T = so_dict[so_data_name].fetch()
                         data_dict[data_uid].transform(T)
-                        if data_source == "rs":
-                            self.add_camera(data_uid[:-13], T, fmt="ROS")
                     elif data_fmt == "xyzimg":
                         data_dict[data_uid].points = Vector3dVector(
                             so_dict[so_data_name].fetch().reshape(-1, 3)

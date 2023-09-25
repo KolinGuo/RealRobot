@@ -182,7 +182,7 @@ class CV2Visualizer:
                     if (so_data := so_dict[so_data_name]).modified:
                         vis_data[so_data_name] = so_data.fetch()
                         updated = True
-                if updated:
+                if updated:  # camera stream is updated, redraw images
                     images = []
                     for so_data_name in so_data_names:
                         if so_data_name.endswith("_mask"):
@@ -191,7 +191,7 @@ class CV2Visualizer:
                         else:
                             images.append(vis_data[so_data_name])
                     self.show_images(images)
-            else:  # synchronized capturing with env
+            else:  # synchronized capturing with env (no redraw here)
                 # for each camera sync, check if capture is triggered
                 for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
                     if so_dict[so_name].triggered:
