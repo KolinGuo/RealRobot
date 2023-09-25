@@ -12,7 +12,7 @@ from open3d.utility import Vector3dVector
 import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 
-from ..camera import T_CV_GL, T_ROS_GL, depth2xyz
+from ..camera import T_GL_CV, T_CV_GL, T_ROS_GL, depth2xyz
 from ..multiprocessing import SharedObject, SharedObjectDefaultDict
 from ..logger import get_logger
 
@@ -168,6 +168,7 @@ class Settings:
         self.bg_color = gui.Color(1, 1, 1)
         self.show_skybox = False
         self.show_axes = False
+        self.show_camera = True
         self.show_ground = False
         self.ground_plane = self.GROUND_PLANE["XY"]
         self.use_ibl = True
@@ -476,11 +477,11 @@ class O3DGUIVisualizer:
         # Coordinate axes and skybox
         self._show_axes = gui.Checkbox("Show axis")
         self._show_axes.set_on_checked(self._on_show_axes)
-        self._show_skybox = gui.Checkbox("Show skybox")
-        self._show_skybox.set_on_checked(self._on_show_skybox)
+        self._show_camera = gui.Checkbox("Show camera")
+        self._show_camera.set_on_checked(self._on_show_camera)
         h = gui.Horiz(em)
         h.add_child(self._show_axes)
-        h.add_child(self._show_skybox)
+        h.add_child(self._show_camera)
         scene_ctrls.add_child(h)
         # Ground plane
         self._show_ground = gui.Checkbox("Show ground")
@@ -490,9 +491,12 @@ class O3DGUIVisualizer:
         self._ground_plane.add_item("XZ")
         self._ground_plane.add_item("YZ")
         self._ground_plane.set_on_selection_changed(self._on_ground_plane)
+        self._show_skybox = gui.Checkbox("Show skybox")
+        self._show_skybox.set_on_checked(self._on_show_skybox)
         h = gui.Horiz(em)
         h.add_child(self._show_ground)
         h.add_child(self._ground_plane)
+        h.add_child(self._show_skybox)
         scene_ctrls.add_child(h)
 
         self._bg_color = gui.ColorEdit()
@@ -723,6 +727,10 @@ class O3DGUIVisualizer:
         ]
         self._scene.scene.set_background(bg_color)
         self._scene.scene.show_axes(self.settings.show_axes)
+        for camera_name in self.camera_poses:
+            if camera_name != "default":
+                self._scene.scene.show_geometry(f"{camera_name}_lineset",
+                                                self.settings.show_camera)
         self._scene.scene.show_skybox(self.settings.show_skybox)
         self._scene.scene.show_ground_plane(self.settings.show_ground,
                                             self.settings.ground_plane)
@@ -750,6 +758,7 @@ class O3DGUIVisualizer:
         self._bg_color.color_value = self.settings.bg_color
         self._show_skybox.checked = self.settings.show_skybox
         self._show_axes.checked = self.settings.show_axes
+        self._show_camera.checked = self.settings.show_camera
         self._use_ibl.checked = self.settings.use_ibl
         self._use_sun.checked = self.settings.use_sun
         self._ibl_intensity.int_value = self.settings.ibl_intensity
@@ -865,6 +874,10 @@ class O3DGUIVisualizer:
     # ---------------------------------------------------------------------- #
     def _on_show_axes(self, show: bool):
         self.settings.show_axes = show
+        self._apply_settings()
+
+    def _on_show_camera(self, show: bool):
+        self.settings.show_camera = show
         self._apply_settings()
 
     def _on_show_skybox(self, show: bool):
@@ -1279,7 +1292,7 @@ class O3DGUIVisualizer:
             bounds = self._scene.scene.bounding_box
             self._scene.setup_camera(60, bounds, bounds.get_center())
             # Store the new camera pose as default
-            self.add_camera_pose(
+            self.update_camera_pose(
                 "default", self._scene.scene.camera.get_model_matrix()
             )
 
@@ -1407,23 +1420,81 @@ class O3DGUIVisualizer:
         self._camera_list.selected_text = name
         self._on_camera_list(name, list(self.camera_poses.keys()).index(name))
 
-    def add_camera_pose(self, name: str, T: np.ndarray, fmt: str = "GL"):
-        """Add a camera pose to render from (OpenGL convention)
-        Camera frame is right(x), up(y), backwards(z)
-        :param T: camera pose in world frame, [4, 4] np.floating np.ndarray
+    @staticmethod
+    def get_camera_lineset(width: int, height: int,
+                           K: np.ndarray, far=1.0) -> o3d.geometry.LineSet:
+        """Create a camera lineset with annotated up-direction
+        :param width: camera image width
+        :param height: camera image height
+        :param K: camera intrinsic matrix, [3, 3] np.floating np.ndarray
+        :param far: camera far clipping plane to draw the lineset, unit in meters
         """
-        # New camera pose
-        if name not in self.camera_poses:
-            self._camera_list.add_item(name)
+        lineset = o3d.geometry.LineSet.create_camera_visualization(
+            width, height, K, np.eye(4), scale=far
+        )
 
+        points = np.asarray(lineset.points)
+        p_00, p_10, p_01 = points[1], points[2], points[4]
+        up_axis = p_00 - p_01
+        up_gap = up_axis * 0.1
+        up_axis /= np.linalg.norm(up_axis)
+
+        lineset.points.append(p_00 + up_gap)
+        lineset.points.append(p_10 + up_gap)
+        lineset.points.append((p_00 + p_10) / 2 + up_gap
+                              + up_axis * np.linalg.norm(p_00 - p_10) / 2 / np.sqrt(3))
+        lineset.lines.append([5, 6])
+        lineset.lines.append([5, 7])
+        lineset.lines.append([6, 7])
+        lineset.paint_uniform_color([0, 0, 1])
+        return lineset
+
+    def add_camera(self, camera_name: str, width: int, height: int, K: np.ndarray,
+                   T: np.ndarray = None, fmt: str = "GL"):
+        """Add a camera to view from (OpenGL convention)
+        Camera frame is right(x), up(y), backwards(z)
+        :param camera_name: camera unique name
+        :param width: camera image width
+        :param height: camera image height
+        :param K: camera intrinsic matrix, [3, 3] np.floating np.ndarray
+        :param T: camera pose in world frame, [4, 4] np.floating np.ndarray
+        :param fmt: camera frame conventions, available: ["GL", "ROS", "CV"]
+        """
+        # New camera
+        if camera_name not in self.camera_poses:
+            self._camera_list.add_item(camera_name)
+            # convert lineset to GL frame convention
+            lineset = self.get_camera_lineset(width, height, K).transform(T_GL_CV)
+            lineset_name = f"{camera_name}_lineset"
+            self._scene.scene.add_geometry(
+                lineset_name, lineset, self.settings._materials[Settings.UNLIT_LINE]
+            )
+            self._scene.scene.show_geometry(lineset_name, self.settings.show_camera)
+            # Initial pose is np.eye(4) (OpenCV convention)
+            self.camera_poses[camera_name] = T_CV_GL
+            self._scene.scene.set_geometry_transform(lineset_name, T_CV_GL)
+
+        if T is not None:
+            self.update_camera_pose(camera_name, T, fmt)
+
+    def update_camera_pose(self, camera_name, T: np.ndarray, fmt: str = "GL"):
+        """Update viewing camera pose (OpenGL convention)
+        Camera frame is right(x), up(y), backwards(z)
+        :param camera_name: camera unique name
+        :param T: camera pose in world frame, [4, 4] np.floating np.ndarray
+        :param fmt: camera frame conventions, available: ["GL", "ROS", "CV"]
+        """
         if fmt == "GL":
-            self.camera_poses[name] = T
+            self.camera_poses[camera_name] = T_GL = T
         elif fmt == "ROS":
-            self.camera_poses[name] = T @ T_ROS_GL
+            self.camera_poses[camera_name] = T_GL = T @ T_ROS_GL
         elif fmt == "CV":
-            self.camera_poses[name] = T @ T_CV_GL
+            self.camera_poses[camera_name] = T_GL = T @ T_CV_GL
         else:
             raise ValueError(f"Unknown camera pose format {fmt=}")
+        # Update camera lineset pose
+        if camera_name != "default":
+            self._scene.scene.set_geometry_transform(f"{camera_name}_lineset", T_GL)
 
     def run_as_process(self):
         """Run O3DGUIVisualizer as a separate process"""
@@ -1517,7 +1588,7 @@ class O3DGUIVisualizer:
                         T = so_dict[so_data_name].fetch()
                         data_dict[data_uid].transform(T)
                         if data_source == "rs":
-                            self.add_camera_pose(data_uid[:-13], T, fmt="ROS")
+                            self.add_camera(data_uid[:-13], T, fmt="ROS")
                     elif data_fmt == "xyzimg":
                         data_dict[data_uid].points = Vector3dVector(
                             so_dict[so_data_name].fetch().reshape(-1, 3)
