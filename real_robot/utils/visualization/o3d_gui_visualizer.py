@@ -1,10 +1,11 @@
 import os
 import glob
+import time
 import platform
 from pathlib import Path
 from functools import partial
 from dataclasses import dataclass, field
-from typing import List, Union, Optional
+from typing import List, Union, Dict, Optional
 
 import numpy as np
 import open3d as o3d
@@ -355,6 +356,9 @@ class O3DGUIVisualizer:
                                        self.picked_pts_pcd,
                                        self.picked_pts_pcd_mat)
 
+        # For computing update fps
+        self.last_timestamp_ns = time.time_ns()
+
         if run_as_process:
             self.stream_camera = stream_camera
             self.run_as_process()
@@ -399,10 +403,17 @@ class O3DGUIVisualizer:
         self._single_step_button.horizontal_padding_em = 0.5
         self._single_step_button.vertical_padding_em = 0
         self._render_info = gui.Label("")
-        h = gui.Horiz(0.25 * em)
+        h = gui.Horiz(0.25 * em, gui.Margins(0.25 * em, 0.25 * em,
+                                             0.25 * em, 0.25 * em))
         h.add_child(self._paused_checkbox)
         h.add_child(self._single_step_button)
         h.add_child(self._render_info)
+        h.add_stretch()
+        self._settings_panel.add_child(h)
+        self._fps_label = gui.Label("FPS: NaN      ")
+        h = gui.Horiz(0.25 * em, gui.Margins(0.25 * em, 0.25 * em,
+                                             0.25 * em, 0.25 * em))
+        h.add_child(self._fps_label)
         h.add_stretch()
         self._settings_panel.add_child(h)
 
@@ -1321,6 +1332,21 @@ class O3DGUIVisualizer:
         # Toggle geometry checkbox and show/hide
         if show is not None:
             self._on_geometry_toggle(show, self.geometries[name])
+
+    def add_geometries(self, geometry_dict: Dict[str, _o3d_geometry_type],
+                       show: bool = None):
+        """Add multiple geometries (allow for computing update fps)
+        :param geometry_dict: dictionary with format {name: Open3D geometry}
+        :param show: whether to show geometry after loading
+        """
+        for name, geometry in geometry_dict.items():
+            self.add_geometry(name, geometry, show)
+
+        # Compute fps
+        cur_timestamp_ns = time.time_ns()
+        fps = 1e9 / (cur_timestamp_ns - self.last_timestamp_ns)
+        self.last_timestamp_ns = cur_timestamp_ns
+        self._fps_label.text = f"FPS: {fps:6.2f}"
 
     def _create_geometry_node(
         self, name: str, parent_node: Optional[GeometryNode] = None
