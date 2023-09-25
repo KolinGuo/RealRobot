@@ -13,7 +13,7 @@ from open3d.utility import Vector3dVector
 import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 
-from ..camera import T_GL_CV, T_CV_GL, T_ROS_GL, depth2xyz
+from ..camera import T_GL_CV, T_CV_GL, T_ROS_GL, T_ROS_CV, depth2xyz
 from ..multiprocessing import SharedObject, SharedObjectDefaultDict
 from ..logger import get_logger
 
@@ -1540,54 +1540,56 @@ class O3DGUIVisualizer:
 
         data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
 
+        def fetch_rs_camera_stream_and_update_pcd(camera_name: str, pcd, all_so_names):
+            """Fetch intr, color, depth, pose streams and update pcd attributes"""
+            # Took ~1.4 ms to fetch 848x480 image streams
+            K = so_dict[f"rs_{camera_name}_intr"].fetch()
+            pts_color = None
+            if (so_data_name := f"rs_{camera_name}_color") in all_so_names:
+                pts_color = so_dict[so_data_name].fetch(lambda x: x/255.).reshape(-1, 3)
+            depth_image = so_dict[f"rs_{camera_name}_depth"].fetch()
+            T_world_cam = so_dict[f"rs_{camera_name}_pose"].fetch()
+
+            if pts_color is not None:
+                pcd.colors = Vector3dVector(pts_color)
+            pcd.points = Vector3dVector(depth2xyz(depth_image, K).reshape(-1, 3))
+            pcd.transform(T_world_cam @ T_ROS_CV)
+            self.add_camera(camera_name, *depth_image.shape[::-1], K,
+                            T_world_cam, fmt="ROS")
+
         while not so_joined.triggered:
             # Sort names so they are ordered as color, depth, mask
             all_so_names = sorted(os.listdir("/dev/shm"))
 
             # ----- Capture from RSDevice stream -----
             if self.stream_camera:  # capture whenever a new frame comes in
-                # TODO: camera pose is not a stream currently
-                geometry_uids = set()
-                for so_data_name in [p for p in all_so_names if p.startswith("rs_")
-                                     and p.endswith(("_color", "_depth"))]:
-                    if (so_data := so_dict[so_data_name]).modified:
+                geometry_uids = []
+                for so_data_name in [p for p in all_so_names
+                                     if p.startswith("rs_") and p.endswith("_depth")]:
+                    if so_dict[so_data_name].modified:
                         camera_name = so_data_name[3:-6]
                         data_uid = f"{camera_name}/captured_pcd"
-                        if so_data_name.endswith("_color"):  # color
-                            data_dict[data_uid].colors = Vector3dVector(
-                                so_data.fetch(lambda x: x/255.0).reshape(-1, 3)
-                            )
-                        else:  # depth
-                            # TODO: fetch pose stream and add_camera with pose
-                            K = so_dict[f"{so_data_name[:-6]}_intr"].fetch()
-                            depth_image = so_data.fetch()
-                            data_dict[data_uid].points = Vector3dVector(
-                                depth2xyz(depth_image, K).reshape(-1, 3)
-                            )
-                            self.add_camera(camera_name, *depth_image.shape[::-1], K)
-                        geometry_uids.add(data_uid)
-                for data_uid in geometry_uids:
-                    self.add_geometry(data_uid, data_dict[data_uid])
-            else:  # synchronized capturing with env
-                # Capture color and depth stream
-                # TODO: camera pose is not a stream (no need to capture here to sync)
 
+                        fetch_rs_camera_stream_and_update_pcd(
+                            camera_name, data_dict[data_uid], all_so_names
+                        )
+
+                        geometry_uids.append(data_uid)
+
+                if len(geometry_uids) > 0:  # camera stream is updated, redraw scene
+                    self.add_geometries({data_uid: data_dict[data_uid]
+                                         for data_uid in geometry_uids})
+            else:  # synchronized capturing with env (no redraw here)
+                # Capture color, depth, and pose stream
                 # for each camera sync, check if capture is triggered
                 for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
                     if so_dict[so_name].triggered:
                         camera_name = so_name[8:]
                         data_uid = f"{camera_name}/captured_pcd"
-                        if (so_data_name := f"{so_name[5:]}_color") in all_so_names:
-                            data_dict[data_uid].colors = Vector3dVector(
-                                so_dict[so_data_name].fetch(lambda x: x/255.0).reshape(-1, 3)
-                            )
-                        if (so_data_name := f"{so_name[5:]}_depth") in all_so_names:
-                            K = so_dict[f"{so_name[5:]}_intr"].fetch()
-                            depth_image = so_dict[so_data_name].fetch()
-                            data_dict[data_uid].points = Vector3dVector(
-                                depth2xyz(depth_image, K).reshape(-1, 3)
-                            )
-                            self.add_camera(camera_name, *depth_image.shape[::-1], K)
+
+                        fetch_rs_camera_stream_and_update_pcd(
+                            camera_name, data_dict[data_uid], all_so_names
+                        )
 
             # ----- Fetch data and draw -----
             if so_draw.triggered:  # triggers redraw
