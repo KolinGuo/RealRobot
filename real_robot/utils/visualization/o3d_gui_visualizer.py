@@ -202,7 +202,7 @@ class Settings:
         # a reference, not a copy, so if we change the property of a material,
         # then switch to another one, then come back,
         # the old setting will still be there.
-        self.material = self._materials[Settings.LIT]
+        self.material = self._materials[Settings.UNLIT]
 
     def apply_material_prefab(self, name: str):
         assert (self.material.shader == Settings.LIT)
@@ -239,7 +239,7 @@ class GeometryNode:
     cell: gui.Widget = None
     # Material settings values
     mat_changed: bool = False
-    mat_shader_index: int = 0  # Settings.LIT
+    mat_shader_index: int = 1  # Settings.UNLIT
     mat_prefab_text: str = Settings.DEFAULT_MATERIAL_NAME
     mat_color: gui.Color = gui.Color(0.9, 0.9, 0.9, 1.0)
     mat_point_size: float = 3.0
@@ -353,7 +353,7 @@ class O3DGUIVisualizer:
         self.picked_pts_pcd = o3d.geometry.PointCloud()
         self.picked_pts_pcd_mat = rendering.MaterialRecord()
         self.picked_pts_pcd_mat.base_color = [0.9, 0.9, 0.9, 1.0]
-        self.picked_pts_pcd_mat.shader = Settings.LIT
+        self.picked_pts_pcd_mat.shader = Settings.UNLIT
         self.picked_pts_pcd_mat.point_size = int(3 * 2)
         self._scene.scene.add_geometry(self.picked_pts_pcd_name,
                                        self.picked_pts_pcd,
@@ -476,8 +476,7 @@ class O3DGUIVisualizer:
         self._camera_list = gui.Combobox()
         self._camera_list.add_item("default")
         self._camera_list.set_on_selection_changed(self._on_camera_list)
-        self._camera_list.tooltip = ("Set the rendering camera to "
-                                     "stored camera poses")
+        self._camera_list.tooltip = "Set the rendering camera to stored camera poses"
         grid = gui.VGrid(2, 0.25 * em)
         grid.add_child(gui.Label("Cameras"))
         grid.add_child(self._camera_list)
@@ -548,9 +547,7 @@ class O3DGUIVisualizer:
         advanced.add_child(h)
 
         self._ibl_map = gui.Combobox()
-        for ibl in glob.glob(gui.Application.instance.resource_path +
-                             "/*_ibl.ktx"):
-
+        for ibl in glob.glob(gui.Application.instance.resource_path + "/*_ibl.ktx"):
             self._ibl_map.add_item(os.path.basename(ibl[:-8]))
         self._ibl_map.selected_text = self.DEFAULT_IBL
         self._ibl_map.set_on_selection_changed(self._on_new_ibl)
@@ -599,18 +596,15 @@ class O3DGUIVisualizer:
         self._shader.add_item(self.MATERIAL_NAMES[3])
         self._shader.add_item(self.MATERIAL_NAMES[4])
         self._shader.set_on_selection_changed(self._on_shader)
+        self._shader.selected_index = GeometryNode.mat_shader_index
         self._material_prefab = gui.Combobox()
         for prefab_name in sorted(Settings.PREFAB.keys()):
             self._material_prefab.add_item(prefab_name)
         self._material_prefab.selected_text = Settings.DEFAULT_MATERIAL_NAME
-        self._material_prefab.set_on_selection_changed(
-            self._on_material_prefab
-        )
+        self._material_prefab.set_on_selection_changed(self._on_material_prefab)
         self._material_color = gui.ColorEdit()
         self._material_color.set_on_value_changed(self._on_material_color)
-        self._material_color.color_value = gui.Color(
-            *self.settings.material.base_color
-        )
+        self._material_color.color_value = gui.Color(*self.settings.material.base_color)
         self._point_size = gui.Slider(gui.Slider.INT)
         self._point_size.set_limits(1, 30)
         self._point_size.set_on_value_changed(self._on_point_size)
@@ -781,9 +775,7 @@ class O3DGUIVisualizer:
         self._sun_intensity.int_value = self.settings.sun_intensity
         self._sun_dir.vector_value = self.settings.sun_dir
         self._sun_color.color_value = self.settings.sun_color
-        self._material_prefab.enabled = (
-            self.settings.material.shader == Settings.LIT
-        )
+        self._material_prefab.enabled = (self.settings.material.shader == Settings.LIT)
         c = gui.Color(self.settings.material.base_color[0],
                       self.settings.material.base_color[1],
                       self.settings.material.base_color[2],
