@@ -33,6 +33,7 @@ class O3DGeometryDefaultDict(dict):
     def __missing__(self, name: str) -> _o3d_geometry_type:
         if name.endswith("_pcd"):
             geometry = self[name] = o3d.geometry.PointCloud()
+        # TODO: _frame, _bbox support
         else:
             raise ValueError(f"Unknown {name=}")
         return geometry
@@ -251,6 +252,11 @@ class GeometryNode:
         if self.parent is not None and self.parent.parent is not None:
             return self.name.removeprefix(self.parent.name + '/')
         return self.name
+
+    def __repr__(self) -> str:
+        return (f"<{self.__class__.__name__}: '{self.name}' (id={self.id}), "
+                f"parent='{self.parent.name}', "
+                f"children={[f'{c.name}' for c in self.children]}>")
 
 
 class O3DGUIVisualizer:
@@ -1325,8 +1331,10 @@ class O3DGUIVisualizer:
             self._on_geometry_tree(current_selected_item)
 
         # Toggle geometry checkbox and show/hide
-        if show is not None:
-            self._on_geometry_toggle(show, self.geometries[name])
+        self._on_geometry_toggle(
+            show if show is not None else node.cell.checkbox.checked,
+            self.geometries[name]
+        )
 
     def add_geometries(self, geometry_dict: Dict[str, _o3d_geometry_type],
                        show: bool = None):
