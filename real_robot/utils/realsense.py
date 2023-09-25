@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple, Union, Optional
 import pyrealsense2 as rs
 import numpy as np
 
+from .camera import T_CV_ROS
 from .multiprocessing import SharedObject
 from .logger import get_logger
 from .. import REPO_ROOT
@@ -248,7 +249,7 @@ class RSDevice:
             data=np.zeros((self.height, self.width), dtype=np.uint16)
         )
         so_intr = SharedObject(f"rs_{self.uid}_intr", data=np.zeros((3, 3)))
-        so_pose = SharedObject(f"rs_{self.uid}_pose", data=np.eye(4, dtype=np.float32))
+        so_pose = SharedObject(f"rs_{self.uid}_pose", data=T_CV_ROS)
 
         while not so_joined.triggered:
             start = so_start.fetch()
@@ -264,6 +265,8 @@ class RSDevice:
                 # wait for frames
                 frames = self.pipeline.wait_for_frames()
                 frames = self.align.process(frames)
+                # TODO: stream so_pose
+                # so_pose.assign()
                 so_color.assign(np.asarray(frames.get_color_frame().data))
                 so_depth.assign(np.asarray(frames.get_depth_frame().data))
 
