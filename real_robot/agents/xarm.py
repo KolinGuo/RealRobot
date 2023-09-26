@@ -1,5 +1,7 @@
 from collections import OrderedDict
 import time
+import math
+from typing import List
 
 import numpy as np
 from gym import spaces
@@ -28,18 +30,34 @@ class XArm7:
                               "joint_online", "cartesian_online")
 
     def __init__(self,
-                 ip="192.168.1.229",
-                 control_mode="pd_ee_delta_pos",
-                 motion_mode="position",
-                 safety_boundary=[999, -999, 999, -999, 999, 0],
-                 boundary_clip_eps=10,
-                 with_hand_camera=True):
+                 ip: str = "192.168.1.229",
+                 control_mode: str = "pd_ee_delta_pos",
+                 motion_mode: str = "position",
+                 safety_boundary: List[int] = [999, -999, 999, -999, 999, 0],
+                 boundary_clip_eps: int = 10,
+                 with_hand_camera: bool = True,
+                 run_as_process: bool = False):
         """
-        :param motion_mode: xArm motion mode
+        :param ip: xArm7 ip address, see controller box
+        :param control_mode: xArm control mode (determines set_action type)
+        :param motion_mode: xArm motion mode (determines xArm motion mode)
         :param safety_boundary: [x_max, x_min, y_max, y_min, z_max, z_min] (mm)
         :param boundary_clip_eps: clip action when TCP position to boundary is
                                   within boundary_clip_eps (mm)
         :param with_hand_camera: whether to include hand camera mount in TCP offset.
+        :param run_as_process: whether to run XArm7 as a separate process.
+            If True, XArm7 needs to be created as a `mp.Process`.
+            Several SharedObject are created to control XArm7 and fetch data:
+            * "join_xarm7": If triggered, the XArm7 process is joined.
+            * "sync_xarm7": If triggered, all processes should fetch data.
+                            Used for synchronizing robot state capture.
+            * "start_xarm7": If True, starts the XArm7 streams; else, stops it.
+
+            * "xarm_qpos": xarm joint angles, [7,] np.float32 np.ndarray
+            * "xarm_qvel": xarm joint velocities, [7,] np.float32 np.ndarray
+            * "xarm_qf": xarm joint torques, [7,] np.float32 np.ndarray
+            * "xarm_tcp_pose": tcp pose in base frame (unit: m)
+                               (xyx, wxyz) [7,] np.float64 np.ndarray
         """
         self.logger = get_logger("XArm7")
         self.arm = XArmAPI(ip)
@@ -393,14 +411,18 @@ class XArm7:
         """Get TCP pose in robot base frame
         :return pose: If unit_in_mm, position unit is mm. Else, unit is m.
         """
-        _, (qpos, qvel, effort) = self.arm.get_joint_states(is_radian=True)
-        _, base_to_tcp = self.arm.get_forward_kinematics(
-            qpos, input_is_radian=True, return_is_radian=True
-        )
-        base_to_tcp = np.asarray(base_to_tcp)
+        # arm.get_position() rounds the values to 6 decimal places
+        # call arm_cmd.get_tcp_pose() instead
+        ret = self.arm._arm.arm_cmd.get_tcp_pose()
+        ret[0] = self.arm._arm._check_code(ret[0])
+        for v in ret[1:]:
+            if not math.isfinite(v):
+                self.logger.critical(f"Return value not finite: {ret[1:]=}")
+
+        xyzrpy = np.asarray(ret[1:], dtype=np.float32)
         base_to_tcp_pose = Pose(
-            p=base_to_tcp[:3] if unit_in_mm else base_to_tcp[:3] / 1000,
-            q=euler2quat(*base_to_tcp[3:], axes='sxyz')
+            p=xyzrpy[:3] if unit_in_mm else xyzrpy[:3] / 1000,
+            q=euler2quat(*xyzrpy[3:], axes='sxyz')
         )
         return base_to_tcp_pose
 
