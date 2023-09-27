@@ -239,9 +239,10 @@ def benchmark_object_trigger(
     return np.mean(times_ns), np.std(times_ns)
 
 
-def child_benchmark_object_fetch_assign(object_type_idx):
+def child_benchmark_object_fetch_assign(object_type_idx: int, p_idx: int):
     so_data = SharedObject("data")
     so_joined = SharedObject("joined")
+    so_ready = SharedObject(f"ready_{p_idx}")
 
     # Create fetch function
     if object_type_idx == 0:
@@ -255,9 +256,8 @@ def child_benchmark_object_fetch_assign(object_type_idx):
     else:
         raise ValueError(f"Unknown {object_type_idx = }")
 
-    while True:
-        if so_joined.fetch():
-            break
+    so_ready.trigger()
+    while not so_joined.triggered:
         if so_data.modified:
             _ = so_data.fetch(fn)
 
@@ -268,31 +268,34 @@ def benchmark_object_2_proc_fetch_assign(
     data = create_random_object(object_type_idx, bytes_len=bytes_len,
                                 dtype=dtype, shape=shape)
     so_data = SharedObject("data", data=data)
-    so_joined = SharedObject("joined", data=False)
+    so_joined = SharedObject("joined")
+    so_ready = SharedObject("ready_0")
 
     times_ns = []
     procs = [ctx.Process(target=child_benchmark_object_fetch_assign,
-                         args=(object_type_idx,)) for _ in range(n_iters)]
+                         args=(object_type_idx, 0)) for _ in range(n_iters)]
     for i in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
                                     dtype=dtype, shape=shape)
-        so_joined.assign(False)
+        procs[i].start()
+        while not so_ready.triggered:
+            pass
 
         start_time = perf_counter_ns()
-        procs[i].start()
         for _ in range(5):
             if object_type_idx in [0, 1, 4, 5]:
-                sleep(1e-3)  # sleep a while to simulate gaps between writes
+                sleep(1e-6)  # sleep a while to simulate gaps between writes
             else:
                 data += 1
             so_data.assign(data)
 
-        so_joined.assign(True)
+        so_joined.trigger()
         procs[i].join()
         times_ns.append(perf_counter_ns() - start_time)
 
     so_data.unlink()
     so_joined.unlink()
+    so_ready.unlink()
 
     total_time_ns = sum(times_ns)
     if object_type_idx in [4, 5]:  # str, bytes
@@ -312,31 +315,37 @@ def benchmark_object_5_proc_fetch_assign(
     data = create_random_object(object_type_idx, bytes_len=bytes_len,
                                 dtype=dtype, shape=shape)
     so_data = SharedObject("data", data=data)
-    so_joined = SharedObject("joined", data=False)
+    so_joined = SharedObject("joined")
+    so_readys = [SharedObject(f"ready_{i}") for i in range(5)]
 
     times_ns = []
     procs = [ctx.Process(target=child_benchmark_object_fetch_assign,
-                         args=(object_type_idx,)) for _ in range(n_iters*5)]
+                         args=(object_type_idx, i % 5)) for i in range(n_iters*5)]
     for i in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
                                     dtype=dtype, shape=shape)
-        so_joined.assign(False)
+        are_ready = [False] * 5
+        [proc.start() for proc in procs[5*i:5*(i+1)]]
+        while not all(are_ready):
+            for j, so_ready in enumerate(so_readys):
+                if so_ready.triggered:
+                    are_ready[j] = True
 
         start_time = perf_counter_ns()
-        [proc.start() for proc in procs[5*i:5*(i+1)]]
         for _ in range(5):
             if object_type_idx in [0, 1, 4, 5]:
-                sleep(1e-3)  # sleep a while to simulate gaps between writes
+                sleep(1e-6)  # sleep a while to simulate gaps between writes
             else:
                 data += 1
             so_data.assign(data)
 
-        so_joined.assign(True)
+        so_joined.trigger()
         [proc.join() for proc in procs[5*i:5*(i+1)]]
         times_ns.append(perf_counter_ns() - start_time)
 
     so_data.unlink()
     so_joined.unlink()
+    [so_ready.unlink() for so_ready in so_readys]
 
     total_time_ns = sum(times_ns)
     if object_type_idx in [4, 5]:  # str, bytes
@@ -502,7 +511,7 @@ if __name__ == '__main__':
     results[f"ndarray {dtype} {shape}"]["2 proc fetch_assign"] = (mean_ns, std_ns)
 
     # ----- 5 processes fetch/assign ----- #
-    n_iters = 50
+    n_iters = 100
     print('\n' + '-' * 10 + " Benchmark fetching/assigning SharedObject with 5 processes " + '-' * 10)
     for object_type_idx in range(len(SharedObject._object_types)-1):
         mean_ns, std_ns = benchmark_object_5_proc_fetch_assign(object_type_idx, n_iters=n_iters)
@@ -564,8 +573,8 @@ if __name__ == '__main__':
         return 1 - (1 - one_tail_p)*2
 
     N_iters = np.array(
-        [[1000]*7 + [100, 50]]*7  # NoneType, bool, int, float, str, bytes, ndarray
-        + [[500] + [1000] * 6 + [100, 50],  # ndarray (720, 1280, 3)
+        [[1000]*7 + [100, 100]]*7  # NoneType, bool, int, float, str, bytes, ndarray
+        + [[500] + [1000] * 6 + [100, 100],  # ndarray (720, 1280, 3)
            [10, 20, 50, 50, 50, 50, 50, 10, 10]]  # ndarray (10000, 10000)
     )
 
