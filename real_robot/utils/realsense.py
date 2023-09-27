@@ -82,7 +82,7 @@ class RSDevice:
         :param bag_path: path to save bag recording. Must end with ".bag" if it's a file
         :param run_as_process: whether to run RSDevice as a separate process.
             If True, RSDevice needs to be created as a `mp.Process`.
-            Several SharedObject are created to control RSDevice and fetch data:
+            Several SharedObject are created to control RSDevice and stream data:
             * "join_rs_<device_uid>": If triggered, the RSDevice process is joined.
             * "sync_rs_<device_uid>": If triggered, all processes should fetch data.
                                       Used for synchronizing camera capture.

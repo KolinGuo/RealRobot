@@ -21,7 +21,7 @@ class CV2Visualizer:
         :param window_name: window name
         :param run_as_process: whether to run CV2Visualizer as a separate process.
           If True, CV2Visualizer needs to be created as a `mp.Process`.
-          Several SharedObject are mounted to control CV2Visualizer and feed data:
+          Several SharedObject are mounted to control CV2Visualizer and fetch data:
               Only "join_viscv2" is created by this process.
             * "join_viscv2": If triggered, the CV2Visualizer process is joined.
             * "draw_vis": If triggered, redraw the images.

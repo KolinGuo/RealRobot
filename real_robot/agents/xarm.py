@@ -50,18 +50,19 @@ class XArm7:
         :param boundary_clip_mm: clip action when TCP position to boundary is
                                  within boundary_clip_eps (mm). No clipping if None.
         :param with_hand_camera: whether to include hand camera mount in TCP offset.
-        :param run_as_process: whether to run XArm7 as a separate process.
+        :param run_as_process: whether to run XArm7 as a separate process
+                               for streaming robot states and save trajectory (not done)
             If True, XArm7 needs to be created as a `mp.Process`.
-            Several SharedObject are created to control XArm7 and fetch data:
+            Several SharedObject are created to control XArm7 and stream data:
             * "join_xarm7": If triggered, the XArm7 process is joined.
             * "sync_xarm7": If triggered, all processes should fetch data.
                             Used for synchronizing robot state capture.
             * "start_xarm7": If True, starts the XArm7 streams; else, stops it.
 
-            * "xarm_qpos": xarm joint angles, [7,] np.float32 np.ndarray
-            * "xarm_qvel": xarm joint velocities, [7,] np.float32 np.ndarray
-            * "xarm_qf": xarm joint torques, [7,] np.float32 np.ndarray
-            * "xarm_tcp_pose": tcp pose in base frame (unit: m)
+            * "xarm7_qpos": xarm joint angles, [7,] np.float32 np.ndarray
+            * "xarm7_qvel": xarm joint velocities, [7,] np.float32 np.ndarray
+            * "xarm7_qf": xarm joint torques, [7,] np.float32 np.ndarray
+            * "xarm7_tcp_pose": tcp pose in base frame (unit: m)
                                (xyx, wxyz) [7,] np.float64 np.ndarray
         """
         self.logger = get_logger("XArm7")

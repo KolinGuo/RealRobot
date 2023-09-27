@@ -292,7 +292,7 @@ class O3DGUIVisualizer:
         :param window_size: (width, height)
         :param run_as_process: whether to run O3DGUIVisualizer as a separate process.
           If True, O3DGUIVisualizer needs to be created as a `mp.Process`.
-          Several SharedObject are mounted to control O3DGUIVisualizer and feed data:
+          Several SharedObject are mounted to control O3DGUIVisualizer and fetch data:
               Only "join_viso3d" is created by this process.
             * "join_viso3d": If triggered, the O3DGUIVisualizer process is joined.
             * "draw_vis": If triggered, redraw the images.
