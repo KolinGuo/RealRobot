@@ -1,0 +1,137 @@
+---------- Benchmark creating SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.0203 seconds
+<class 'bool'>: 1000 iterations take 0.01555 seconds
+<class 'int'>: 1000 iterations take 0.01532 seconds
+<class 'float'>: 1000 iterations take 0.01532 seconds
+<class 'sapien.core.pysapien.Pose'>: 1000 iterations take 0.01987 seconds
+<class 'str'> (len=50): 1000 iterations take 0.01599 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.01577 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.3169 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 500 iterations take 3.741 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 10 iterations take 2.577 seconds
+
+---------- Benchmark fetching SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.001003 seconds
+<class 'bool'>: 1000 iterations take 0.0009662 seconds
+<class 'int'>: 1000 iterations take 0.001016 seconds
+<class 'float'>: 1000 iterations take 0.0009984 seconds
+<class 'sapien.core.pysapien.Pose'>: 1000 iterations take 0.001766 seconds
+<class 'str'> (len=50): 1000 iterations take 0.001221 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.001308 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.03605 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 1.263 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 20 iterations take 1.82 seconds
+
+---------- Benchmark assigning SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.001267 seconds
+<class 'bool'>: 1000 iterations take 0.001529 seconds
+<class 'int'>: 1000 iterations take 0.001297 seconds
+<class 'float'>: 1000 iterations take 0.00132 seconds
+<class 'sapien.core.pysapien.Pose'>: 1000 iterations take 0.001947 seconds
+<class 'str'> (len=50): 1000 iterations take 0.001555 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.001576 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.04186 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 1.281 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 50 iterations take 2.063 seconds
+
+---------- Benchmark creating from existing SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.00827 seconds
+<class 'bool'>: 1000 iterations take 0.007917 seconds
+<class 'int'>: 1000 iterations take 0.008571 seconds
+<class 'float'>: 1000 iterations take 0.007937 seconds
+<class 'sapien.core.pysapien.Pose'>: 1000 iterations take 0.009382 seconds
+<class 'str'> (len=50): 1000 iterations take 0.007895 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.007966 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.04958 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 0.7731 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 50 iterations take 1.408 seconds
+
+---------- Benchmark checking SharedObject modified ----------
+<class 'NoneType'>: 1000 iterations take 0.0008093 seconds
+<class 'bool'>: 1000 iterations take 0.0009167 seconds
+<class 'int'>: 1000 iterations take 0.001633 seconds
+<class 'float'>: 1000 iterations take 0.0008453 seconds
+<class 'sapien.core.pysapien.Pose'>: 1000 iterations take 0.0009488 seconds
+<class 'str'> (len=50): 1000 iterations take 0.0007993 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.001058 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.001592 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 0.004304 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 50 iterations take 0.0004514 seconds
+
+---------- Benchmark checking SharedObject triggered ----------
+<class 'NoneType'>: 1000 iterations take 0.0008893 seconds
+<class 'bool'>: 1000 iterations take 0.0008925 seconds
+<class 'int'>: 1000 iterations take 0.0008539 seconds
+<class 'float'>: 1000 iterations take 0.0008587 seconds
+<class 'sapien.core.pysapien.Pose'>: 1000 iterations take 0.0009798 seconds
+<class 'str'> (len=50): 1000 iterations take 0.0008747 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.0008585 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.001636 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 0.004105 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 50 iterations take 0.0004749 seconds
+
+---------- Benchmark triggering SharedObject ----------
+<class 'NoneType'>: 1000 iterations take 0.0008641 seconds
+<class 'bool'>: 1000 iterations take 0.0008347 seconds
+<class 'int'>: 1000 iterations take 0.0008232 seconds
+<class 'float'>: 1000 iterations take 0.0008257 seconds
+<class 'sapien.core.pysapien.Pose'>: 1000 iterations take 0.0009273 seconds
+<class 'str'> (len=50): 1000 iterations take 0.0008276 seconds
+<class 'bytes'> (len=50): 1000 iterations take 0.0008177 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 1000 iterations take 0.001603 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 1000 iterations take 0.004287 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 50 iterations take 0.0004468 seconds
+
+---------- Benchmark fetching/assigning SharedObject with 2 processes ----------
+<class 'NoneType'>: 100 iterations take 0.3675 seconds
+<class 'bool'>: 100 iterations take 0.3571 seconds
+<class 'int'>: 100 iterations take 0.3468 seconds
+<class 'float'>: 100 iterations take 0.3481 seconds
+<class 'sapien.core.pysapien.Pose'>: 100 iterations take 0.368 seconds
+<class 'str'> (len=50): 100 iterations take 0.3729 seconds
+<class 'bytes'> (len=50): 100 iterations take 0.3629 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 100 iterations take 0.5509 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 100 iterations take 1.875 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 10 iterations take 6.121 seconds
+
+---------- Benchmark fetching/assigning SharedObject with 5 processes ----------
+<class 'NoneType'>: 100 iterations take 0.5022 seconds
+<class 'bool'>: 100 iterations take 0.5382 seconds
+<class 'int'>: 100 iterations take 0.4749 seconds
+<class 'float'>: 100 iterations take 0.475 seconds
+<class 'sapien.core.pysapien.Pose'>: 100 iterations take 0.4957 seconds
+<class 'str'> (len=50): 100 iterations take 0.4912 seconds
+<class 'bytes'> (len=50): 100 iterations take 0.5071 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.uint8'> shape=(480, 848, 3)): 100 iterations take 0.7012 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(720, 1280, 3)): 100 iterations take 2.323 seconds
+<class 'numpy.ndarray'> (dtype=<class 'numpy.float64'> shape=(10000, 10000)): 10 iterations take 6.785 seconds
++------------------------------------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+----------------------+----------------------+
+| Object Type / Duration for 1 obj (mean ± std)  |         create        |         fetch         |         assign        |       create_ref      |        modified       |       triggered       |        trigger        | 2 proc fetch_assign  | 5 proc fetch_assign  |
++------------------------------------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+----------------------+----------------------+
+|               <class 'NoneType'>               | 2.03022e-05 ± 0.00018 | 1.00323e-06 ± 1.1e-06 |  1.267e-06 ± 9.9e-07  | 8.26987e-06 ± 8.3e-06 | 8.09309e-07 ± 1.3e-07 |  8.893e-07 ± 1.4e-07  | 8.64136e-07 ± 1.3e-07 | 0.00367484 ± 0.0007  | 0.00502243 ± 0.00064 |
+|                 <class 'bool'>                 |  1.5547e-05 ± 1.8e-06 |  9.66188e-07 ± 1e-07  | 1.52931e-06 ± 8.7e-06 | 7.91691e-06 ± 3.5e-07 | 9.16736e-07 ± 3.9e-06 | 8.92526e-07 ± 1.2e-06 | 8.34663e-07 ± 1.1e-07 | 0.0035708 ± 0.00053  | 0.00538219 ± 0.0045  |
+|                 <class 'int'>                  | 1.53224e-05 ± 8.9e-07 | 1.01629e-06 ± 8.1e-08 | 1.29657e-06 ± 7.9e-08 | 8.57055e-06 ± 1.4e-05 | 1.63272e-06 ± 2.4e-05 | 8.53877e-07 ± 1.3e-07 | 8.23189e-07 ± 4.4e-08 | 0.00346783 ± 0.00066 | 0.00474905 ± 0.00067 |
+|                <class 'float'>                 | 1.53208e-05 ± 8.4e-07 |  9.98396e-07 ± 7e-08  | 1.31992e-06 ± 8.9e-08 |  7.93662e-06 ± 4e-07  | 8.45279e-07 ± 5.2e-08 | 8.58702e-07 ± 8.5e-08 | 8.25738e-07 ± 6.3e-08 | 0.00348112 ± 0.00057 | 0.0047501 ± 0.00075  |
+|      <class 'sapien.core.pysapien.Pose'>       | 1.98663e-05 ± 1.1e-05 |  1.766e-06 ± 2.4e-07  |   1.9466e-06 ± 3e-06  |  9.38156e-06 ± 1e-05  | 9.48808e-07 ± 1.5e-07 | 9.79769e-07 ± 9.9e-08 |  9.2726e-07 ± 1.4e-07 | 0.00367998 ± 0.00052 | 0.00495746 ± 0.00045 |
+|                 <class 'str'>                  | 1.59912e-05 ± 1.5e-05 | 1.22109e-06 ± 1.4e-07 | 1.55466e-06 ± 9.4e-08 | 7.89459e-06 ± 2.8e-07 | 7.99268e-07 ± 7.9e-08 | 8.74667e-07 ± 1.8e-07 | 8.27559e-07 ± 4.6e-08 | 0.00372903 ± 0.00073 | 0.00491243 ± 0.00043 |
+|                <class 'bytes'>                 |  1.57745e-05 ± 2e-06  | 1.30809e-06 ± 4.2e-06 | 1.57573e-06 ± 1.2e-07 | 7.96615e-06 ± 2.6e-06 | 1.05813e-06 ± 8.6e-06 | 8.58509e-07 ± 8.8e-08 | 8.17721e-07 ± 4.2e-08 | 0.00362889 ± 0.00045 |  0.0050713 ± 0.0016  |
+|  ndarray <class 'numpy.uint8'> (480, 848, 3)   | 0.000316892 ± 2.2e-05 | 3.60511e-05 ± 7.9e-06 | 4.18569e-05 ± 5.7e-06 | 4.95802e-05 ± 3.4e-06 | 1.59164e-06 ± 4.1e-07 | 1.63622e-06 ± 4.5e-07 | 1.60307e-06 ± 3.7e-07 | 0.00550903 ± 0.0032  | 0.00701155 ± 0.0008  |
+| ndarray <class 'numpy.float64'> (720, 1280, 3) |  0.00748289 ± 0.0006  |  0.00126257 ± 0.00022 |  0.00128141 ± 0.00018 | 0.000773144 ± 9.1e-05 |   4.3035e-06 ± 2e-06  | 4.10518e-06 ± 2.1e-06 | 4.28713e-06 ± 2.2e-06 |  0.0187462 ± 0.0046  |  0.0232271 ± 0.0042  |
+| ndarray <class 'numpy.float64'> (10000, 10000) |    0.257705 ± 0.013   |   0.0910113 ± 0.003   |   0.0412668 ± 0.0094  |   0.0281593 ± 0.0044  |  9.02796e-06 ± 1e-06  | 9.49854e-06 ± 1.8e-06 | 8.93644e-06 ± 1.1e-06 |   0.612105 ± 0.02    |   0.678532 ± 0.014   |
++------------------------------------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+----------------------+----------------------+
+
+Comparing with benchmark_shared_object_result_v0.0.5.npz
+	show if mean has increased (￪) or decreased (￬) with (mean - prev_mean) and its confidence level
++---------------------------------------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+---------------------+
+| Object Type / Duration for 1 obj (mean, conf lvl) |        create        |        fetch         |        assign        |      create_ref      |       modified       |      triggered       |       trigger        | 2 proc fetch_assign  | 5 proc fetch_assign |
++---------------------------------------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+---------------------+
+|                 <class 'NoneType'>                | ￬ (-1.701e-05), 0.68 | ￬ (-1.437e-08), 0.24 | ￬ (-5.861e-08), 0.93 |  ￪ (1.365e-07), 0.37 | ￬ (-3.265e-08), 1.00 |  ￬ (-8.6e-10), 0.10  | ￬ (-3.099e-08), 1.00 |  ￪ (0.001901), 1.00  |   ￪ (0.00165), 1.00 |
+|                   <class 'bool'>                  |  ￪ (5.361e-07), 1.00 | ￬ (-1.432e-08), 0.99 |  ￪ (2.325e-07), 0.60 | ￬ (-3.873e-07), 0.97 |  ￪ (1.271e-07), 0.70 |  ￪ (3.557e-08), 0.65 |  ￪ (1.782e-08), 1.00 |  ￪ (0.001541), 1.00  |  ￪ (0.002182), 1.00 |
+|                   <class 'int'>                   |  ￪ (2.904e-07), 0.63 | ￬ (-1.147e-08), 0.99 | ￬ (-7.645e-08), 1.00 |  ￪ (5.25e-07), 0.77  |  ￪ (8.524e-07), 0.73 |  ￪ (1.646e-09), 0.27 |  ￪ (9.515e-09), 0.99 |  ￪ (0.001866), 1.00  |  ￪ (0.001759), 1.00 |
+|                  <class 'float'>                  | ￬ (-1.222e-08), 0.02 | ￬ (-1.631e-07), 0.68 | ￬ (-5.181e-08), 1.00 | ￬ (-2.228e-07), 0.82 |  ￪ (6.582e-08), 1.00 |  ￪ (9.665e-09), 1.00 |  ￪ (1.053e-08), 1.00 |  ￪ (0.001483), 1.00  |  ￪ (0.001641), 1.00 |
+|                   <class 'str'>                   |  ￪ (8.935e-07), 0.92 |  ￪ (6.656e-09), 0.70 | ￬ (-3.955e-08), 1.00 | ￬ (-6.805e-07), 0.90 |  ￪ (2.177e-08), 1.00 |  ￪ (3.066e-08), 1.00 |  ￪ (1.557e-08), 1.00 |  ￪ (0.001607), 1.00  |  ￪ (0.001518), 1.00 |
+|                  <class 'bytes'>                  |  ￪ (6.89e-07), 0.99  |  ￪ (1.208e-07), 0.63 | ￬ (-1.641e-07), 0.51 | ￬ (-4.416e-07), 0.84 |  ￪ (2.814e-07), 0.70 |  ￪ (1.463e-09), 0.34 |  ￪ (4.213e-09), 0.83 |   ￪ (0.0016), 1.00   |  ￪ (0.001731), 1.00 |
+|    ndarray <class 'numpy.uint8'> (480, 848, 3)    |  ￪ (7.807e-06), 1.00 | ￬ (-1.386e-07), 0.30 |  ￪ (6.783e-07), 0.89 | ￬ (-1.073e-06), 1.00 |  ￪ (2.223e-09), 0.09 | ￬ (-3.024e-08), 0.90 |  ￪ (6.804e-08), 1.00 |  ￪ (0.001437), 1.00  |  ￪ (0.001392), 1.00 |
+|   ndarray <class 'numpy.float64'> (720, 1280, 3)  | ￬ (-7.426e-05), 0.97 | ￬ (-7.827e-06), 0.56 |  ￪ (2.231e-05), 0.99 | ￬ (-1.866e-05), 1.00 | ￬ (-3.06e-07), 1.00  | ￬ (-4.26e-07), 1.00  | ￬ (-1.094e-07), 0.73 | ￬ (-0.0003002), 0.31 |  ￪ (0.000492), 0.61 |
+|   ndarray <class 'numpy.float64'> (10000, 10000)  |  ￪ (0.001216), 0.15  | ￬ (-0.0001932), 0.15 |  ￪ (0.001041), 0.49  |  ￪ (0.0002204), 0.20 | ￬ (-1.184e-06), 0.92 | ￬ (-7.812e-07), 0.79 | ￬ (-3.246e-07), 0.48 |  ￪ (5.786e-05), 0.00 |  ￬ (-0.01232), 0.85 |
++---------------------------------------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+----------------------+---------------------+

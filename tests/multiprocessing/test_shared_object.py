@@ -7,6 +7,8 @@ import multiprocessing as mp
 from typing import Union, Tuple
 
 import numpy as np
+from sapien.core import Pose
+from transforms3d.euler import euler2quat
 
 from real_robot.utils.multiprocessing import SharedObject
 from real_robot.utils.logger import get_logger
@@ -43,13 +45,17 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
     elif object_type_idx == 3:  # float
         return (random.uniform(-100, 100) if bool(random.randrange(2))
                 else random.uniform(-1e307, 1e308))
-    elif object_type_idx == 4:  # str
+    elif object_type_idx == 4:  # sapien.core.Pose
+        return Pose(p=np.random.uniform(-10, 10, size=3),
+                    q=euler2quat(*np.random.uniform([0, 0, 0],
+                                                    [np.pi*2, np.pi, np.pi*2])))
+    elif object_type_idx == 5:  # str
         str_len = random.randrange(51)
         return ''.join(random.choices(string.printable, k=str_len))
-    elif object_type_idx == 5:  # bytes
+    elif object_type_idx == 6:  # bytes
         bytes_len = random.randrange(51)
         return random.randbytes(bytes_len)
-    elif object_type_idx == 6:  # np.ndarray
+    elif object_type_idx == 7:  # np.ndarray
         size = NDARRAY_NBYTES_LIMIT + 1
         while size > NDARRAY_NBYTES_LIMIT:
             ndim = random.randint(1, 5)
@@ -68,11 +74,15 @@ def check_object_equal(obj1: SharedObject, obj2: SharedObject, data=None):
 
     if obj1.object_type_idx == 0:  # None.__class__
         assert obj1.fetch() is None and obj2.fetch() is None
-    elif obj1.object_type_idx in [1, 2, 3, 4, 5]:  # bool, int, float, str, bytes
+    elif obj1.object_type_idx in [1, 2, 3, 5, 6]:  # bool, int, float, str, bytes
         assert obj1.fetch() == obj2.fetch()
         if data is not None:
             assert obj1.fetch() == data
-    elif obj1.object_type_idx == 6:  # np.ndarray
+    elif obj1.object_type_idx == 4:  # sapien.core.Pose
+        np.testing.assert_equal(obj1.fetch().__getstate__(), obj2.fetch().__getstate__())
+        if data is not None:
+            np.testing.assert_equal(obj1.fetch().__getstate__(), data.__getstate__())
+    elif obj1.object_type_idx == 7:  # np.ndarray
         np.testing.assert_equal(obj1.fetch(), obj2.fetch())
         if data is not None:
             np.testing.assert_equal(obj1.fetch(), data)
@@ -114,6 +124,13 @@ class TestCreate:
             data = random.uniform(-1e307, 1e308)
             so = SharedObject(uuid.uuid4().hex, data=data)
             assert so.fetch() == data
+            assert not so.modified
+
+    def test_pose(self):
+        for _ in range(500):
+            pose = create_random_object(SharedObject._object_types.index(Pose))
+            so = SharedObject(uuid.uuid4().hex, data=pose)
+            np.testing.assert_equal(so.fetch().__getstate__(), pose.__getstate__())
             assert not so.modified
 
     def test_str(self):
@@ -226,6 +243,54 @@ class TestFetch:
         assert so.fetch(lambda x: x+v) == data+v
         assert so.fetch(lambda x: x*v) == data*v
         assert so.fetch() == data
+
+    def test_pose(self):
+        pose = create_random_object(SharedObject._object_types.index(Pose))
+        so = SharedObject(uuid.uuid4().hex, data=pose)
+
+        for _ in range(500):
+            pose2 = create_random_object(SharedObject._object_types.index(Pose))
+            np.testing.assert_equal(so.fetch(lambda x: x*pose2).__getstate__(),
+                                    (pose*pose2).__getstate__())
+
+        for _ in range(500):
+            pose2 = create_random_object(SharedObject._object_types.index(Pose))
+            np.testing.assert_equal(so.fetch(lambda x: pose2*x).__getstate__(),
+                                    (pose2*pose).__getstate__())
+
+        for _ in range(500):
+            pose2 = create_random_object(SharedObject._object_types.index(Pose))
+            np.testing.assert_equal(
+                so.fetch(lambda x: x.transform(pose2)).__getstate__(),
+                pose.transform(pose2).__getstate__()
+            )
+
+        for _ in range(500):
+            pose2 = create_random_object(SharedObject._object_types.index(Pose))
+            np.testing.assert_equal(
+                so.fetch(lambda x: pose2.transform(x)).__getstate__(),
+                pose2.transform(pose).__getstate__()
+            )
+
+        np.testing.assert_equal(so.fetch(lambda x: x.inv()).__getstate__(),
+                                pose.inv().__getstate__())
+
+        np.testing.assert_equal(so.fetch(lambda x: x.to_transformation_matrix()),
+                                pose.to_transformation_matrix())
+
+    def test_pose_fn_modify_inplace(self):
+        pose = create_random_object(SharedObject._object_types.index(Pose))
+        so = SharedObject(uuid.uuid4().hex, data=pose)
+
+        # modify
+        def inplace_modify(x):
+            x.set_p([1, 2, 3])
+            return x
+
+        so.fetch(inplace_modify)  # no change to buffer
+        np.testing.assert_equal(so.fetch(inplace_modify).__getstate__(),
+                                Pose(p=[1, 2, 3], q=pose.q).__getstate__())
+        np.testing.assert_equal(so.fetch().__getstate__(), pose.__getstate__())
 
     def test_str(self):
         data = ""
@@ -475,6 +540,18 @@ class TestAssign:
             assert not so.modified
             assert so.fetch() == data
 
+    def test_pose(self):
+        pose = create_random_object(SharedObject._object_types.index(Pose))
+        so = SharedObject(uuid.uuid4().hex, data=pose)
+        np.testing.assert_equal(so.fetch().__getstate__(), pose.__getstate__())
+        assert not so.modified
+
+        for _ in range(500):
+            pose = create_random_object(SharedObject._object_types.index(Pose))
+            so.assign(pose)
+            assert not so.modified
+            np.testing.assert_equal(so.fetch().__getstate__(), pose.__getstate__())
+
     def test_str(self):
         data = ""
         so = SharedObject(uuid.uuid4().hex, data=data, init_size=200)
@@ -697,7 +774,7 @@ class TestMultiSharedObject:
             assert not so2.modified
             check_object_equal(so, so2, data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -706,7 +783,7 @@ class TestMultiSharedObject:
             assert not so2.modified
             check_object_equal(so, so2, new_data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -718,7 +795,7 @@ class TestMultiSharedObject:
             so.close()
             so = SharedObject(so.name)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -727,7 +804,7 @@ class TestMultiSharedObject:
             assert not so2.modified
             check_object_equal(so, so2, new_data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -739,7 +816,7 @@ class TestMultiSharedObject:
             del so2
             so2 = SharedObject(so.name)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -748,7 +825,7 @@ class TestMultiSharedObject:
             assert not so2.modified
             check_object_equal(so, so2, new_data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -767,7 +844,7 @@ class TestMultiSharedObject:
                 assert not so2.modified
                 check_object_equal(so, so2, data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -778,7 +855,7 @@ class TestMultiSharedObject:
                 check_object_equal(so, so2, new_data)
 
             for so2 in sos:
-                if object_type_idx == 6:  # np.ndarray
+                if object_type_idx == SharedObject._object_types.index(np.ndarray):
                     new_data = create_random_ndarray(data.dtype, data.shape)
                 else:
                     new_data = create_random_object(object_type_idx)
@@ -800,7 +877,7 @@ class TestModified:
             assert not so2.modified
             check_object_equal(so, so2, data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -813,7 +890,7 @@ class TestModified:
             assert not so2.modified
             check_object_equal(so, so2, new_data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -836,7 +913,7 @@ class TestModified:
                 assert not so2.modified
                 check_object_equal(so, so2, data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -851,7 +928,7 @@ class TestModified:
                 check_object_equal(so, so2, new_data)
 
             for so2 in sos:
-                if object_type_idx == 6:  # np.ndarray
+                if object_type_idx == SharedObject._object_types.index(np.ndarray):
                     new_data = create_random_ndarray(data.dtype, data.shape)
                 else:
                     new_data = create_random_object(object_type_idx)
@@ -888,7 +965,7 @@ class TestTrigger:
             assert not so2.triggered
             check_object_equal(so, so2, data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -904,7 +981,7 @@ class TestTrigger:
             assert not so2.triggered
             check_object_equal(so, so2, new_data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -930,7 +1007,7 @@ class TestTrigger:
                 assert not so2.triggered
                 check_object_equal(so, so2, data)
 
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == SharedObject._object_types.index(np.ndarray):
                 new_data = create_random_ndarray(data.dtype, data.shape)
             else:
                 new_data = create_random_object(object_type_idx)
@@ -949,7 +1026,7 @@ class TestTrigger:
                 check_object_equal(so, so2, new_data)
 
             for so2 in sos:
-                if object_type_idx == 6:  # np.ndarray
+                if object_type_idx == SharedObject._object_types.index(np.ndarray):
                     new_data = create_random_ndarray(data.dtype, data.shape)
                 else:
                     new_data = create_random_object(object_type_idx)

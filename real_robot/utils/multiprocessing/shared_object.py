@@ -1,7 +1,7 @@
 """
 Shared object implemented with SharedMemory and synchronization
 Careful optimization is done to make it run as fast as possible
-version 0.0.5
+version 0.0.6
 
 Written by Kolin Guo
 
@@ -42,6 +42,7 @@ from multiprocessing.shared_memory import SharedMemory
 from typing import Callable, Any, Optional, Union
 
 import numpy as np
+from sapien.core import Pose
 
 from ..logger import get_logger
 
@@ -108,6 +109,7 @@ class SharedObject:
       For NoneType, data area is ignored
       For bool, 1 byte data
       For int / float, 8 bytes data
+      For sapien.core.Pose, 7*4 = 28 bytes data ([xyz, xyzw], float32)
       For str / bytes, (N + 1) bytes data, N is str / bytes length, 1 is for termination
       For np.ndarray,
       - 1 byte: array dtype index, stored as 'B'
@@ -116,7 +118,8 @@ class SharedObject:
       - D bytes: array data buffer
     """
 
-    _object_types = (None.__class__, bool, int, float, str, bytes, np.ndarray)
+    # object_type_idx:     0          1     2     3     4     5     6        7
+    _object_types = (None.__class__, bool, int, float, Pose, str, bytes, np.ndarray)
 
     @staticmethod
     def _get_bytes_size(enc_str: bytes, init_size: int) -> int:
@@ -126,7 +129,7 @@ class SharedObject:
             return init_size + 10
 
     _object_sizes = (
-        9, 10, 17, 17,  # NoneType, bool, int, float
+        9, 10, 17, 17, 37,  # NoneType, bool, int, float, sapien.core.Pose
         _get_bytes_size.__func__,  # str
         _get_bytes_size.__func__,  # bytes
         lambda array, ndim: array.nbytes + ndim * 8 + 18,  # ndarray
@@ -137,7 +140,7 @@ class SharedObject:
         nbytes = shm._size
         mtime, object_type_idx = struct.unpack_from("QB", shm.buf, offset=0)
         np_metas = ()
-        if object_type_idx == 6:  # np.ndarray
+        if object_type_idx == 7:  # np.ndarray
             np_metas = SharedObject._fetch_np_metas(shm.buf)
         return nbytes, mtime, object_type_idx, np_metas
 
@@ -166,6 +169,13 @@ class SharedObject:
     def _fetch_float(buf, fn: Optional[Callable[[float], Any]], *args) -> Any:
         v = struct.unpack_from('d', buf, offset=9)[0]
         return v if fn is None else fn(v)
+
+    @staticmethod
+    def _fetch_pose(buf, fn: Optional[Callable[[Pose], Any]], *args) -> Any:
+        """Fetch and construct a sapien.core.Pose (using __setstate__)"""
+        pose = Pose.__new__(Pose)
+        pose.__setstate__(struct.unpack_from("7f", buf, offset=9))
+        return pose if fn is None else fn(pose)
 
     @staticmethod
     def _fetch_str(buf, fn: Optional[Callable[[str], Any]], *args) -> Any:
@@ -218,6 +228,7 @@ class SharedObject:
         _fetch_bool.__func__,
         _fetch_int.__func__,
         _fetch_float.__func__,
+        _fetch_pose.__func__,
         _fetch_str.__func__,
         _fetch_bytes.__func__,
         _fetch_ndarray.__func__,
@@ -245,6 +256,10 @@ class SharedObject:
         struct.pack_into('d', buf, 9, data)
 
     @staticmethod
+    def _assign_pose(buf, pose: Pose, *args):
+        struct.pack_into("7f", buf, 9, *pose.__getstate__())
+
+    @staticmethod
     def _assign_bytes(buf, enc_data: bytes, buf_nbytes: int, *args):
         struct.pack_into(f"{buf_nbytes-9}s", buf, 9, enc_data+b'\xff')
 
@@ -257,6 +272,7 @@ class SharedObject:
         _assign_bool.__func__,
         _assign_int.__func__,
         _assign_float.__func__,
+        _assign_pose.__func__,
         _assign_bytes.__func__,
         _assign_bytes.__func__,
         _assign_ndarray.__func__,
@@ -308,7 +324,7 @@ class SharedObject:
             # Assign object_type, np_metas to init object meta info
             self._writer_lock.acquire()
             self.shm.buf[8] = object_type_idx
-            if object_type_idx == 6:  # np.ndarray
+            if object_type_idx == 7:  # np.ndarray
                 self._assign_np_metas(self.shm.buf, *np_metas)
             self._writer_lock.release()
         else:
@@ -319,7 +335,7 @@ class SharedObject:
 
         # Create np.ndarray here to save frequent np.ndarray construction
         self.np_ndarray, self.np_ndarray_ro = None, None
-        if self.object_type_idx == 6:  # np.ndarray
+        if self.object_type_idx == 7:  # np.ndarray
             np_dtype_idx, data_ndim, data_shape = self.np_metas
             self.np_ndarray = np.ndarray(
                 data_shape, dtype=self._np_dtypes[np_dtype_idx],
@@ -350,14 +366,14 @@ class SharedObject:
 
         # Get shared memory size in bytes
         np_metas = ()
-        if object_type_idx <= 3:  # NoneType, bool, int, float
+        if object_type_idx <= 4:  # NoneType, bool, int, float, sapien.core.Pose
             nbytes = self._object_sizes[object_type_idx]
-        elif object_type_idx == 4:  # str
+        elif object_type_idx == 5:  # str
             data = data.encode(_encoding)  # encode strings into bytes
             nbytes = self._object_sizes[object_type_idx](data, self.init_size)
-        elif object_type_idx == 5:  # bytes
+        elif object_type_idx == 6:  # bytes
             nbytes = self._object_sizes[object_type_idx](data, self.init_size)
-        elif object_type_idx == 6:  # np.ndarray
+        elif object_type_idx == 7:  # np.ndarray
             try:
                 np_dtype_idx = self._np_dtypes.index(data.dtype)
             except ValueError:
@@ -486,7 +502,7 @@ class SharedDynamicObject(SharedObject):
         nbytes = shm._mmap.size()  # _mmap size will be updated by os.ftruncate()
         mtime, object_type_idx = struct.unpack_from("QB", shm.buf, offset=0)
         np_metas = ()
-        if object_type_idx == 6:  # np.ndarray
+        if object_type_idx == 7:  # np.ndarray
             np_metas = SharedObject._fetch_np_metas(shm.buf)
         return nbytes, mtime, object_type_idx, np_metas
 
