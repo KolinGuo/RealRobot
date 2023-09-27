@@ -1,7 +1,10 @@
+"""xArm7 Agent Interface
+Check user manual at https://www.ufactory.cc/download/
+"""
 from collections import OrderedDict
 import time
 import math
-from typing import List
+from typing import List, Union
 
 import numpy as np
 from gym import spaces
@@ -14,6 +17,8 @@ from xarm.wrapper import XArmAPI
 from real_robot.utils.logger import get_logger
 from real_robot.utils.common import clip_and_scale_action, vectorize_pose
 from real_robot.sensors.camera import CameraConfig
+
+# TODO: remove return code from all functions, add return code checks
 
 
 class XArm7:
@@ -32,18 +37,18 @@ class XArm7:
     def __init__(self,
                  ip: str = "192.168.1.229",
                  control_mode: str = "pd_ee_delta_pos",
-                 motion_mode: str = "position",
-                 safety_boundary: List[int] = [999, -999, 999, -999, 999, 0],
-                 boundary_clip_eps: int = 10,
+                 motion_mode: str = "position", *,
+                 safety_boundary_mm: List[int] = [999, -999, 999, -999, 999, 0],
+                 boundary_clip_mm: int = 10,
                  with_hand_camera: bool = True,
                  run_as_process: bool = False):
         """
         :param ip: xArm7 ip address, see controller box
         :param control_mode: xArm control mode (determines set_action type)
         :param motion_mode: xArm motion mode (determines xArm motion mode)
-        :param safety_boundary: [x_max, x_min, y_max, y_min, z_max, z_min] (mm)
-        :param boundary_clip_eps: clip action when TCP position to boundary is
-                                  within boundary_clip_eps (mm)
+        :param safety_boundary_mm: [x_max, x_min, y_max, y_min, z_max, z_min] (mm)
+        :param boundary_clip_mm: clip action when TCP position to boundary is
+                                 within boundary_clip_eps (mm). No clipping if None.
         :param with_hand_camera: whether to include hand camera mount in TCP offset.
         :param run_as_process: whether to run XArm7 as a separate process.
             If True, XArm7 needs to be created as a `mp.Process`.
@@ -87,11 +92,12 @@ class XArm7:
             [0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2, 0.044643, 0.044643]
         )
         self.pose = Pose()  # base_pose
-        self.safety_boundary = np.asarray(safety_boundary)
-        self.boundary_clip_eps = boundary_clip_eps
-        self.safety_boundary_clip = self.safety_boundary.copy()
-        self.safety_boundary_clip[0::2] -= boundary_clip_eps
-        self.safety_boundary_clip[1::2] += boundary_clip_eps
+        self.safety_boundary = np.asarray(safety_boundary_mm)
+        self.boundary_clip = boundary_clip_mm
+        if self.boundary_clip is not None:
+            self.safety_boundary_clip = self.safety_boundary.copy()
+            self.safety_boundary_clip[0::2] -= boundary_clip_mm
+            self.safety_boundary_clip[1::2] += boundary_clip_mm
         self.with_hand_camera = with_hand_camera
 
         self.reset()
@@ -139,10 +145,6 @@ class XArm7:
         self.arm.motion_enable(enable=True)
         self.arm.set_mode(self.SUPPORTED_MOTION_MODES.index(self._motion_mode))
         self.arm.set_state(state=0)
-
-    # def get_absolute_gripper_pos(self):
-    #     _, gripper_pos = self.arm.get_gripper_position()
-    #     return gripper_pos
 
     @property
     def robot(self):
@@ -197,13 +199,13 @@ class XArm7:
     def _preprocess_action(self, action: np.ndarray,
                            translation_scale: float, axangle_scale: float):
         """Preprocess action:
-            * apply translation_scale and axangle_scale
-            * clip tgt_tcp_pose to avoid going out of safety_boundary
+            * Keep current TCP orientation when action only has position
+            * apply translation_scale and axangle_scale for delta control_mode
+            * clip tgt_tcp_pose to avoid going out of safety_boundary (optionally)
             * clip and rescale gripper action (action[-1])
         :param action: control action (unit for translation is meters)
                        If in delta control_mode, action needs to apply scale
         :return tgt_tcp_pose: target TCP pose in robot base frame (unit in mm)
-        :return delta_tcp_pose: delta TCP pose in robot tool frame (unit in mm)
         :return gripper_pos: gripper action after rescaling [-10, 850] mm
         """
         cur_tcp_pose = self.get_tcp_pose(unit_in_mm=True)
@@ -236,29 +238,32 @@ class XArm7:
                                   q=action[3:7])  # in milimeters
             tgt_tcp_pose = cur_tcp_pose * delta_tcp_pose
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(f"{self._control_mode=} not implemented")
 
         # Clip tgt_tcp_pose.p to safety_boundary_clip
-        tgt_tcp_pose.set_p(np.clip(tgt_tcp_pose.p,
-                                   self.safety_boundary_clip[1::2],
-                                   self.safety_boundary_clip[0::2]))
+        if self.boundary_clip is not None:
+            tgt_tcp_pose.set_p(np.clip(tgt_tcp_pose.p,
+                                       self.safety_boundary_clip[1::2],
+                                       self.safety_boundary_clip[0::2]))
 
-        # [-1, 1] => [gripper_min, gripper_max]
+        # [-1, 1] => [-10, 850] mm
         gripper_pos = clip_and_scale_action(action[-1], self.gripper_limits)
 
-        delta_tcp_pose = cur_tcp_pose.inv() * tgt_tcp_pose
-
         self.logger.info(f"Setting {tgt_tcp_pose = }, {gripper_pos = }")
-        return tgt_tcp_pose, delta_tcp_pose, gripper_pos
+        return tgt_tcp_pose, gripper_pos
 
     def set_action(self, action: np.ndarray,
                    translation_scale=100.0, axangle_scale=0.1,
                    speed=None, mvacc=None,
                    skip_gripper=False, wait=False):
         """
-        :param translation_scale: action [-1, 1] maps to [-100mm, 100mm]
+        :param action: action corresponding to self.control_mode, np.floating np.ndarray
+                       action[-1] is gripper action (always has range [-1, 1])
+        :param translation_scale: action [-1, 1] maps to [-100mm, 100mm],
+                                  Used for delta control_mode only.
         :param axangle_scale: axangle action norm (rotation angle) is multiplied by 0.1
                               [-1, 0, 0] => rotate around [1, 0, 0] by -0.1 rad
+                              Used for delta control_mode only.
         :param speed: move speed.
                       For TCP motion: range is [0.1, 1000.0] mm/s (default=100)
                       For joint motion: range is [0.05, 180.0] deg/s (default=20)
@@ -266,6 +271,7 @@ class XArm7:
                       For TCP motion: range [1.0, 50000.0] mm/s^2 (default=2000)
                       For joint motion: range [0.5, 1145.0] deg/s^2 (default=500)
         :param skip_gripper: whether to skip gripper action
+        :param wait: whether to wait for the arm to complete, default is False.
         """
         # TODO: Check if there's a way to not wait for set_gripper_position()
         #       so skip_gripper is not needed
@@ -273,32 +279,32 @@ class XArm7:
         # Clean existing warnings / errors
         while self.arm.has_err_warn:
             error_code, warn_code = self.arm.get_err_warn_code()
-            if error_code in [35]:  # 35: Safety Boundary Limit
-                self.clean_warning_error()
-            else:
-                self.logger.error(f"ErrorCode: {error_code}, need to manually clean it")
-                self.arm.get_err_warn_code(show=True)
-                _ = input("Press enter after cleaning error")
+            # if error_code in [35]:  # 35: Safety Boundary Limit
+            #     self.clean_warning_error()
+            self.logger.error(f"ErrorCode: {error_code}, need to manually clean it")
+            self.arm.get_err_warn_code(show=True)
+            _ = input("Press enter after cleaning error")
 
         # Checks action shape and range
         assert action in self.action_space, f"Wrong {action = }"
         action = np.asarray(action).copy()  # TODO: can be removed?
 
         # Preprocess action (apply scaling, clip to safety boundary, rescale gripper)
-        tgt_tcp_pose, delta_tcp_pose, gripper_pos = self._preprocess_action(
+        tgt_tcp_pose, gripper_pos = self._preprocess_action(
             action, translation_scale, axangle_scale
         )
 
         # Control gripper position
         ret_gripper = 0
         if not skip_gripper:
-            ret_gripper = self.arm.set_gripper_position(gripper_pos, wait=wait)
+            ret_gripper = self.arm.set_gripper_position(gripper_pos, wait=False)
 
         # Control xArm based on motion mode
         if self._motion_mode == "position":
-            ret_arm = self.arm.set_tool_position(
-                *delta_tcp_pose.p, *quat2euler(delta_tcp_pose.q, axes='sxyz'),
-                is_radian=True, wait=wait
+            ret_arm = self.arm.set_position(
+                *tgt_tcp_pose.p, *quat2euler(tgt_tcp_pose.q, axes='sxyz'),
+                speed=speed, mvacc=mvacc,
+                relative=False, is_radian=True, wait=wait
             )
             return ret_arm, ret_gripper
         elif self._motion_mode == "servo":
@@ -311,6 +317,7 @@ class XArm7:
         elif self._motion_mode == "joint_teaching":
             raise ValueError("Joint teaching mode enabled (no action needed)")
         elif self._motion_mode == "joint_vel":
+            raise NotImplementedError("Unverified")
             # clip delta pos to prevent undesired rotation due to ik solutions
             cur_tcp_pose = self.get_tcp_pose(unit_in_mm=True)
             tgt_tcp_pose.set_p(np.clip(tgt_tcp_pose.p,
@@ -425,6 +432,13 @@ class XArm7:
             q=euler2quat(*xyzrpy[3:], axes='sxyz')
         )
         return base_to_tcp_pose
+
+    def get_gripper_position(self, unit_in_mm=False) -> Union[int, float]:
+        """Get gripper opening width
+        :return pos: if unit_in_mm, position unit is mm (int). Else unit is m (float).
+        """
+        _, gripper_pos = self.arm.get_gripper_position()
+        return gripper_pos if unit_in_mm else gripper_pos / 1000.0
 
     # ---------------------------------------------------------------------- #
     # Observations

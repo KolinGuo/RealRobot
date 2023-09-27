@@ -17,7 +17,7 @@ from real_robot.sensors.camera import (
     Camera,
     parse_camera_cfgs
 )
-from real_robot.agents.xarm import XArm7
+from real_robot.agents import XArm7
 
 
 class XArmBaseEnv(gym.Env):
@@ -120,7 +120,7 @@ class XArmBaseEnv(gym.Env):
         self.agent = XArm7(
             self.xarm_ip,
             control_mode=self._control_mode, motion_mode=self._xarm_motion_mode,
-            safety_boundary=[550, 0, 50, -600, 280, 0]
+            safety_boundary_mm=[550, 0, 50, -600, 280, 0]
         )
 
     def _register_cameras(self) -> Sequence[CameraConfig]:

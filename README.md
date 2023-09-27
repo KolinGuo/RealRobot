@@ -30,12 +30,20 @@ if not installing from source.
 * Enabled `RSDevice` to record camera streams as a rosbag file
 
 ### API changes
+* `real_robot.agents.xarm`
+  * Change `XArm7` parameters for clarity (`safety_boundary` => `safety_boundary_mm`, `boundary_clip_eps` => `boundary_clip_mm`)
+  * Add `get_gripper_position()` to get gripper opening width in mm or m
 * `real_robot.sensors.camera`
   * `CameraConfig` now accepts an `fps` parameter
 * `real_robot.utils.realsense`
   * `RSDevice` now accepts `device_sn` instead of an `rs.device`
   * `RSDevice` now accepts `color_config` and `depth_config` as parameters
     (`width`, `height`, `fps`) instead of `rs.config`
+
+### Other changes
+* `real_robot.agents.xarm`
+  * `XArm7` will not clear *"Safety Boundary Limit"* error automatically in `set_action()`
+  * For `motion_mode == "position"`, switch from using `set_tool_position()` to `set_position()`
 
 </p>
 </details>
