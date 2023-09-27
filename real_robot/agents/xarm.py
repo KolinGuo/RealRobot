@@ -65,6 +65,7 @@ class XArm7:
                                (xyx, wxyz) [7,] np.float64 np.ndarray
         """
         self.logger = get_logger("XArm7")
+        self.ip = ip
         self.arm = XArmAPI(ip)
 
         if control_mode not in self.SUPPORTED_CONTROL_MODES:
@@ -146,52 +147,9 @@ class XArm7:
         self.arm.set_mode(self.SUPPORTED_MOTION_MODES.index(self._motion_mode))
         self.arm.set_state(state=0)
 
-    @property
-    def robot(self):
-        """An alias for compatibility."""
-        return self
-
-    @property
-    def control_mode(self):
-        """Get the currently activated controller uid."""
-        return self._control_mode
-
-    @property
-    def motion_mode(self):
-        """Get the currently activated controller uid."""
-        return self._motion_mode
-
-    @property
-    def action_space(self):
-        if self._control_mode == "pd_ee_pos":
-            return spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_delta_pos":
-            return spaces.Box(low=-1, high=1, shape=(4,), dtype=np.float32)
-        # elif self._control_mode == "pd_ee_pose":
-        #     # [x, y, z, r, p, y, gripper], xyz in meters, rpy in radian
-        #     return spaces.Box(low=np.array([-np.inf]*3 + [-np.pi]*3 + [-1]),
-        #                       high=np.array([np.inf]*3 + [np.pi]*3 + [1]),
-        #                       shape=(7,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_pose_axangle":
-            # [x, y, z, *rotvec, gripper], xyz in meters
-            #   rotvec is in axis of rotation and its norm gives rotation angle
-            return spaces.Box(low=np.array([-np.inf]*6 + [-1]),
-                              high=np.array([np.inf]*6 + [1]),
-                              shape=(7,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_delta_pose_axangle":  # TODO: verify bounds
-            # [x, y, z, *rotvec, gripper], xyz in meters
-            #   rotvec is in axis of rotation and its norm gives rotation angle
-            return spaces.Box(low=-1, high=1, shape=(7,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_pose_quat":
-            # [x, y, z, w, x, y, z, gripper], xyz in meters, wxyz is unit quaternion
-            return spaces.Box(low=np.array([-np.inf]*3 + [-1] * 4 + [-1]),
-                              high=np.array([np.inf]*3 + [1] * 4 + [1]),
-                              shape=(8,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_delta_pose_quat":
-            # [x, y, z, w, x, y, z, gripper], xyz in meters, wxyz is unit quaternion
-            return spaces.Box(low=-1, high=1, shape=(8,), dtype=np.float32)
-        else:
-            raise NotImplementedError(f"Unsupported {self._control_mode = }")
+        # Enable gripper and set to maximum speed
+        self.arm.set_gripper_enable(enable=True)
+        self.arm.set_gripper_speed(speed=5000)
 
     # ---------------------------------------------------------------------- #
     # Control robot
@@ -254,7 +212,7 @@ class XArm7:
 
     def set_action(self, action: np.ndarray,
                    translation_scale=100.0, axangle_scale=0.1,
-                   speed=None, mvacc=None,
+                   speed=None, mvacc=None, gripper_speed=None,
                    skip_gripper=False, wait=False):
         """
         :param action: action corresponding to self.control_mode, np.floating np.ndarray
@@ -270,12 +228,11 @@ class XArm7:
         :param mvacc: move acceleration.
                       For TCP motion: range [1.0, 50000.0] mm/s^2 (default=2000)
                       For joint motion: range [0.5, 1145.0] deg/s^2 (default=500)
+        :param gripper_speed: gripper speed, range [1, 5000] r/min (default=5000)
         :param skip_gripper: whether to skip gripper action
         :param wait: whether to wait for the arm to complete, default is False.
+                     Has no effect in "joint_online" and "cartesian_online" motion mode
         """
-        # TODO: Check if there's a way to not wait for set_gripper_position()
-        #       so skip_gripper is not needed
-
         # Clean existing warnings / errors
         while self.arm.has_err_warn:
             error_code, warn_code = self.arm.get_err_warn_code()
@@ -287,7 +244,7 @@ class XArm7:
 
         # Checks action shape and range
         assert action in self.action_space, f"Wrong {action = }"
-        action = np.asarray(action).copy()  # TODO: can be removed?
+        action = np.asarray(action)
 
         # Preprocess action (apply scaling, clip to safety boundary, rescale gripper)
         tgt_tcp_pose, gripper_pos = self._preprocess_action(
@@ -297,10 +254,14 @@ class XArm7:
         # Control gripper position
         ret_gripper = 0
         if not skip_gripper:
-            ret_gripper = self.arm.set_gripper_position(gripper_pos, wait=False)
+            ret_gripper = self.arm.set_gripper_position(
+                gripper_pos, speed=gripper_speed, wait=False
+            )
 
         # Control xArm based on motion mode
         if self._motion_mode == "position":
+            # NOTE: when wait=False, the second set_position() call will be blocked
+            # until previous motion is completed.
             ret_arm = self.arm.set_position(
                 *tgt_tcp_pose.p, *quat2euler(tgt_tcp_pose.q, axes='sxyz'),
                 speed=speed, mvacc=mvacc,
@@ -368,18 +329,32 @@ class XArm7:
         else:
             raise NotImplementedError()
 
-    def set_qpos(self, qpos, wait=False):
-        """Set xarm qpos using maniskill2 qpos"""
+    def set_qpos(self, qpos, speed=None, mvacc=None, gripper_speed=None, wait=False):
+        """Set xarm qpos using maniskill2 qpos
+        :param qpos: joint qpos (angles for arm joints, gripper_qpos for gripper)
+                     See self.joint_limits_ms2
+        :param speed: move speed.
+                      For TCP motion: range is [0.1, 1000.0] mm/s (default=100)
+                      For joint motion: range is [0.05, 180.0] deg/s (default=20)
+        :param mvacc: move acceleration.
+                      For TCP motion: range [1.0, 50000.0] mm/s^2 (default=2000)
+                      For joint motion: range [0.5, 1145.0] deg/s^2 (default=500)
+        :param gripper_speed: gripper speed, range [1, 5000] r/min
+        :param wait: whether to wait for the arm to complete, default is False.
+        """
         assert len(qpos) == 9, f"Wrong qpos shape: {len(qpos)}"
         arm_qpos, gripper_qpos = qpos[:7], qpos[-2:]
-        ret_arm = self.arm.set_servo_angle(angle=arm_qpos, is_radian=True,
-                                           wait=wait)
+        ret_arm = self.arm.set_servo_angle(
+            angle=arm_qpos, speed=speed, mvacc=mvacc, is_radian=True, wait=wait
+        )
 
         gripper_qpos = gripper_qpos[0]  # NOTE: mimic action
         gripper_pos = clip_and_scale_action(
             gripper_qpos, self.gripper_limits, self.joint_limits_ms2[-1, :]
         )
-        ret_gripper = self.arm.set_gripper_position(gripper_pos, wait=wait)
+        ret_gripper = self.arm.set_gripper_position(
+            gripper_pos, speed=gripper_speed, wait=False
+        )
         return ret_arm, ret_gripper
 
     @staticmethod
@@ -475,6 +450,58 @@ class XArm7:
 
         # if not ignore_controller and "controller" in state:
         #     self.controller.set_state(state["controller"])
+
+    def __repr__(self):
+        return (f'<{self.__class__.__name__}: ip={self.ip}, '
+                f'control_mode={self._control_mode}, motion_mode={self._motion_mode}, '
+                f'with_hand_camera={self.with_hand_camera}>')
+
+    @property
+    def robot(self):
+        """An alias for compatibility."""
+        return self
+
+    @property
+    def control_mode(self):
+        """Get the currently activated controller uid."""
+        return self._control_mode
+
+    @property
+    def motion_mode(self):
+        """Get the currently activated controller uid."""
+        return self._motion_mode
+
+    @property
+    def action_space(self):
+        if self._control_mode == "pd_ee_pos":
+            return spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32)
+        elif self._control_mode == "pd_ee_delta_pos":
+            return spaces.Box(low=-1, high=1, shape=(4,), dtype=np.float32)
+        # elif self._control_mode == "pd_ee_pose":
+        #     # [x, y, z, r, p, y, gripper], xyz in meters, rpy in radian
+        #     return spaces.Box(low=np.array([-np.inf]*3 + [-np.pi]*3 + [-1]),
+        #                       high=np.array([np.inf]*3 + [np.pi]*3 + [1]),
+        #                       shape=(7,), dtype=np.float32)
+        elif self._control_mode == "pd_ee_pose_axangle":
+            # [x, y, z, *rotvec, gripper], xyz in meters
+            #   rotvec is in axis of rotation and its norm gives rotation angle
+            return spaces.Box(low=np.array([-np.inf]*6 + [-1]),
+                              high=np.array([np.inf]*6 + [1]),
+                              shape=(7,), dtype=np.float32)
+        elif self._control_mode == "pd_ee_delta_pose_axangle":  # TODO: verify bounds
+            # [x, y, z, *rotvec, gripper], xyz in meters
+            #   rotvec is in axis of rotation and its norm gives rotation angle
+            return spaces.Box(low=-1, high=1, shape=(7,), dtype=np.float32)
+        elif self._control_mode == "pd_ee_pose_quat":
+            # [x, y, z, w, x, y, z, gripper], xyz in meters, wxyz is unit quaternion
+            return spaces.Box(low=np.array([-np.inf]*3 + [-1] * 4 + [-1]),
+                              high=np.array([np.inf]*3 + [1] * 4 + [1]),
+                              shape=(8,), dtype=np.float32)
+        elif self._control_mode == "pd_ee_delta_pose_quat":
+            # [x, y, z, w, x, y, z, gripper], xyz in meters, wxyz is unit quaternion
+            return spaces.Box(low=-1, high=1, shape=(8,), dtype=np.float32)
+        else:
+            raise NotImplementedError(f"Unsupported {self._control_mode = }")
 
     @property
     def cameras(self) -> CameraConfig:

@@ -484,9 +484,9 @@ class SharedObject:
         return self.__class__, (self.name,)
 
     def __repr__(self):
-        return (f'{self.__class__.__name__}(name={self.name}, '
+        return (f'<{self.__class__.__name__}: name={self.name}, '
                 f'data_type={self._object_types[self.object_type_idx]}, '
-                f'nbytes={self.nbytes})')
+                f'nbytes={self.nbytes}>')
 
 
 class SharedDynamicObject(SharedObject):

@@ -33,6 +33,7 @@ if not installing from source.
 * `real_robot.agents.xarm`
   * Change `XArm7` parameters for clarity (`safety_boundary` => `safety_boundary_mm`, `boundary_clip_eps` => `boundary_clip_mm`)
   * Add `get_gripper_position()` to get gripper opening width in mm or m
+  * Add `gripper_speed` parameter to `set_action()` to control gripper speed
 * `real_robot.sensors.camera`
   * `CameraConfig` now accepts an `fps` parameter
 * `real_robot.utils.realsense`
@@ -44,6 +45,7 @@ if not installing from source.
 * `real_robot.agents.xarm`
   * `XArm7` will not clear *"Safety Boundary Limit"* error automatically in `set_action()`
   * For `motion_mode == "position"`, switch from using `set_tool_position()` to `set_position()`
+  * Enable gripper and set to maximum speed in `reset()`
 
 </p>
 </details>
