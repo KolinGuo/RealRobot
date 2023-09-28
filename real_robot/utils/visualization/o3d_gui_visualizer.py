@@ -305,8 +305,7 @@ class O3DGUIVisualizer:
               * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
               * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
               * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
-                                        forward(x), left(y) and up(z)
-                                        [4, 4] np.float32 np.ndarray
+                                        forward(x), left(y) and up(z), sapien.core.Pose
             Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
               <device_uid> and <data_uid> must not be the same
           Acceptable <data_uid> suffixes with its acceptable data member suffixes:
@@ -324,7 +323,7 @@ class O3DGUIVisualizer:
                       or pts color, [N, 3] np.uint8 np.ndarray
           * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
           * "_intr": camera intrinsic matrix, [3, 3] np.floating np.ndarray
-          * "_pose": object / camera pose, [4, 4] np.floating np.ndarray
+          * "_pose": object / camera pose, sapien.core.Pose
           * "_xyzimg": xyz image, [H, W, 3] np.floating np.ndarray
           * "_pts": points, [N, 3] np.floating np.ndarray
         :param stream_camera: whether to redraw camera stream when a new frame arrives
@@ -1551,7 +1550,8 @@ class O3DGUIVisualizer:
             if (so_data_name := f"rs_{camera_name}_color") in all_so_names:
                 pts_color = so_dict[so_data_name].fetch(lambda x: x/255.).reshape(-1, 3)
             depth_image = so_dict[f"rs_{camera_name}_depth"].fetch()
-            T_world_camROS = so_dict[f"rs_{camera_name}_pose"].fetch()
+            T_world_camROS = so_dict[f"rs_{camera_name}_pose"].fetch()\
+                .to_transformation_matrix()
 
             if pts_color is not None:
                 pcd.colors = Vector3dVector(pts_color)
@@ -1629,7 +1629,7 @@ class O3DGUIVisualizer:
                         ).reshape(-1, 3))
                         self.add_camera(camera_name, *depth_image.shape[::-1], K)
                     elif data_fmt == "pose":  # object / camera pose
-                        T = so_dict[so_data_name].fetch()
+                        T = so_dict[so_data_name].fetch().to_transformation_matrix()
                         if data_uid.endswith("_camera"):  # camera capture
                             self.update_camera_pose(data_uid, T, fmt="CV")
                             data_uid = f"{data_uid}/captured_pcd"

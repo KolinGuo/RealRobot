@@ -166,7 +166,7 @@ class Camera:
             pose = self.parent_pose_fn() * self.local_pose
         else:
             pose = self.local_pose
-        self.so_pose.assign(pose.to_transformation_matrix())
+        self.so_pose.assign(pose)
         return pose
 
     def get_extrinsic_matrix(self, pose: Pose = None) -> np.ndarray:

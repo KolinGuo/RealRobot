@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple, Union, Optional
 import pyrealsense2 as rs
 import numpy as np
 
-from .camera import T_CV_ROS
+from .camera import pose_CV_ROS
 from .multiprocessing import SharedObject
 from .logger import get_logger
 from .. import REPO_ROOT
@@ -91,8 +91,7 @@ class RSDevice:
             * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
             * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
             * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
-                                      forward(x), left(y) and up(z)
-                                      [4, 4] np.float32 np.ndarray
+                                      forward(x), left(y) and up(z), sapien.core.Pose
         """
         self.logger = get_logger("RSDevice")
 
@@ -249,7 +248,7 @@ class RSDevice:
             data=np.zeros((self.height, self.width), dtype=np.uint16)
         )
         so_intr = SharedObject(f"rs_{self.uid}_intr", data=np.zeros((3, 3)))
-        so_pose = SharedObject(f"rs_{self.uid}_pose", data=T_CV_ROS)
+        so_pose = SharedObject(f"rs_{self.uid}_pose", data=pose_CV_ROS)
 
         while not so_joined.triggered:
             start = so_start.fetch()
