@@ -17,6 +17,7 @@ from xarm.wrapper import XArmAPI
 from real_robot.utils.logger import get_logger
 from real_robot.utils.common import clip_and_scale_action, vectorize_pose
 from real_robot.sensors.camera import CameraConfig
+from real_robot.utils.multiprocessing import SharedObject
 
 # TODO: remove return code from all functions, add return code checks
 
@@ -50,20 +51,18 @@ class XArm7:
         :param boundary_clip_mm: clip action when TCP position to boundary is
                                  within boundary_clip_eps (mm). No clipping if None.
         :param with_hand_camera: whether to include hand camera mount in TCP offset.
-        :param run_as_process: whether to run XArm7 as a separate process
-                               for streaming robot states and save trajectory (not done)
+        :param run_as_process: whether to run XArm7 as a separate process for
+                               streaming robot states and saving trajectory (not done)
             If True, XArm7 needs to be created as a `mp.Process`.
             Several SharedObject are created to control XArm7 and stream data:
             * "join_xarm7": If triggered, the XArm7 process is joined.
             * "sync_xarm7": If triggered, all processes should fetch data.
                             Used for synchronizing robot state capture.
             * "start_xarm7": If True, starts the XArm7 streams; else, stops it.
-
-            * "xarm7_qpos": xarm joint angles, [7,] np.float32 np.ndarray
-            * "xarm7_qvel": xarm joint velocities, [7,] np.float32 np.ndarray
-            * "xarm7_qf": xarm joint torques, [7,] np.float32 np.ndarray
-            * "xarm7_tcp_pose": tcp pose in base frame (unit: m)
-                               (xyx, wxyz) [7,] np.float64 np.ndarray
+            * "xarm7_qpos": xArm7 joint angles, [9,] np.float32 np.ndarray
+            * "xarm7_qvel": xArm7 joint velocities, [9,] np.float32 np.ndarray
+            * "xarm7_qf": xArm7 joint torques, [9,] np.float32 np.ndarray
+            * "xarm7_tcp_pose": tcp pose in world frame (unit: m), sapien.core.Pose
         """
         self.logger = get_logger("XArm7")
         self.ip = ip
@@ -77,7 +76,7 @@ class XArm7:
         self._motion_mode = motion_mode
 
         # TODO: read this from URDF
-        self.joint_limits_ms2 = np.array(
+        self.joint_limits_ms2 = np.asarray(
             [[-6.2831855, 6.2831855],
              [-2.059, 2.0944],
              [-6.2831855, 6.2831855],
@@ -86,14 +85,15 @@ class XArm7:
              [-1.69297, 3.1415927],
              [-6.2831855, 6.2831855],
              [0, 0.044643],
-             [0, 0.044643],]
+             [0, 0.044643],], dtype=np.float32
         )  # joint limits in maniskill2
-        self.gripper_limits = np.array([-10, 850]).astype(float)
+        self.gripper_limits = np.asarray([-10, 850], dtype=np.float32)
 
-        self.init_qpos = np.array(
-            [0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2, 0.044643, 0.044643]
+        self.init_qpos = np.asarray(
+            [0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2, 0.044643, 0.044643],
+            dtype=np.float32
         )
-        self.pose = Pose()  # base_pose
+        self.pose = Pose()  # base pose in world frame
         self.safety_boundary = np.asarray(safety_boundary_mm)
         self.boundary_clip = boundary_clip_mm
         if self.boundary_clip is not None:
@@ -102,7 +102,10 @@ class XArm7:
             self.safety_boundary_clip[1::2] += boundary_clip_mm
         self.with_hand_camera = with_hand_camera
 
-        self.reset()
+        if run_as_process:
+            self.run_as_process()
+        else:
+            self.reset()
 
     def __del__(self):
         self.reset()
@@ -255,6 +258,7 @@ class XArm7:
         # Control gripper position
         ret_gripper = 0
         if not skip_gripper:
+            # NOTE: wait=False for gripper position (it should never block)
             ret_gripper = self.arm.set_gripper_position(
                 gripper_pos, speed=gripper_speed, wait=False
             )
@@ -375,23 +379,34 @@ class XArm7:
     # ---------------------------------------------------------------------- #
     # Get robot information
     # ---------------------------------------------------------------------- #
-    def get_qpos(self):
-        """Get xarm qpos in maniskill2 format"""
+    def get_qpos(self) -> np.ndarray:
+        """Get xarm qpos in maniskill2 format
+        :return qpos: xArm7 joint angles, [9,] np.float32 np.ndarray
+        """
         _, (qpos, qvel, effort) = self.arm.get_joint_states(is_radian=True)
         _, gripper_pos = self.arm.get_gripper_position()
 
         gripper_qpos = clip_and_scale_action(
             gripper_pos, self.joint_limits_ms2[-1, :], self.gripper_limits
         )
-        return np.hstack([qpos, [gripper_qpos, gripper_qpos]])
+        return np.asarray(qpos + [gripper_qpos, gripper_qpos], dtype=np.float32)
 
-    def get_qvel(self):
-        """Get xarm qvel in maniskill2 format"""
+    def get_qvel(self) -> np.ndarray:
+        """Get xarm qvel in maniskill2 format
+        :return qvel: xArm7 joint velocities, [9,] np.float32 np.ndarray
+        """
         _, (qpos, qvel, effort) = self.arm.get_joint_states(is_radian=True)
-        return np.hstack([qvel, [0.0, 0.0]])  # No gripper qvel
+        return np.asarray(qvel + [0.0, 0.0], dtype=np.float32)  # No gripper qvel
+
+    def get_qf(self) -> np.ndarray:
+        """Get xarm qf (joint torques) in maniskill2 format
+        :return qf: xArm7 joint torques, [9,] np.float32 np.ndarray
+        """
+        _, (qpos, qvel, effort) = self.arm.get_joint_states(is_radian=True)
+        return np.asarray(effort + [0.0, 0.0], dtype=np.float32)  # No gripper qf
 
     def get_tcp_pose(self, unit_in_mm=False) -> Pose:
-        """Get TCP pose in robot base frame
+        """Get TCP pose in world frame
         :return pose: If unit_in_mm, position unit is mm. Else, unit is m.
         """
         # arm.get_position() rounds the values to 6 decimal places
@@ -403,11 +418,11 @@ class XArm7:
                 self.logger.critical(f"Return value not finite: {ret[1:]=}")
 
         xyzrpy = np.asarray(ret[1:], dtype=np.float32)
-        base_to_tcp_pose = Pose(
+        pose_base_tcp = Pose(
             p=xyzrpy[:3] if unit_in_mm else xyzrpy[:3] / 1000,
             q=euler2quat(*xyzrpy[3:], axes='sxyz')
         )
-        return base_to_tcp_pose
+        return self.pose * pose_base_tcp
 
     def get_gripper_position(self, unit_in_mm=False) -> Union[int, float]:
         """Get gripper opening width
@@ -434,7 +449,7 @@ class XArm7:
         state["robot_root_pose"] = vectorize_pose(self.pose)
         state["robot_qpos"] = self.get_qpos()
         state["robot_qvel"] = self.get_qvel()
-        # state["robot_qacc"] = self.robot.get_qacc()
+        state["robot_qf"] = self.get_qf()
 
         # controller state
         # state["controller"] = self.controller.get_state()
@@ -452,10 +467,44 @@ class XArm7:
         # if not ignore_controller and "controller" in state:
         #     self.controller.set_state(state["controller"])
 
-    def __repr__(self):
-        return (f'<{self.__class__.__name__}: ip={self.ip}, '
-                f'control_mode={self._control_mode}, motion_mode={self._motion_mode}, '
-                f'with_hand_camera={self.with_hand_camera}>')
+    def run_as_process(self):
+        """Run XArm7 as a separate process"""
+        self.logger.info(f"Running {self!r} as a separate process")
+
+        # XArm7 control
+        so_joined = SharedObject("join_xarm7")
+        so_sync = SharedObject("sync_xarm7")
+        so_start = SharedObject("start_xarm7", data=False)
+        # data
+        so_qpos = SharedObject("xarm7_qpos", data=np.zeros(9, dtype=np.float32))
+        so_qvel = SharedObject("xarm7_qvel", data=np.zeros(9, dtype=np.float32))
+        so_qf = SharedObject("xarm7_qf", data=np.zeros(9, dtype=np.float32))
+        so_tcp_pose = SharedObject("xarm7_tcp_pose", data=Pose())
+
+        while not so_joined.triggered:
+            if so_start.fetch():
+                _, (qpos, qvel, qf) = self.arm.get_joint_states(is_radian=True)
+                _, gripper_pos = self.arm.get_gripper_position()
+                gripper_qpos = clip_and_scale_action(
+                    gripper_pos, self.joint_limits_ms2[-1, :], self.gripper_limits
+                )
+                pose_world_tcp = self.get_tcp_pose()
+
+                so_qpos.assign(np.asarray(qpos + [gripper_qpos, gripper_qpos],
+                                          dtype=np.float32))
+                so_qvel.assign(np.asarray(qvel + [0.0, 0.0], dtype=np.float32))
+                so_qf.assign(np.asarray(qf + [0.0, 0.0], dtype=np.float32))
+                so_tcp_pose.assign(pose_world_tcp)
+
+        self.logger.info(f"Process running {self!r} is joined")
+        # Unlink created SharedObject
+        so_joined.unlink()
+        so_sync.unlink()
+        so_start.unlink()
+        so_qpos.unlink()
+        so_qvel.unlink()
+        so_qf.unlink()
+        so_tcp_pose.unlink()
 
     @property
     def robot(self):
@@ -521,3 +570,8 @@ class XArm7:
             depth_option_kwargs={rs.option.exposure: 1500},
             parent_pose_fn=self.get_tcp_pose,
         )
+
+    def __repr__(self):
+        return (f'<{self.__class__.__name__}: ip={self.ip}, '
+                f'control_mode={self._control_mode}, motion_mode={self._motion_mode}, '
+                f'with_hand_camera={self.with_hand_camera}>')
