@@ -334,7 +334,8 @@ class XArm7:
         else:
             raise NotImplementedError()
 
-    def set_qpos(self, qpos, speed=None, mvacc=None, gripper_speed=None, wait=False):
+    def set_qpos(self, qpos, speed=None, mvacc=None,
+                 gripper_speed=None, skip_gripper=False, wait=False):
         """Set xarm qpos using maniskill2 qpos
         :param qpos: joint qpos (angles for arm joints, gripper_qpos for gripper)
                      See self.joint_limits_ms2
@@ -345,22 +346,58 @@ class XArm7:
                       For TCP motion: range [1.0, 50000.0] mm/s^2 (default=2000)
                       For joint motion: range [0.5, 1145.0] deg/s^2 (default=500)
         :param gripper_speed: gripper speed, range [1, 5000] r/min
+        :param skip_gripper: whether to skip gripper action
         :param wait: whether to wait for the arm to complete, default is False.
         """
         assert len(qpos) == 9, f"Wrong qpos shape: {len(qpos)}"
         arm_qpos, gripper_qpos = qpos[:7], qpos[-2:]
-        ret_arm = self.arm.set_servo_angle(
-            angle=arm_qpos, speed=speed, mvacc=mvacc, is_radian=True, wait=wait
-        )
 
-        gripper_qpos = gripper_qpos[0]  # NOTE: mimic action
-        gripper_pos = clip_and_scale_action(
-            gripper_qpos, self.gripper_limits, self.joint_limits_ms2[-1, :]
-        )
-        ret_gripper = self.arm.set_gripper_position(
-            gripper_pos, speed=gripper_speed, wait=False
+        # Control gripper position
+        ret_gripper = 0
+        if not skip_gripper:
+            gripper_qpos = gripper_qpos[0]  # NOTE: mimic action
+            gripper_pos = clip_and_scale_action(
+                gripper_qpos, self.gripper_limits, self.joint_limits_ms2[-1, :]
+            )
+            ret_gripper = self.arm.set_gripper_position(
+                gripper_pos, speed=gripper_speed, wait=False
+            )
+
+        ret_arm = self.arm.set_servo_angle(
+            angle=arm_qpos, speed=speed, mvacc=mvacc,
+            relative=False, is_radian=True, wait=wait
         )
         return ret_arm, ret_gripper
+
+    def set_gripper_position(self, gripper_pos, unit_in_mm=False,
+                             gripper_speed=None, wait=False):
+        """Set gripper opening width
+        :param gripper_pos: gripper position (default unit is in meters)
+        :param unit_in_mm: whether gripper_pos has unit mm or m
+        :param gripper_speed: gripper speed, range [1, 5000] r/min
+        :param wait: whether to wait for the action to complete, default is False.
+        """
+        ret_gripper = self.arm.set_gripper_position(
+            gripper_pos if unit_in_mm else gripper_pos * 1000.0,
+            speed=gripper_speed, wait=wait
+        )
+        return ret_gripper
+
+    def close_gripper(self, gripper_speed=None, wait=False):
+        """Close gripper
+        :param gripper_speed: gripper speed, range [1, 5000] r/min
+        :param wait: whether to wait for the action to complete, default is False.
+        """
+        return self.set_gripper_position(self.gripper_limits[0], unit_in_mm=True,
+                                         gripper_speed=gripper_speed, wait=wait)
+
+    def open_gripper(self, gripper_speed=None, wait=False):
+        """Open gripper
+        :param gripper_speed: gripper speed, range [1, 5000] r/min
+        :param wait: whether to wait for the action to complete, default is False.
+        """
+        return self.set_gripper_position(self.gripper_limits[1], unit_in_mm=True,
+                                         gripper_speed=gripper_speed, wait=wait)
 
     @staticmethod
     def build_grasp_pose(center, approaching=[0.0, 0.0, -1.0],
