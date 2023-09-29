@@ -8,18 +8,13 @@ import pyrealsense2 as rs
 import open3d as o3d
 
 from mani_skill2.envs.sapien_env import BaseEnv as MS2BaseEnv
-from real_robot.utils.common import (
+from ..sensors.camera import CALIB_CAMERA_POSES, CameraConfig, Camera, parse_camera_cfgs
+from ..agents import XArm7
+from ..utils.common import (
     convert_observation_to_space, vectorize_pose, flatten_state_dict
 )
-from real_robot.utils.visualization import Visualizer
-from real_robot.sensors.camera import (
-    CALIB_CAMERA_POSES,
-    CameraConfig,
-    Camera,
-    parse_camera_cfgs
-)
-from real_robot.agents import XArm7
-from real_robot.utils.multiprocessing import ctx
+from ..utils.visualization import Visualizer
+from ..utils.multiprocessing import ctx, SharedObject, start_and_wait_for_process
 
 
 class XArmBaseEnv(gym.Env):
@@ -151,8 +146,12 @@ class XArmBaseEnv(gym.Env):
                 run_as_process=True,
             )
         )
-        self.agent_proc.start()
-        time.sleep(1.0)  # sleep for 1 second to wait for SharedObject creation
+        start_and_wait_for_process(self.agent_proc, desc="<XArm7>", timeout=5)
+
+        # Create SharedObject to control XArm7
+        self.so_agent_joined = SharedObject("join_xarm7")
+        self.so_agent_start = SharedObject("start_xarm7")
+        self.so_agent_start.assign(True)  # start the XArm7 to stream robot states
 
         self.agent = XArm7(
             self.xarm_ip,
@@ -495,3 +494,7 @@ class XArmBaseEnv(gym.Env):
             #    raise NotImplementedError()
         else:
             raise NotImplementedError(mode)
+
+    def __del__(self):
+        self.so_agent_joined.trigger()
+        self.agent_proc.join()

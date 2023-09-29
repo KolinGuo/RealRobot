@@ -1,6 +1,5 @@
-import time
 from collections import OrderedDict
-from typing import Dict, Callable, Optional
+from typing import Dict, Optional
 
 import numpy as np
 from sapien.core import Pose
@@ -8,7 +7,7 @@ from gym import spaces
 
 from ..utils.camera import pose_CV_ROS, pose_ROS_CV
 from ..utils.realsense import _default_bag_path, RSDevice
-from ..utils.multiprocessing import ctx, SharedObject
+from ..utils.multiprocessing import ctx, SharedObject, start_and_wait_for_process
 from .. import REPO_ROOT
 
 
@@ -116,8 +115,11 @@ class Camera:
                 local_pose=self.local_pose,
             )
         )
-        self.device_proc.start()
-        time.sleep(1.0)  # sleep for 1 second to wait for SharedObject creation
+        start_and_wait_for_process(
+            self.device_proc,
+            desc=f"<RSDevice: {self.uid} (S/N: {self.device_sn})>",
+            timeout=5
+        )
 
         # Create SharedObject to control RSDevice and fetch data
         self.so_joined = SharedObject(f"join_rs_{self.uid}")
@@ -138,6 +140,8 @@ class Camera:
 
     def take_picture(self):
         """Fetch images and camera pose from the camera"""
+        assert self.device_proc.is_alive(), f"RSDevice for {self!r} has died"
+
         # Trigger camera capture in other processes
         self.so_sync.trigger()
 

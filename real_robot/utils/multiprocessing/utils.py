@@ -1,3 +1,7 @@
+import os
+import time
+import multiprocessing as mp
+
 from .shared_object import SharedObject
 
 
@@ -9,3 +13,33 @@ class SharedObjectDefaultDict(dict):
     def __missing__(self, so_name: str) -> SharedObject:
         so = self[so_name] = SharedObject(so_name)
         return so
+
+
+def start_and_wait_for_process(process: mp.Process, *,
+                               desc=None, timeout: float = None) -> None:
+    """Start and wait for process to be ready (finishes initialization)
+    When the waiting process is ready, it should trigger SharedObject "proc_<pid>_ready"
+
+    :param process: mp.Process
+    :param desc: process description for intuitive error message.
+    :param timeout: If process is not ready after timeout seconds, raise a TimeoutError
+                    If timeout is None, wait indefinitely
+    """
+    # TODO: should this be written using mp.Pipe?
+    process.start()
+    so_ready = SharedObject(f"proc_{process.pid}_ready")
+
+    start_time = time.time()
+    while not so_ready.triggered:
+        if timeout is not None and time.time() - start_time > timeout:
+            raise TimeoutError(
+                f"Process {process.pid if desc is None else desc} did not become ready "
+                f"within {timeout=} seconds."
+            )
+
+
+def signal_process_ready() -> None:
+    """When called, signals that the current process is ready
+    by triggering SharedObject "proc_<pid>_ready"
+    """
+    SharedObject(f"proc_{os.getpid()}_ready").trigger().unlink()

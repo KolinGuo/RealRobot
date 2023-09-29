@@ -7,7 +7,7 @@ import numpy as np
 from sapien.core import Pose
 
 from .camera import pose_CV_ROS
-from .multiprocessing import SharedObject
+from .multiprocessing import SharedObject, signal_process_ready
 from .logger import get_logger
 from .. import REPO_ROOT
 
@@ -261,6 +261,8 @@ class RSDevice:
 
         if self.parent_pose_so_name is not None:
             so_parent_pose = SharedObject(self.parent_pose_so_name)
+
+        signal_process_ready()  # current process is ready
 
         while not so_joined.triggered:
             start = so_start.fetch()

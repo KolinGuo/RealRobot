@@ -2,9 +2,8 @@
 Check user manual at https://www.ufactory.cc/download/
 """
 from collections import OrderedDict
-import time
 import math
-from typing import List, Union
+from typing import List
 
 import numpy as np
 from gym import spaces
@@ -14,10 +13,10 @@ from transforms3d.euler import euler2quat, quat2euler
 from transforms3d.quaternions import axangle2quat
 
 from xarm.wrapper import XArmAPI
-from real_robot.utils.logger import get_logger
-from real_robot.utils.common import clip_and_scale_action, vectorize_pose
-from real_robot.sensors.camera import CameraConfig
-from real_robot.utils.multiprocessing import SharedObject
+from ..utils.logger import get_logger
+from ..utils.common import clip_and_scale_action, vectorize_pose
+from ..sensors.camera import CameraConfig
+from ..utils.multiprocessing import SharedObject, signal_process_ready
 
 # TODO: remove return code from all functions, add return code checks
 
@@ -519,6 +518,8 @@ class XArm7:
         so_qvel = SharedObject("xarm7_qvel", data=np.zeros(9, dtype=np.float32))
         so_qf = SharedObject("xarm7_qf", data=np.zeros(9, dtype=np.float32))
         so_tcp_pose = SharedObject("xarm7_tcp_pose", data=Pose())
+
+        signal_process_ready()  # current process is ready
 
         while not so_joined.triggered:
             if so_start.fetch():
