@@ -44,7 +44,8 @@ class CameraConfig:
         :param device_sn: unique serial number of the camera
         :param pose: camera pose in world frame, following ROS frame conventions.
                      Format is forward(x), left(y) and up(z)
-                     If parent_pose_so_name is not None, this is pose relative to parent link
+                     If parent_pose_so_name is not None, this is pose relative to
+                     parent link.
         :param width: width of the camera
         :param height: height of the camera
         :param fps: camera streaming fps

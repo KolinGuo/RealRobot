@@ -257,12 +257,10 @@ class RSDevice:
             data=np.zeros((self.height, self.width), dtype=np.uint16)
         )
         so_intr = SharedObject(f"rs_{self.uid}_intr", data=np.zeros((3, 3)))
-        so_pose = SharedObject(f"rs_{self.uid}_pose", data=pose_CV_ROS)
+        so_pose = SharedObject(f"rs_{self.uid}_pose", data=self.local_pose)
 
         if self.parent_pose_so_name is not None:
             so_parent_pose = SharedObject(self.parent_pose_so_name)
-        else:  # static camera pose
-            so_pose.assign(self.local_pose)
 
         while not so_joined.triggered:
             start = so_start.fetch()
@@ -280,7 +278,8 @@ class RSDevice:
                 # Fetch parent link pose and assign camera pose here for synchronization
                 if self.parent_pose_so_name is not None:  # dynamic camera pose
                     so_pose.assign(so_parent_pose.fetch() * self.local_pose)
-                frames = self.align.process(frames)
+                frames = self.align.process(frames)  # align depth image to color frame
+
                 so_color.assign(np.asarray(frames.get_color_frame().data))
                 so_depth.assign(np.asarray(frames.get_depth_frame().data))
 
