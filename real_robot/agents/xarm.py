@@ -370,35 +370,35 @@ class XArm7:
         return ret_arm, ret_gripper
 
     def set_gripper_position(self, gripper_pos, unit_in_mm=False,
-                             gripper_speed=None, wait=False):
+                             speed=None, wait=False):
         """Set gripper opening width
         :param gripper_pos: gripper position (default unit is in meters)
         :param unit_in_mm: whether gripper_pos has unit mm or m
-        :param gripper_speed: gripper speed, range [1, 5000] r/min
+        :param speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
         ret_gripper = self.arm.set_gripper_position(
             gripper_pos * 10.0 if unit_in_mm else gripper_pos * 10000.0,
-            speed=gripper_speed, wait=wait
+            speed=speed, wait=wait
         )
         return ret_gripper
 
-    def close_gripper(self, gripper_speed=None, wait=False):
+    def close_gripper(self, speed=None, wait=False):
         """Close gripper
-        :param gripper_speed: gripper speed, range [1, 5000] r/min
+        :param speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
         ret_gripper = self.arm.set_gripper_position(self.gripper_limits[0],
-                                                    speed=gripper_speed, wait=wait)
+                                                    speed=speed, wait=wait)
         return ret_gripper
 
-    def open_gripper(self, gripper_speed=None, wait=False):
+    def open_gripper(self, speed=None, wait=False):
         """Open gripper
-        :param gripper_speed: gripper speed, range [1, 5000] r/min
+        :param speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
         ret_gripper = self.arm.set_gripper_position(self.gripper_limits[1],
-                                                    speed=gripper_speed, wait=wait)
+                                                    speed=speed, wait=wait)
         return ret_gripper
 
     @staticmethod
