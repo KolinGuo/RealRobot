@@ -430,18 +430,20 @@ class SharedObject:
         self._readers_lock.release()
         return data
 
-    def trigger(self) -> None:
+    def trigger(self) -> "SharedObject":
         """Trigger by modifying object mtime (protected by writer lock)"""
         self._writer_lock.acquire()
         # Update mtime
         struct.pack_into("Q", self.shm.buf, 0, time.time_ns())
         self._writer_lock.release()
+        return self
 
-    def assign(self, data: Union[_object_types]) -> None:
+    def assign(self, data: Union[_object_types]) -> "SharedObject":
         """Assign data to SharedMemory (protected by writer lock)"""
-        self._assign(*self._preprocess_data(data))
+        return self._assign(*self._preprocess_data(data))
 
-    def _assign(self, data, object_type_idx: int, nbytes: int, np_metas: tuple) -> None:
+    def _assign(self, data,
+                object_type_idx: int, nbytes: int, np_metas: tuple) -> "SharedObject":
         """Inner function for assigning data (protected by writer lock)
         For SharedObject, object_type_idx, nbytes, and np_metas cannot be modified
         """
@@ -463,6 +465,7 @@ class SharedObject:
         self._assign_objects[self.object_type_idx](self.shm.buf, data,
                                                    self.nbytes, self.np_ndarray)
         self._writer_lock.release()
+        return self
 
     def close(self):
         """Closes access to the shared memory from this instance but does
