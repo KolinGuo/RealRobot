@@ -1,5 +1,4 @@
 import time
-import multiprocessing as mp
 from collections import OrderedDict
 from typing import Dict, Callable, Optional
 
@@ -9,7 +8,7 @@ from gym import spaces
 
 from ..utils.camera import pose_CV_ROS, pose_ROS_CV
 from ..utils.realsense import _default_bag_path, RSDevice
-from ..utils.multiprocessing import SharedObject
+from ..utils.multiprocessing import ctx, SharedObject
 from .. import REPO_ROOT
 
 
@@ -19,9 +18,6 @@ CALIB_CAMERA_POSES = {
         CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230726_CSE4144_front.npy"
     )) * pose_CV_ROS
 }
-
-ctx = mp.get_context("forkserver" if "forkserver" in mp.get_all_start_methods()
-                     else "spawn")
 
 
 class CameraConfig:

@@ -1,5 +1,6 @@
+import time
 from collections import OrderedDict, defaultdict
-from typing import Dict, Sequence
+from typing import Dict, List, Sequence
 
 import gym
 import numpy as np
@@ -18,6 +19,7 @@ from real_robot.sensors.camera import (
     parse_camera_cfgs
 )
 from real_robot.agents import XArm7
+from real_robot.utils.multiprocessing import ctx
 
 
 class XArmBaseEnv(gym.Env):
@@ -28,14 +30,32 @@ class XArmBaseEnv(gym.Env):
 
     def __init__(
         self, *args,
-        xarm_ip="192.168.1.229",
         obs_mode=None,
-        control_mode="pd_ee_delta_pos",
-        xarm_motion_mode="position",
         image_obs_mode=None,
-        robot_translation_scale=100,
+        control_mode="pd_ee_delta_pos",
+        motion_mode="position",
+        xarm_ip="192.168.1.229",
+        safety_boundary_mm: List[int] = [550, 0, 50, -600, 280, 0],
+        boundary_clip_mm: int = 10,
+        with_hand_camera: bool = True,
+        action_translation_scale=100.0,
+        action_axangle_scale=0.1,
         **kwargs
     ):
+        """
+        :param control_mode: xArm control mode (determines set_action type)
+        :param motion_mode: xArm motion mode (determines xArm motion mode)
+        :param xarm_ip: xArm7 ip address, see controller box
+        :param safety_boundary_mm: [x_max, x_min, y_max, y_min, z_max, z_min] (mm)
+        :param boundary_clip_mm: clip action when TCP position to boundary is
+                                 within boundary_clip_eps (mm). No clipping if None.
+        :param with_hand_camera: whether to include hand camera mount in TCP offset.
+        :param translation_scale: action [-1, 1] maps to [-100mm, 100mm],
+                                  Used for delta control_mode only.
+        :param axangle_scale: axangle action norm (rotation angle) is multiplied by 0.1
+                              [-1, 0, 0] => rotate around [1, 0, 0] by -0.1 rad
+                              Used for delta control_mode only.
+        """
         super().__init__(*args, **kwargs)
 
         self._is_ms2_env = isinstance(self, MS2BaseEnv)
@@ -55,7 +75,7 @@ class XArmBaseEnv(gym.Env):
 
         # Control mode
         self._control_mode = control_mode
-        self._xarm_motion_mode = xarm_motion_mode
+        self._motion_mode = motion_mode
 
         # Image obs mode
         if image_obs_mode is None:
@@ -79,7 +99,11 @@ class XArmBaseEnv(gym.Env):
 
         # Configure agent and cameras
         self.xarm_ip = xarm_ip
-        self.robot_translation_scale = robot_translation_scale
+        self.safety_boundary_mm = safety_boundary_mm
+        self.boundary_clip_mm = boundary_clip_mm
+        self.with_hand_camera = with_hand_camera
+        self.action_translation_scale = action_translation_scale
+        self.action_axangle_scale = action_axangle_scale
         self._configure_agent()
         self._configure_cameras()
         self._configure_render_cameras()
@@ -117,10 +141,25 @@ class XArmBaseEnv(gym.Env):
 
     def _configure_agent(self):
         """Create real robot agent"""
+        self.agent_proc = ctx.Process(
+            target=XArm7,
+            args=(self.xarm_ip, self._control_mode, self._motion_mode),
+            kwargs=dict(
+                safety_boundary_mm=self.safety_boundary_mm,
+                boundary_clip_mm=self.boundary_clip_mm,
+                with_hand_camera=self.with_hand_camera,
+                run_as_process=True,
+            )
+        )
+        self.agent_proc.start()
+        time.sleep(1.0)  # sleep for 1 second to wait for SharedObject creation
+
         self.agent = XArm7(
             self.xarm_ip,
-            control_mode=self._control_mode, motion_mode=self._xarm_motion_mode,
-            safety_boundary_mm=[550, 0, 50, -600, 280, 0]
+            control_mode=self._control_mode, motion_mode=self._motion_mode,
+            safety_boundary_mm=self.safety_boundary_mm,
+            boundary_clip_mm=self.boundary_clip_mm,
+            with_hand_camera=self.with_hand_camera,
         )
 
     def _register_cameras(self) -> Sequence[CameraConfig]:
@@ -192,24 +231,6 @@ class XArmBaseEnv(gym.Env):
             obs = self.get_obs()
 
         self.visualizer.reset()
-
-        # FIXME: comment for debug
-        # if self._obs_mode == 'state':
-        #     self.visualizer.reset(
-        #         color_image=self.recent_sam_obs["color_image"],
-        #         depth_image=self.recent_sam_obs["depth_image"],
-        #         pred_masks=self.recent_sam_obs["pred_masks"],
-        #         xyz_image=self.recent_sam_obs["world_xyz_image"],
-        #         cube_pts=self.recent_sam_obs["object_filt_pcds"]["red cube"],
-        #         bowl_pts=self.recent_sam_obs["object_filt_pcds"]["green bowl"],
-        #     )
-        # elif self._obs_mode == "image":
-        #     self.visualizer.reset(
-        #         color_image=self.recent_sam_obs["color_image"],
-        #         depth_image=self.recent_sam_obs["depth_image"],
-        #     )
-        # else:
-        #     raise NotImplementedError()
 
         return obs
 
@@ -366,11 +387,31 @@ class XArmBaseEnv(gym.Env):
 
         return obs, reward, done, info
 
-    def step_action(self, action, speed=None, mvacc=None,
+    def step_action(self, action, speed=None, mvacc=None, gripper_speed=None,
                     skip_gripper=False, wait=True):
+        """
+        :param action: action corresponding to self.control_mode, np.floating np.ndarray
+                       action[-1] is gripper action (always has range [-1, 1])
+        :param translation_scale: action [-1, 1] maps to [-100mm, 100mm],
+                                  Used for delta control_mode only.
+        :param axangle_scale: axangle action norm (rotation angle) is multiplied by 0.1
+                              [-1, 0, 0] => rotate around [1, 0, 0] by -0.1 rad
+                              Used for delta control_mode only.
+        :param speed: move speed.
+                      For TCP motion: range is [0.1, 1000.0] mm/s (default=100)
+                      For joint motion: range is [0.05, 180.0] deg/s (default=20)
+        :param mvacc: move acceleration.
+                      For TCP motion: range [1.0, 50000.0] mm/s^2 (default=2000)
+                      For joint motion: range [0.5, 1145.0] deg/s^2 (default=500)
+        :param gripper_speed: gripper speed, range [1, 5000] r/min (default=5000)
+        :param skip_gripper: whether to skip gripper action
+        :param wait: whether to wait for the arm to complete, default is False.
+                     Has no effect in "joint_online" and "cartesian_online" motion mode
+        """
         self.agent.set_action(action,
-                              translation_scale=self.robot_translation_scale,
-                              speed=speed, mvacc=mvacc,
+                              translation_scale=self.action_translation_scale,
+                              axangle_scale=self.action_axangle_scale,
+                              speed=speed, mvacc=mvacc, gripper_speed=gripper_speed,
                               skip_gripper=skip_gripper, wait=wait)
 
     def evaluate(self, **kwargs) -> dict:
