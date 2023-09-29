@@ -28,6 +28,7 @@ if not installing from source.
 * Enabled `RSDevice` to run as a separate process (now `Camera` will create
   `RSDevice` as a separate process)
 * Enabled `RSDevice` to record camera streams as a rosbag file
+* Enabled `XArm7` to run as a separate process (for streaming robot states)
 
 ### API changes
 * `real_robot.agents.xarm`
@@ -36,6 +37,7 @@ if not installing from source.
   * Add `gripper_speed` parameter to `set_action()` to control gripper speed
 * `real_robot.sensors.camera`
   * `CameraConfig` now accepts an `fps` parameter
+  * Rename `CameraConfig` parameter `parent_pose_fn` => `parent_pose_so_name`
 * `real_robot.utils.realsense`
   * `RSDevice` now accepts `device_sn` instead of an `rs.device`
   * `RSDevice` now accepts `color_config` and `depth_config` as parameters

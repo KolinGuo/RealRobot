@@ -605,7 +605,7 @@ class XArm7:
             height=480,
             preset="High Accuracy",
             depth_option_kwargs={rs.option.exposure: 1500},
-            parent_pose_fn=self.get_tcp_pose,
+            parent_pose_so_name="xarm7_tcp_pose",
         )
 
     def __repr__(self):

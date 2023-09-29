@@ -294,15 +294,12 @@ class XArmBaseEnv(gym.Env):
         return obs
 
     def take_picture(self):
-        """Take pictures from all cameras (blocking).
-        No need to cam.take_picture() as cameras now run as separate processes
-        """
-        # for cam in self._cameras.values():
-        #     cam.take_picture()
-        pass
+        """Take pictures from all cameras for syncing camera pose"""
+        for cam in self._cameras.values():
+            cam.take_picture()
 
     def get_images(self) -> Dict[str, Dict[str, np.ndarray]]:
-        """Get (raw) images from all cameras (non-blocking)."""
+        """Get (raw) images from all cameras"""
         images = OrderedDict()
         for name, cam in self._cameras.items():
             images[name] = cam.get_images()

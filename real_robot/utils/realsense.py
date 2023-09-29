@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple, Union, Optional
 
 import pyrealsense2 as rs
 import numpy as np
+from sapien.core import Pose
 
 from .camera import pose_CV_ROS
 from .multiprocessing import SharedObject
@@ -65,7 +66,8 @@ class RSDevice:
     def __init__(self, device_sn: str, uid: str = None,
                  color_config=(848, 480, 30), depth_config=(848, 480, 30), *,
                  preset="Default", color_option_kwargs={}, depth_option_kwargs={},
-                 record_bag=False, bag_path=_default_bag_path, run_as_process=False):
+                 record_bag=False, bag_path=_default_bag_path, run_as_process=False,
+                 parent_pose_so_name: str = None, local_pose: Pose = pose_CV_ROS):
         """
         :param device_sn: realsense device serial number
         :param uid: unique camera id, e.g. "hand_camera", "front_camera"
@@ -92,6 +94,11 @@ class RSDevice:
             * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
             * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
                                       forward(x), left(y) and up(z), sapien.core.Pose
+        :param parent_pose_so_name: If not None, it's the SharedObject name of camera's
+                                    parent link pose in world frame.
+        :param local_pose: camera pose in world frame (ROS convention)
+                           If parent_pose_so_name is not None, this is pose
+                           relative to parent link.
         """
         self.logger = get_logger("RSDevice")
 
@@ -123,6 +130,8 @@ class RSDevice:
         self._set_sensor_options(color_option_kwargs, depth_option_kwargs)
 
         if run_as_process:
+            self.parent_pose_so_name = parent_pose_so_name
+            self.local_pose = local_pose
             self.run_as_process()
 
     def _create_rs_config(self, color_config: tuple, depth_config: tuple) -> rs.config:
@@ -250,6 +259,11 @@ class RSDevice:
         so_intr = SharedObject(f"rs_{self.uid}_intr", data=np.zeros((3, 3)))
         so_pose = SharedObject(f"rs_{self.uid}_pose", data=pose_CV_ROS)
 
+        if self.parent_pose_so_name is not None:
+            so_parent_pose = SharedObject(self.parent_pose_so_name)
+        else:  # static camera pose
+            so_pose.assign(self.local_pose)
+
         while not so_joined.triggered:
             start = so_start.fetch()
             if not device_started and start:
@@ -263,9 +277,10 @@ class RSDevice:
             if device_started:
                 # wait for frames
                 frames = self.pipeline.wait_for_frames()
+                # Fetch parent link pose and assign camera pose here for synchronization
+                if self.parent_pose_so_name is not None:  # dynamic camera pose
+                    so_pose.assign(so_parent_pose.fetch() * self.local_pose)
                 frames = self.align.process(frames)
-                # TODO: stream so_pose
-                # so_pose.assign()
                 so_color.assign(np.asarray(frames.get_color_frame().data))
                 so_depth.assign(np.asarray(frames.get_depth_frame().data))
 

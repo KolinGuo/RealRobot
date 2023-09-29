@@ -29,14 +29,14 @@ class CameraConfig:
         self,
         uid: str,
         device_sn: str,
-        pose: Pose,
+        pose: Pose = pose_CV_ROS,
         width: int = 848,
         height: int = 480,
-        fps: int = 30,
+        fps: int = 30, *,
         preset="Default",
         depth_option_kwargs={},
         color_option_kwargs={},
-        parent_pose_fn: Optional[Callable[[], Pose]] = None,
+        parent_pose_so_name: Optional[str] = None,
     ):
         """Camera configuration.
 
@@ -44,15 +44,16 @@ class CameraConfig:
         :param device_sn: unique serial number of the camera
         :param pose: camera pose in world frame, following ROS frame conventions.
                      Format is forward(x), left(y) and up(z)
-                     If parent_pose_fn is not None, this is pose relative to parent link
+                     If parent_pose_so_name is not None, this is pose relative to parent link
         :param width: width of the camera
         :param height: height of the camera
         :param fps: camera streaming fps
         :param preset: depth sensor presets
         :param depth_option_kwargs: depth sensor optional keywords
         :param color_option_kwargs: color sensor optional keywords
-        :param parent_pose_fn: function to get camera's parent link pose
-                               Defaults to None (camera has no mounting parent link).
+        :param parent_pose_so_name: SharedObject name of camera's parent link pose
+                                    in world frame. Defaults to None (camera has no
+                                    mounting parent link).
         """
         self.uid = uid
         self.device_sn = device_sn
@@ -64,7 +65,7 @@ class CameraConfig:
         self.preset = preset
         self.depth_option_kwargs = depth_option_kwargs
         self.color_option_kwargs = color_option_kwargs
-        self.parent_pose_fn = parent_pose_fn
+        self.parent_pose_so_name = parent_pose_so_name
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + "(" + str(self.__dict__) + ")"
@@ -84,7 +85,7 @@ def parse_camera_cfgs(camera_cfgs):
 class Camera:
     """Wrapper for RealSense camera (RSDevice)"""
 
-    def __init__(self, camera_cfg: CameraConfig,
+    def __init__(self, camera_cfg: CameraConfig, *,
                  record_bag: bool = False, bag_path=_default_bag_path):
         """
         :param record_bag: whether to record camera streams as a rosbag file.
@@ -97,7 +98,7 @@ class Camera:
         self.width = camera_cfg.width
         self.height = camera_cfg.height
         self.fps = camera_cfg.fps
-        self.parent_pose_fn = camera_cfg.parent_pose_fn
+        self.parent_pose_so_name = camera_cfg.parent_pose_so_name
 
         self.record_bag = record_bag
         self.bag_path = bag_path
@@ -113,7 +114,9 @@ class Camera:
                 depth_option_kwargs=camera_cfg.depth_option_kwargs,
                 record_bag=record_bag,
                 bag_path=bag_path,
-                run_as_process=True
+                run_as_process=True,
+                parent_pose_so_name=self.parent_pose_so_name,
+                local_pose=self.local_pose,
             )
         )
         self.device_proc.start()
@@ -134,27 +137,30 @@ class Camera:
             pass
         self.intrinsic_matrix = self.so_intr.fetch()
 
+        self.camera_buffer = None  # (pose, rgb, depth) for self.take_picture()
+
     def take_picture(self):
-        # TODO: need to take picture to fetch synchronized camera pose
-        pass
+        """Fetch images and camera pose from the camera"""
+        # Trigger camera capture in other processes
+        self.so_sync.trigger()
+
+        self.camera_buffer = (
+            self.so_pose.fetch(),
+            self.so_color.fetch(),
+            self.so_depth.fetch(lambda d: d[..., None].astype(np.float32)) / 1000.0
+        )
 
     def get_images(self, take_picture=False) -> Dict[str, np.ndarray]:
         """Get (raw) images from the camera. Takes ~300 us for 848x480 @ 60fps
         :return rgb: color image, [H, W, 3] np.uint8 array
         :return depth: depth image, [H, W, 1] np.float32 array
         """
-        # if take_picture:
-        #     self.take_picture()
-
-        # Trigger camera capture in other processes
-        self.so_sync.trigger()
-
-        rgb = self.so_color.fetch()
-        depth = self.so_depth.fetch(lambda d: d[..., None].astype(np.float32)) / 1000.0
+        if take_picture:
+            self.take_picture()
 
         return {
-            "rgb": rgb,
-            "depth": depth,
+            "rgb": self.camera_buffer[1],
+            "depth": self.camera_buffer[2],
         }
 
     @property
@@ -162,12 +168,10 @@ class Camera:
         """Camera pose in world frame, following ROS frame conventions
         Format is forward(x), left(y) and up(z)
         """
-        if self.parent_pose_fn is not None:
-            pose = self.parent_pose_fn() * self.local_pose
-        else:
-            pose = self.local_pose
-        self.so_pose.assign(pose)
-        return pose
+        if self.parent_pose_so_name is not None:  # dynamic camera pose
+            return self.so_pose.fetch()
+        else:  # static camera pose
+            return self.local_pose
 
     def get_extrinsic_matrix(self, pose: Pose = None) -> np.ndarray:
         """Returns a 4x4 extrinsic camera matrix in OpenCV format
@@ -191,7 +195,7 @@ class Camera:
 
     def get_params(self):
         """Get camera parameters."""
-        pose = self.pose
+        pose = self.camera_buffer[0]
         return dict(
             extrinsic_cv=self.get_extrinsic_matrix(pose),
             cam2world_cv=self.get_model_matrix(pose),
