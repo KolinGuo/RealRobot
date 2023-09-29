@@ -378,7 +378,7 @@ class XArm7:
         :param wait: whether to wait for the action to complete, default is False.
         """
         ret_gripper = self.arm.set_gripper_position(
-            gripper_pos if unit_in_mm else gripper_pos * 1000.0,
+            gripper_pos * 10.0 if unit_in_mm else gripper_pos * 10000.0,
             speed=gripper_speed, wait=wait
         )
         return ret_gripper
@@ -388,16 +388,18 @@ class XArm7:
         :param gripper_speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
-        return self.set_gripper_position(self.gripper_limits[0], unit_in_mm=True,
-                                         gripper_speed=gripper_speed, wait=wait)
+        ret_gripper = self.arm.set_gripper_position(self.gripper_limits[0],
+                                                    speed=gripper_speed, wait=wait)
+        return ret_gripper
 
     def open_gripper(self, gripper_speed=None, wait=False):
         """Open gripper
         :param gripper_speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
-        return self.set_gripper_position(self.gripper_limits[1], unit_in_mm=True,
-                                         gripper_speed=gripper_speed, wait=wait)
+        ret_gripper = self.arm.set_gripper_position(self.gripper_limits[1],
+                                                    speed=gripper_speed, wait=wait)
+        return ret_gripper
 
     @staticmethod
     def build_grasp_pose(center, approaching=[0.0, 0.0, -1.0],
@@ -461,12 +463,12 @@ class XArm7:
         )
         return self.pose * pose_base_tcp
 
-    def get_gripper_position(self, unit_in_mm=False) -> Union[int, float]:
+    def get_gripper_position(self, unit_in_mm=False) -> float:
         """Get gripper opening width
-        :return pos: if unit_in_mm, position unit is mm (int). Else unit is m (float).
+        :return pos: if unit_in_mm, position unit is mm. Else unit is m.
         """
         _, gripper_pos = self.arm.get_gripper_position()
-        return gripper_pos if unit_in_mm else gripper_pos / 1000.0
+        return gripper_pos / 10.0 if unit_in_mm else gripper_pos / 10000.0
 
     # ---------------------------------------------------------------------- #
     # Observations
