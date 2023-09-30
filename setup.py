@@ -17,10 +17,14 @@ if __name__ == "__main__":
 
     setup(
         name='real_robot',
-        version='0.1.0.dev20230917',
+        version='0.1.0.dev20230929',
         description="Real Robot xArm7",
+        python_requires=">=3.8",
         install_requires=[
-            'xarm', 'pyrealsense2'
+            'xarm', 'pyrealsense2', 'numpy', 'gym', 'transforms3d',
+            'opencv-python', 'open3d', 'Pillow', 'scipy',  # for visualization
+            'sapien'  # for sapien.core.Pose
         ],
-        packages=find_packages(include=[]),
+        package_data={"real_robot": ["assets/**"]},
+        exclude_package_data={"": ["*.convex.stl"]},
     )
