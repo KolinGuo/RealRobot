@@ -11,8 +11,10 @@ import pyrealsense2 as rs
 from sapien.core import Pose
 from transforms3d.euler import euler2quat, quat2euler
 from transforms3d.quaternions import axangle2quat
+from urchin import URDF
 
 from xarm.wrapper import XArmAPI
+from .. import ASSET_DIR
 from ..utils.logger import get_logger
 from ..utils.common import clip_and_scale_action, vectorize_pose
 from ..sensors.camera import CameraConfig
@@ -74,18 +76,11 @@ class XArm7:
         self._control_mode = control_mode
         self._motion_mode = motion_mode
 
-        # TODO: read this from URDF
-        self.joint_limits_ms2 = np.asarray(
-            [[-6.2831855, 6.2831855],
-             [-2.059, 2.0944],
-             [-6.2831855, 6.2831855],
-             [-0.19198, 3.927],
-             [-6.2831855, 6.2831855],
-             [-1.69297, 3.1415927],
-             [-6.2831855, 6.2831855],
-             [0, 0.044643],
-             [0, 0.044643],], dtype=np.float32
-        )  # joint limits in maniskill2
+        # TODO: When gear joint is complete, this is not needed
+        self.joint_limits_ms2 = URDF.load(
+            f"{ASSET_DIR}/descriptions/xarm7_pris_finger_d435.urdf",
+            lazy_load_meshes=True
+        ).joint_limits.astype(np.float32)
         self.gripper_limits = np.asarray([-10, 850], dtype=np.float32)
 
         self.init_qpos = np.asarray(
