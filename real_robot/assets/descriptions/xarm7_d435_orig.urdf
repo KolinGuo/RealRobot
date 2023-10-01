@@ -367,10 +367,10 @@
     </collision>
   </link>
   <joint name="drive_joint" type="revolute">
-    <origin rpy="0.85 0 0" xyz="0 0.035 0.059098"/>
+    <origin rpy="0 0 0" xyz="0 0.035 0.059098"/>
     <parent link="xarm_gripper_base_link"/>
     <child link="left_outer_knuckle"/>
-    <axis xyz="-1 0 0"/>
+    <axis xyz="1 0 0"/>
     <limit effort="50" lower="0" upper="0.85" velocity="2"/>
   </joint>
   <link name="left_finger">
@@ -394,10 +394,10 @@
     </collision>
   </link>
   <joint name="left_finger_joint" type="revolute">
-    <origin rpy="-0.85 0 0" xyz="0 0.035465 0.042039"/>
+    <origin rpy="0 0 0" xyz="0 0.035465 0.042039"/>
     <parent link="left_outer_knuckle"/>
     <child link="left_finger"/>
-    <axis xyz="1 0 0"/>
+    <axis xyz="-1 0 0"/>
     <limit effort="50" lower="0" upper="0.85" velocity="2"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
@@ -422,10 +422,10 @@
     </collision>
   </link>
   <joint name="left_inner_knuckle_joint" type="revolute">
-    <origin rpy="0.85 0 0" xyz="0 0.02 0.074098"/>
+    <origin rpy="0 0 0" xyz="0 0.02 0.074098"/>
     <parent link="xarm_gripper_base_link"/>
     <child link="left_inner_knuckle"/>
-    <axis xyz="-1 0 0"/>
+    <axis xyz="1 0 0"/>
     <limit effort="50" lower="0" upper="0.85" velocity="2"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
@@ -450,10 +450,10 @@
     </collision>
   </link>
   <joint name="right_outer_knuckle_joint" type="revolute">
-    <origin rpy="-0.85 0 0" xyz="0 -0.035 0.059098"/>
+    <origin rpy="0 0 0" xyz="0 -0.035 0.059098"/>
     <parent link="xarm_gripper_base_link"/>
     <child link="right_outer_knuckle"/>
-    <axis xyz="1 0 0"/>
+    <axis xyz="-1 0 0"/>
     <limit effort="50" lower="0" upper="0.85" velocity="2"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
@@ -478,10 +478,10 @@
     </collision>
   </link>
   <joint name="right_finger_joint" type="revolute">
-    <origin rpy="0.85 0 0" xyz="0 -0.035465 0.042039"/>
+    <origin rpy="0 0 0" xyz="0 -0.035465 0.042039"/>
     <parent link="right_outer_knuckle"/>
     <child link="right_finger"/>
-    <axis xyz="-1 0 0"/>
+    <axis xyz="1 0 0"/>
     <limit effort="50" lower="0" upper="0.85" velocity="2"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
@@ -506,10 +506,10 @@
     </collision>
   </link>
   <joint name="right_inner_knuckle_joint" type="revolute">
-    <origin rpy="-0.85 0 0" xyz="0 -0.02 0.074098"/>
+    <origin rpy="0 0 0" xyz="0 -0.02 0.074098"/>
     <parent link="xarm_gripper_base_link"/>
     <child link="right_inner_knuckle"/>
-    <axis xyz="1 0 0"/>
+    <axis xyz="-1 0 0"/>
     <limit effort="50" lower="0" upper="0.85" velocity="2"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
