@@ -22,6 +22,7 @@ if __name__ == "__main__":
         python_requires=">=3.8",
         install_requires=[
             'xarm', 'pyrealsense2', 'numpy', 'gym', 'transforms3d',
+            'urchin',  # loading URDF
             'opencv-python', 'open3d', 'Pillow', 'scipy',  # for visualization
             'sapien'  # for sapien.core.Pose
         ],

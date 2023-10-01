@@ -366,13 +366,13 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <!-- joint name="drive_joint" type="revolute">
+  <joint name="drive_joint" type="revolute">
     <origin rpy="0 0 0" xyz="0 0.035 0.059098"/>
     <parent link="xarm_gripper_base_link"/>
     <child link="left_outer_knuckle"/>
     <axis xyz="1 0 0"/>
     <limit effort="50" lower="0" upper="0.85" velocity="2"/>
-  </joint -->
+  </joint>
   <link name="left_finger">
     <inertial>
       <origin rpy="0 0 0" xyz="-2.4536E-14 -0.016413 0.029258"/>
