@@ -76,7 +76,7 @@ class XArm7:
         self._control_mode = control_mode
         self._motion_mode = motion_mode
 
-        # TODO: When gear joint is complete, this is not needed
+        # TODO: When gear joint is properly implemented, this is not needed
         self.joint_limits_ms2 = URDF.load(
             f"{ASSET_DIR}/descriptions/xarm7_pris_finger_d435.urdf",
             lazy_load_meshes=True
