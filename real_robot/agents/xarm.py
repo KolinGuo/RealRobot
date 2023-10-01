@@ -84,7 +84,8 @@ class XArm7:
         self.gripper_limits = np.asarray([-10, 850], dtype=np.float32)
 
         self.init_qpos = np.asarray(
-            [0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2, 0.044643, 0.044643],
+            [0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2,
+             0.0453556139430441, 0.0453556139430441],
             dtype=np.float32
         )
         self.pose = Pose()  # base pose in world frame

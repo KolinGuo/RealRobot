@@ -367,11 +367,11 @@
     </collision>
   </link>
   <joint name="left_finger_joint" type="prismatic">
-    <origin rpy="0 0 0" xyz="0 0.027 0.113"/>
+    <origin rpy="0 0 0" xyz="0 0.02682323 0.11348719"/>
     <parent link="xarm_gripper_base_link"/>
     <child link="left_finger"/>
-    <axis xyz="0 0.9631963 -0.26879897"/>
-    <limit effort="50" lower="0" upper="0.0446430" velocity="0.5"/>
+    <axis xyz="0 0.96221329 -0.27229686"/>
+    <limit effort="50" lower="0" upper="0.0453556139430441" velocity="0.5"/>
   </joint>
   <link name="right_finger">
     <inertial>
@@ -394,11 +394,11 @@
     </collision>
   </link>
   <joint name="right_finger_joint" type="prismatic">
-    <origin rpy="0 0 0" xyz="0 -0.027 0.113"/>
+    <origin rpy="0 0 0" xyz="0 -0.02682323 0.11348719"/>
     <parent link="xarm_gripper_base_link"/>
     <child link="right_finger"/>
-    <axis xyz="0. -0.9631963 -0.26879897"/>
-    <limit effort="50" lower="0" upper="0.0446430" velocity="0.5"/>
+    <axis xyz="0. -0.96221329 -0.27229686"/>
+    <limit effort="50" lower="0" upper="0.0453556139430441" velocity="0.5"/>
   </joint>
   <link name="link_tcp"/>
   <joint name="joint_tcp" type="fixed">
