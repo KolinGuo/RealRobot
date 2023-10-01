@@ -81,6 +81,8 @@ class XArm7:
             f"{ASSET_DIR}/descriptions/xarm7_pris_finger_d435.urdf",
             lazy_load_meshes=True
         ).joint_limits.astype(np.float32)
+        # set joint_limits to correspond to [-10, 850]
+        self.joint_limits_ms2[-2:, 0] = self.joint_limits_ms2[-2:, 1] / 850 * -10
         self.gripper_limits = np.asarray([-10, 850], dtype=np.float32)
 
         self.init_qpos = np.asarray(
