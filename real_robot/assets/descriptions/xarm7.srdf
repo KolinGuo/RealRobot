@@ -37,7 +37,6 @@
     <joint name="joint7" value="0"/>
   </group_state>
   <group name="xarm_gripper">
-    <!--
     <link name="xarm_gripper_base_link"/>
     <link name="left_outer_knuckle"/>
     <link name="left_finger"/>
@@ -47,44 +46,32 @@
     <link name="right_finger"/>
     <link name="link_tcp"/>
     <joint name="drive_joint"/>
-    -->
-    <joint name="left_finger_joint"/>
-    <joint name="right_finger_joint"/>
   </group>
   <!-- xarm_gripper open/close states are swapped to align with python API. -->
   <group_state group="xarm_gripper" name="open">
-    <joint name="left_finger_joint" value="0.0446430"/>
-    <joint name="right_finger_joint" value="0.0446430"/>
+    <joint name="drive_joint" value="0.85"/>
   </group_state>
   <group_state group="xarm_gripper" name="close">
-    <joint name="left_finger_joint" value="0"/>
-    <joint name="right_finger_joint" value="0"/>
+    <joint name="drive_joint" value="0"/>
   </group_state>
   <!-- END EFFECTOR, Purpose, Represent information about an end effector. -->
   <end_effector group="xarm_gripper" name="xarm_gripper" parent_link="link_tcp"/>
   <!-- PASSIVE JOINT, Purpose, this element is used to mark joints that are not actuated -->
-  <!--
   <passive_joint name="left_finger_joint"/>
   <passive_joint name="left_inner_knuckle_joint"/>
   <passive_joint name="right_inner_knuckle_joint"/>
   <passive_joint name="right_outer_knuckle_joint"/>
   <passive_joint name="right_finger_joint"/>
-  -->
   <!-- DISABLE COLLISIONS, By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
-  <!--
   <disable_collisions link1="left_finger" link2="left_inner_knuckle" reason="Default"/>
   <disable_collisions link1="left_finger" link2="left_outer_knuckle" reason="Adjacent"/>
-  -->
   <disable_collisions link1="left_finger" link2="link5" reason="Never"/>
   <disable_collisions link1="left_finger" link2="link6" reason="Never"/>
   <disable_collisions link1="left_finger" link2="link7" reason="Never"/>
   <disable_collisions link1="left_finger" link2="right_finger" reason="Never"/>
-  <!--
   <disable_collisions link1="left_finger" link2="right_inner_knuckle" reason="Never"/>
   <disable_collisions link1="left_finger" link2="right_outer_knuckle" reason="Never"/>
-  -->
   <disable_collisions link1="left_finger" link2="xarm_gripper_base_link" reason="Never"/>
-  <!--
   <disable_collisions link1="left_inner_knuckle" link2="left_outer_knuckle" reason="Never"/>
   <disable_collisions link1="left_inner_knuckle" link2="link3" reason="Never"/>
   <disable_collisions link1="left_inner_knuckle" link2="link5" reason="Never"/>
@@ -103,45 +90,30 @@
   <disable_collisions link1="left_outer_knuckle" link2="xarm_gripper_base_link" reason="Adjacent"/>
   <disable_collisions link1="link3" link2="right_inner_knuckle" reason="Never"/>
   <disable_collisions link1="link3" link2="right_outer_knuckle" reason="Never"/>
-  -->
   <disable_collisions link1="link3" link2="xarm_gripper_base_link" reason="Never"/>
   <disable_collisions link1="link5" link2="right_finger" reason="Never"/>
-  <!--
   <disable_collisions link1="link5" link2="right_inner_knuckle" reason="Never"/>
-  -->
   <disable_collisions link1="link6" link2="link7" reason="Adjacent"/>
   <disable_collisions link1="link6" link2="right_finger" reason="Never"/>
-  <!--
   <disable_collisions link1="link6" link2="right_inner_knuckle" reason="Never"/>
   <disable_collisions link1="link6" link2="right_outer_knuckle" reason="Never"/>
-  -->
   <disable_collisions link1="link6" link2="xarm_gripper_base_link" reason="Never"/>
   <disable_collisions link1="link7" link2="right_finger" reason="Never"/>
-  <!--
   <disable_collisions link1="link7" link2="right_inner_knuckle" reason="Never"/>
   <disable_collisions link1="link7" link2="right_outer_knuckle" reason="Never"/>
-  -->
   <disable_collisions link1="link7" link2="xarm_gripper_base_link" reason="Adjacent"/>
-  <!--
   <disable_collisions link1="right_finger" link2="right_inner_knuckle" reason="Default"/>
   <disable_collisions link1="right_finger" link2="right_outer_knuckle" reason="Adjacent"/>
-  -->
   <disable_collisions link1="right_finger" link2="xarm_gripper_base_link" reason="Never"/>
-  <!--
   <disable_collisions link1="right_inner_knuckle" link2="right_outer_knuckle" reason="Never"/>
   <disable_collisions link1="right_inner_knuckle" link2="xarm_gripper_base_link" reason="Adjacent"/>
   <disable_collisions link1="right_outer_knuckle" link2="xarm_gripper_base_link" reason="Adjacent"/>
-  -->
   <disable_collisions link1="link_eef" link2="left_finger" reason="Never"/>
-  <!--
   <disable_collisions link1="link_eef" link2="left_inner_knuckle" reason="Never"/>
   <disable_collisions link1="link_eef" link2="left_outer_knuckle" reason="Never"/>
-  -->
   <disable_collisions link1="link_eef" link2="right_finger" reason="Never"/>
-  <!--
   <disable_collisions link1="link_eef" link2="right_inner_knuckle" reason="Never"/>
   <disable_collisions link1="link_eef" link2="right_outer_knuckle" reason="Never"/>
-  -->
   <disable_collisions link1="link_eef" link2="xarm_gripper_base_link" reason="Adjacent"/>
   <disable_collisions link1="link1" link2="link2" reason="Adjacent"/>
   <disable_collisions link1="link1" link2="link3" reason="Never"/>
