@@ -287,7 +287,7 @@ class O3DGUIVisualizer:
     ]
 
     def __init__(self, window_name="Point Clouds", window_size=(1920, 1080),
-                 run_as_process=False, stream_camera=False):
+                 run_as_process=False, stream_camera=False, stream_robot=False):
         """
         :param window_name: window name
         :param window_size: (width, height)
@@ -320,7 +320,7 @@ class O3DGUIVisualizer:
                        For camera capture, "_pose" is in OpenCV convention
           * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
                                 ("_xyzimg", ["_color", "_pose"])
-          * "_robot": Robot mesh: ("_urdf_path", "_qpos")
+          * "*": Robot mesh: ("_urdf_path", "_qpos")
           # TODO:
           * "_frame": Coordinate frame: ("_pose",)
           * "_bbox": bounding box pts (xyz_min, xyz_max), [2, 3] np.float64 np.ndarray
@@ -336,6 +336,7 @@ class O3DGUIVisualizer:
           * "_urdf_path": robot URDF path, str
           * "_qpos": robot qpos, [ndof,] np.float32 np.ndarray
         :param stream_camera: whether to redraw camera stream when a new frame arrives
+        :param stream_robot: whether to update robot mesh when a new robot state arrives
         """
         self.logger = get_logger("O3DGUIVisualizer")
 
@@ -378,6 +379,7 @@ class O3DGUIVisualizer:
 
         if run_as_process:
             self.stream_camera = stream_camera
+            self.stream_robot = stream_robot
             self.run_as_process()
 
     def construct_gui(self):
@@ -1233,7 +1235,7 @@ class O3DGUIVisualizer:
     # ---------------------------------------------------------------------- #
     # Methods
     # ---------------------------------------------------------------------- #
-    def load(self, path: str, name: str = None):
+    def load(self, path: str, *, name: str = None):
         """Load and add a geometry from file"""
         geometry_name = Path(path).stem if name is None else name
 
@@ -1573,20 +1575,23 @@ class O3DGUIVisualizer:
         def init_robot_geometries(robot_name: str):
             """Initialize robot geometries by reading from URDF
             and adding all meshes to visualizer"""
-            urdf_path = so_dict[f"{robot_name}_urdf_path"].fetch()
-            geometry_dir = urdf_path.rsplit('/', 1)[0]
-            robot = URDF.load(urdf_path, lazy_load_meshes=True)
-            robot_geo_names = []
+            if robot_name not in robot_data_dict:
+                urdf_path = so_dict[f"{robot_name}_urdf_path"].fetch()
+                geometry_dir = urdf_path.rsplit('/', 1)[0]
+                robot = URDF.load(urdf_path, lazy_load_meshes=True)
+                robot_geo_names = []
 
-            for link in robot.link_fk():
-                n_visuals = len(link.visuals)
-                for i, visual in enumerate(link.visuals):
-                    geo_name = (f"{robot_name}/{link.name}" if n_visuals == 1
-                                else f"{robot_name}/{link.name}_{i}")
-                    self.load(f"{geometry_dir}/{visual.geometry.mesh.filename}",
-                              geo_name)
-                    robot_geo_names.append(geo_name)
-            robot_data_dict[robot_name] = (robot, robot_geo_names)
+                for link in robot.link_fk():
+                    n_visuals = len(link.visuals)
+                    for i, visual in enumerate(link.visuals):
+                        geo_name = (f"{robot_name}/{link.name}" if n_visuals == 1
+                                    else f"{robot_name}/{link.name}_{i}")
+                        self.load(f"{geometry_dir}/{visual.geometry.mesh.filename}",
+                                  name=geo_name)
+                        robot_geo_names.append(geo_name)
+                robot_data_dict[robot_name] = (robot, robot_geo_names)
+
+                update_robot_geometries(robot_name)
 
         def update_robot_geometries(robot_name: str, qpos: np.ndarray = None):
             """Update robot geometries using qpos and FK"""
@@ -1632,14 +1637,21 @@ class O3DGUIVisualizer:
                         )
 
             # ----- Capture from robot state stream -----
-            for so_name in [p for p in all_so_names if p.startswith("sync_xarm7_")]:
-                robot_name = so_name[5:]  # xarm7_<robot_uid>
-                if robot_name not in robot_data_dict:
+            if self.stream_robot:  # update whenever a new robot state comes in
+                for so_data_name in [p for p in all_so_names
+                                     if p.startswith("xarm7_") and p.endswith("_qpos")]:
+                    if (so_data := so_dict[so_data_name]).modified:
+                        robot_name = so_data_name[:-5]  # xarm7_<robot_uid>
+                        init_robot_geometries(robot_name)
+                        update_robot_geometries(robot_name, qpos=so_data.fetch())
+            else:
+                for so_name in [p for p in all_so_names if p.startswith("sync_xarm7_")]:
+                    robot_name = so_name[5:]  # xarm7_<robot_uid>
                     init_robot_geometries(robot_name)
-                    update_robot_geometries(robot_name)
-                if so_dict[so_name].triggered:
-                    update_robot_geometries(robot_name,
-                                            qpos=so_dict[f"{robot_name}_qpos"].fetch())
+                    if so_dict[so_name].triggered:
+                        update_robot_geometries(
+                            robot_name, qpos=so_dict[f"{robot_name}_qpos"].fetch()
+                        )
 
             # ----- Fetch data and draw -----
             if so_draw.triggered:  # triggers redraw
@@ -1648,7 +1660,8 @@ class O3DGUIVisualizer:
                 so_data_names = [
                     p for p in all_so_names
                     if p.startswith(("rs_", "vis_", "viso3d_"))
-                    and p.endswith(("_color", "_depth", "_pose", "_xyzimg", "_pts"))
+                    and p.endswith(("_color", "_depth", "_pose", "_xyzimg", "_pts",
+                                    "_qpos"))
                 ]
                 for so_data_name in so_data_names:
                     data_source, data_uid = so_data_name.split('_', 1)
@@ -1689,6 +1702,11 @@ class O3DGUIVisualizer:
                         data_dict[data_uid].points = Vector3dVector(
                             so_dict[so_data_name].fetch().reshape(-1, 3)
                         )
+                    elif data_fmt == "qpos":
+                        robot_name = so_data_name[:-5]  # xarm7_<robot_uid>
+                        init_robot_geometries(robot_name)
+                        update_robot_geometries(robot_name,
+                                                qpos=so_dict[so_data_name].fetch())
                     else:
                         raise ValueError(f"Unknown {so_data_name = }")
                     geometry_uids.add(data_uid)
