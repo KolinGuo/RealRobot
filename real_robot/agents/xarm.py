@@ -56,14 +56,15 @@ class XArm7:
                                streaming robot states and saving trajectory (not done)
             If True, XArm7 needs to be created as a `mp.Process`.
             Several SharedObject are created to control XArm7 and stream data:
-            * "join_xarm7": If triggered, the XArm7 process is joined.
-            * "sync_xarm7": If triggered, all processes should fetch data.
-                            Used for synchronizing robot state capture.
-            * "start_xarm7": If True, starts the XArm7 streams; else, stops it.
-            * "xarm7_qpos": xArm7 joint angles, [9,] np.float32 np.ndarray
-            * "xarm7_qvel": xArm7 joint velocities, [9,] np.float32 np.ndarray
-            * "xarm7_qf": xArm7 joint torques, [9,] np.float32 np.ndarray
-            * "xarm7_tcp_pose": tcp pose in world frame (unit: m), sapien.core.Pose
+            * "join_xarm7_real": If triggered, the XArm7 process is joined.
+            * "sync_xarm7_real": If triggered, all processes should fetch data.
+                                 Used for synchronizing robot state capture.
+            * "start_xarm7_real": If True, starts the XArm7 streams; else, stops it.
+            * "xarm7_real_urdf_path": xArm7 URDF path, str
+            * "xarm7_real_qpos": xArm7 joint angles, [8,] np.float32 np.ndarray
+            * "xarm7_real_qvel": xArm7 joint velocities, [8,] np.float32 np.ndarray
+            * "xarm7_real_qf": xArm7 joint torques, [8,] np.float32 np.ndarray
+            * "xarm7_real_tcp_pose": tcp pose in world frame (unit: m), sapien.core.Pose
         """
         self.logger = get_logger("XArm7")
         self.ip = ip
@@ -76,6 +77,7 @@ class XArm7:
         self._control_mode = control_mode
         self._motion_mode = motion_mode
 
+        # NOTE: currently still using prismatic fingers in simulation
         # TODO: When gear joint is properly implemented, this is not needed
         self.joint_limits_ms2 = URDF.load(
             f"{ASSET_DIR}/descriptions/xarm7_pris_finger_d435.urdf",
@@ -420,7 +422,7 @@ class XArm7:
         :return qpos: xArm7 joint angles, [9,] np.float32 np.ndarray
         """
         _, (qpos, qvel, effort) = self.arm.get_joint_states(is_radian=True)
-        _, gripper_pos = self.arm.get_gripper_position()
+        _, gripper_pos = self.arm.get_gripper_position()  # [-10, 850]
 
         gripper_qpos = clip_and_scale_action(
             gripper_pos, self.joint_limits_ms2[-1, :], self.gripper_limits
@@ -508,30 +510,30 @@ class XArm7:
         self.logger.info(f"Running {self!r} as a separate process")
 
         # XArm7 control
-        so_joined = SharedObject("join_xarm7")
-        so_sync = SharedObject("sync_xarm7")
-        so_start = SharedObject("start_xarm7", data=False)
+        so_joined = SharedObject("join_xarm7_real")
+        so_sync = SharedObject("sync_xarm7_real")
+        so_start = SharedObject("start_xarm7_real", data=False)
         # data
-        so_qpos = SharedObject("xarm7_qpos", data=np.zeros(9, dtype=np.float32))
-        so_qvel = SharedObject("xarm7_qvel", data=np.zeros(9, dtype=np.float32))
-        so_qf = SharedObject("xarm7_qf", data=np.zeros(9, dtype=np.float32))
-        so_tcp_pose = SharedObject("xarm7_tcp_pose", data=Pose())
+        urdf_path = (f"{ASSET_DIR}/descriptions/"
+                     f"{'xarm7_d435.urdf' if self.with_hand_camera else 'xarm7.urdf'}")
+        so_urdf_path = SharedObject("xarm7_real_urdf_path", data=urdf_path)
+        so_qpos = SharedObject("xarm7_real_qpos", data=np.zeros(8, dtype=np.float32))
+        so_qvel = SharedObject("xarm7_real_qvel", data=np.zeros(8, dtype=np.float32))
+        so_qf = SharedObject("xarm7_real_qf", data=np.zeros(8, dtype=np.float32))
+        so_tcp_pose = SharedObject("xarm7_real_tcp_pose", data=Pose())
 
         signal_process_ready()  # current process is ready
 
         while not so_joined.triggered:
             if so_start.fetch():
                 _, (qpos, qvel, qf) = self.arm.get_joint_states(is_radian=True)
-                _, gripper_pos = self.arm.get_gripper_position()
-                gripper_qpos = clip_and_scale_action(
-                    gripper_pos, self.joint_limits_ms2[-1, :], self.gripper_limits
-                )
+                _, gripper_pos = self.arm.get_gripper_position()  # [-10, 850]
                 pose_world_tcp = self.get_tcp_pose()
 
-                so_qpos.assign(np.asarray(qpos + [gripper_qpos, gripper_qpos],
+                so_qpos.assign(np.asarray(qpos + [gripper_pos / 1000.0,],
                                           dtype=np.float32))
-                so_qvel.assign(np.asarray(qvel + [0.0, 0.0], dtype=np.float32))
-                so_qf.assign(np.asarray(qf + [0.0, 0.0], dtype=np.float32))
+                so_qvel.assign(np.asarray(qvel + [0.0,], dtype=np.float32))
+                so_qf.assign(np.asarray(qf + [0.0,], dtype=np.float32))
                 so_tcp_pose.assign(pose_world_tcp)
 
         self.logger.info(f"Process running {self!r} is joined")
@@ -539,6 +541,7 @@ class XArm7:
         so_joined.unlink()
         so_sync.unlink()
         so_start.unlink()
+        so_urdf_path.unlink()
         so_qpos.unlink()
         so_qvel.unlink()
         so_qf.unlink()
@@ -606,7 +609,7 @@ class XArm7:
             height=480,
             preset="High Accuracy",
             depth_option_kwargs={rs.option.exposure: 1500},
-            parent_pose_so_name="xarm7_tcp_pose",
+            parent_pose_so_name="xarm7_real_tcp_pose",
         )
 
     def __repr__(self):

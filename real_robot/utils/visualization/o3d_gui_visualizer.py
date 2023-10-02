@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import List, Union, Dict, Optional
 
 import numpy as np
+from urchin import URDF
 import open3d as o3d
 from open3d.utility import Vector3dVector
 import open3d.visualization.gui as gui
@@ -306,8 +307,12 @@ class O3DGUIVisualizer:
               * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
               * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
                                         forward(x), left(y) and up(z), sapien.core.Pose
+            * xArm7 state feeds have prefix "xarm7_<robot_uid>_"
+              * "xarm7_<robot_uid>_urdf_path": xArm7 URDF path, str
+              * "xarm7_<robot_uid>_qpos": xArm7 joint angles, [8,] np.float32 np.ndarray
+              * "xarm7_<robot_uid>_tcp_pose": tcp pose in world frame, sapien.core.Pose
             Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
-              <device_uid> and <data_uid> must not be the same
+              <device_uid>, <robot_uid>, and <data_uid> must not be the same
           Acceptable <data_uid> suffixes with its acceptable data member suffixes:
             (data members in brackets are optional)
           * "_camera": PointCloud capture: ("_depth", "_intr", ["_color", "_pose"])
@@ -315,6 +320,8 @@ class O3DGUIVisualizer:
                        For camera capture, "_pose" is in OpenCV convention
           * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
                                 ("_xyzimg", ["_color", "_pose"])
+          * "_robot": Robot mesh: ("_urdf_path", "_qpos")
+          # TODO:
           * "_frame": Coordinate frame: ("_pose",)
           * "_bbox": bounding box pts (xyz_min, xyz_max), [2, 3] np.float64 np.ndarray
 
@@ -326,6 +333,8 @@ class O3DGUIVisualizer:
           * "_pose": object / camera pose, sapien.core.Pose
           * "_xyzimg": xyz image, [H, W, 3] np.floating np.ndarray
           * "_pts": points, [N, 3] np.floating np.ndarray
+          * "_urdf_path": robot URDF path, str
+          * "_qpos": robot qpos, [ndof,] np.float32 np.ndarray
         :param stream_camera: whether to redraw camera stream when a new frame arrives
         """
         self.logger = get_logger("O3DGUIVisualizer")
@@ -1224,9 +1233,9 @@ class O3DGUIVisualizer:
     # ---------------------------------------------------------------------- #
     # Methods
     # ---------------------------------------------------------------------- #
-    def load(self, path: str):
+    def load(self, path: str, name: str = None):
         """Load and add a geometry from file"""
-        geometry_name = Path(path).stem
+        geometry_name = Path(path).stem if name is None else name
 
         geometry = None
         geometry_type = o3d.io.read_file_geometry_type(path)
@@ -1541,6 +1550,7 @@ class O3DGUIVisualizer:
         so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
 
         data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
+        robot_data_dict = {}  # {xarm7_<robot_uid>: (URDF, [geometry name])}
 
         def fetch_rs_camera_stream_and_update_pcd(camera_name: str, pcd, all_so_names):
             """Fetch intr, color, depth, pose streams and update pcd attributes"""
@@ -1559,6 +1569,33 @@ class O3DGUIVisualizer:
             pcd.transform(T_world_camROS @ T_ROS_CV)
             self.add_camera(camera_name, *depth_image.shape[::-1], K,
                             T_world_camROS, fmt="ROS")
+
+        def init_robot_geometries(robot_name: str):
+            """Initialize robot geometries by reading from URDF
+            and adding all meshes to visualizer"""
+            urdf_path = so_dict[f"{robot_name}_urdf_path"].fetch()
+            geometry_dir = urdf_path.rsplit('/', 1)[0]
+            robot = URDF.load(urdf_path, lazy_load_meshes=True)
+            robot_geo_names = []
+
+            for link in robot.link_fk():
+                n_visuals = len(link.visuals)
+                for i, visual in enumerate(link.visuals):
+                    geo_name = (f"{robot_name}/{link.name}" if n_visuals == 1
+                                else f"{robot_name}/{link.name}_{i}")
+                    self.load(f"{geometry_dir}/{visual.geometry.mesh.filename}",
+                              geo_name)
+                    robot_geo_names.append(geo_name)
+            robot_data_dict[robot_name] = (robot, robot_geo_names)
+
+        def update_robot_geometries(robot_name: str, qpos: np.ndarray = None):
+            """Update robot geometries using qpos and FK"""
+            robot, robot_geo_names = robot_data_dict[robot_name]
+            if qpos is None:
+                qpos = np.zeros(len(robot.actuated_joints))
+            for geo_name, T in zip(robot_geo_names,
+                                   robot.visual_geometry_fk(qpos).values()):
+                self._scene.scene.set_geometry_transform(geo_name, T)
 
         while not so_joined.triggered:
             # Sort names so they are ordered as color, depth, mask
@@ -1593,6 +1630,16 @@ class O3DGUIVisualizer:
                         fetch_rs_camera_stream_and_update_pcd(
                             camera_name, data_dict[data_uid], all_so_names
                         )
+
+            # ----- Capture from robot state stream -----
+            for so_name in [p for p in all_so_names if p.startswith("sync_xarm7_")]:
+                robot_name = so_name[5:]  # xarm7_<robot_uid>
+                if robot_name not in robot_data_dict:
+                    init_robot_geometries(robot_name)
+                    update_robot_geometries(robot_name)
+                if so_dict[so_name].triggered:
+                    update_robot_geometries(robot_name,
+                                            qpos=so_dict[f"{robot_name}_qpos"].fetch())
 
             # ----- Fetch data and draw -----
             if so_draw.triggered:  # triggers redraw
