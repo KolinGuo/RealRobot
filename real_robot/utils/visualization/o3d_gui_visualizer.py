@@ -34,7 +34,11 @@ class O3DGeometryDefaultDict(dict):
     def __missing__(self, name: str) -> _o3d_geometry_type:
         if name.endswith("_pcd"):
             geometry = self[name] = o3d.geometry.PointCloud()
-        # TODO: _frame, _bbox support
+        elif name.endswith("_frame"):
+            geometry = self[name] = o3d.geometry.TriangleMesh.create_coordinate_frame(
+                size=0.5
+            )
+        # TODO: _bbox support
         else:
             raise ValueError(f"Unknown {name=}")
         return geometry
@@ -321,8 +325,8 @@ class O3DGUIVisualizer:
           * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
                                 ("_xyzimg", ["_color", "_pose"])
           * "*": Robot mesh: ("_urdf_path", "_qpos")
-          # TODO:
           * "_frame": Coordinate frame: ("_pose",)
+          # TODO:
           * "_bbox": bounding box pts (xyz_min, xyz_max), [2, 3] np.float64 np.ndarray
 
           Acceptable visualization SharedObject data formats:
@@ -1699,6 +1703,10 @@ class O3DGUIVisualizer:
                         if data_uid.endswith("_camera"):  # camera capture
                             self.update_camera_pose(data_uid, T, fmt="CV")
                             data_uid = f"{data_uid}/captured_pcd"
+                        if data_uid not in self.geometries:  # add for the first time
+                            self.add_geometry(data_uid, data_dict[data_uid])
+                        # NOTE: it's possible to rescale coord frames
+                        # with set_geometry_transform (maybe add another slider?)
                         self._scene.scene.set_geometry_transform(data_uid, T)
                     elif data_fmt == "pts":
                         data_dict[data_uid].points = Vector3dVector(
