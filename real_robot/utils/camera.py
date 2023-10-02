@@ -68,6 +68,38 @@ def transform_points(pts: np.ndarray, H: np.ndarray) -> np.ndarray:
     return pts @ H[:3, :3].T + H[:3, 3]
 
 
+def transform_points_batch(pts: np.ndarray, H: np.ndarray) -> np.ndarray:
+    """Transform points by Bx4x4 transformation matrix H
+
+        [3,], [4, 4] => [3,]
+        [P, 3], [4, 4] => [P, 3]
+        [H, W, 3], [4, 4] => [H, W, 3]
+        [N, H, W, 3], [4, 4] => [N, H, W, 3]
+        [P, 3], [B, 4, 4] => [B, P, 3]
+        [B, P, 3], [B, 4, 4] => [B, P, 3]
+        [H, W, 3], [B, 4, 4] => [B, H, W, 3]  # (H != B)
+        [B, H, W, 3], [B, 4, 4] => [B, H, W, 3]
+        [N, H, W, 3], [B, 4, 4] => [B, N, H, W, 3]  # (N != B)
+        [B, N, H, W, 3], [B, 4, 4] => [B, N, H, W, 3]
+        [B, N, 3], [B, N, 4, 4] => [B, N, 3]
+        [B, N, P, 3], [B, N, 4, 4] => [B, N, P, 3]
+        [B, N, H, W, 3], [B, N, 4, 4] => [B, N, H, W, 3]
+    """
+    assert H.shape[-2:] == (4, 4), H.shape
+    assert pts.shape[-1] == 3, pts.shape
+
+    batch_shape = H.shape[:-2]
+    pts_shape = batch_shape + (-1, 3)
+    out_pts_shape = pts.shape
+    if batch_shape != pts.shape[:len(batch_shape)] or pts.ndim < H.ndim < 4:
+        pts_shape = (-1, 3)
+        out_pts_shape = batch_shape + out_pts_shape
+
+    H = H.swapaxes(-1, -2)
+    return (pts.reshape(pts_shape) @ H[..., :3, :3]
+            + H[..., [3], :3]).reshape(out_pts_shape)
+
+
 def resize_obs_image(rgb_image, depth_image, intr_params: Tuple, new_size,
                      interpolation=cv2.INTER_NEAREST_EXACT):
     """Resize rgb/depth images into shape=(width, height)
