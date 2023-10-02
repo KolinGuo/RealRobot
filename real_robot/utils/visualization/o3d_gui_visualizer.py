@@ -38,7 +38,10 @@ class O3DGeometryDefaultDict(dict):
             geometry = self[name] = o3d.geometry.TriangleMesh.create_coordinate_frame(
                 size=0.5
             )
-        # TODO: _bbox support
+        elif name.endswith("_bbox"):
+            geometry = self[name] = o3d.geometry.AxisAlignedBoundingBox(
+                min_bound=[-1e-3]*3, max_bound=[1e-3]*3
+            )
         else:
             raise ValueError(f"Unknown {name=}")
         return geometry
@@ -326,8 +329,7 @@ class O3DGUIVisualizer:
                                 ("_xyzimg", ["_color", "_pose"])
           * "*": Robot mesh: ("_urdf_path", "_qpos")
           * "_frame": Coordinate frame: ("_pose",)
-          # TODO:
-          * "_bbox": bounding box pts (xyz_min, xyz_max), [2, 3] np.float64 np.ndarray
+          * "_bbox": bounding box pts: ("_bounds", ["_pose"])
 
           Acceptable visualization SharedObject data formats:
           * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
@@ -339,6 +341,8 @@ class O3DGUIVisualizer:
           * "_pts": points, [N, 3] np.floating np.ndarray
           * "_urdf_path": robot URDF path, str
           * "_qpos": robot qpos, [ndof,] np.float32 np.ndarray
+          * "_bounds": AxisAlignedBoundingBox bounds, (xyz_min, xyz_max),
+                       [2, 3] np.floating np.ndarray
         :param stream_camera: whether to redraw camera stream when a new frame arrives
         :param stream_robot: whether to update robot mesh when a new robot state arrives
         """
@@ -1608,6 +1612,7 @@ class O3DGUIVisualizer:
                 qpos = np.zeros(len(robot.actuated_joints))
             for geo_name, T in zip(robot_geo_names,
                                    robot.visual_geometry_fk(qpos).values()):
+                # TODO: currently assumes robot base is world frame
                 self._scene.scene.set_geometry_transform(geo_name, T)
 
         while not so_joined.triggered:
@@ -1669,7 +1674,7 @@ class O3DGUIVisualizer:
                     p for p in all_so_names
                     if p.startswith(("rs_", "vis_", "viso3d_"))
                     and p.endswith(("_color", "_depth", "_pose", "_xyzimg", "_pts",
-                                    "_qpos"))
+                                    "_qpos", "_bounds"))
                 ]
                 for so_data_name in so_data_names:
                     data_source, data_uid = so_data_name.split('_', 1)
@@ -1723,6 +1728,11 @@ class O3DGUIVisualizer:
                         init_robot_geometries(robot_name)
                         update_robot_geometries(robot_name,
                                                 qpos=so_dict[so_data_name].fetch())
+                    elif data_fmt == "bounds":
+                        bounds = so_dict[so_data_name].fetch()  # [xyz_min, xyz_max]
+                        data_dict[data_uid].min_bound = bounds[0]
+                        data_dict[data_uid].max_bound = bounds[1]
+                        redraw_geometry_uids.add(data_uid)  # redraw
                     else:
                         raise ValueError(f"Unknown {so_data_name = }")
 
