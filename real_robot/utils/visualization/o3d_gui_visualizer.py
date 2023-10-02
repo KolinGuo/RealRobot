@@ -16,7 +16,9 @@ import open3d.visualization.rendering as rendering
 
 from .gripper_utils import XArmGripper
 from ..camera import T_GL_CV, T_CV_GL, T_ROS_GL, T_ROS_CV, depth2xyz
-from ..multiprocessing import SharedObject, SharedObjectDefaultDict
+from ..multiprocessing import (
+    SharedObject, SharedObjectDefaultDict, signal_process_ready
+)
 from ..logger import get_logger
 
 isMacOS = (platform.system() == "Darwin")
@@ -294,7 +296,7 @@ class O3DGUIVisualizer:
         Settings.NORMALS, Settings.DEPTH
     ]
 
-    def __init__(self, window_name="Point Clouds", window_size=(1920, 1080),
+    def __init__(self, window_name="Point Clouds", window_size=(1920, 1080), *,
                  run_as_process=False, stream_camera=False, stream_robot=False):
         """
         :param window_name: window name
@@ -1561,9 +1563,6 @@ class O3DGUIVisualizer:
         # TODO: size-variable pointcloud support is not implemented yet,
         #       Need support for size-variable np.ndarray in SharedObject
         self.logger.info(f"Running {self!r} as a separate process")
-        if self.stream_camera:
-            self.logger.warning("O3DGUIVisualizer.stream_camera is not ready yet. "
-                                "Need to stream camera pose as well")
 
         # O3DGUIVisualizer control
         so_joined = SharedObject("join_viso3d")
@@ -1630,6 +1629,8 @@ class O3DGUIVisualizer:
                 self._scene.scene.set_geometry_transform(
                     geo_name, T if pose is None else pose @ T
                 )
+
+        signal_process_ready()  # current process is ready
 
         while not so_joined.triggered:
             # Sort names so they are ordered as color, depth, mask
@@ -1812,7 +1813,7 @@ class O3DGUIVisualizer:
         self.close()
 
     def __repr__(self):
-        return f"<{self.__class__.__name__}: {self.window_name})>"
+        return f"<{self.__class__.__name__}: {self.window_name}>"
 
 
 if __name__ == "__main__":

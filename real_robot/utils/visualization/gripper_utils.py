@@ -5,7 +5,9 @@ from ..camera import transform_points, transform_points_batch
 
 
 class XArmGripper:
-    """An object representing a UFactory XArm gripper."""
+    """An object representing a UFactory XArm gripper.
+    Used for drawing grasp pose control points only
+    """
 
     def __init__(self):
         self.load_gripper_points()

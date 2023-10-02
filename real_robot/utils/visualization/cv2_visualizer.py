@@ -9,14 +9,17 @@ import numpy as np
 import cv2
 
 from .utils import draw_mask, colorize_mask
-from ..multiprocessing import SharedObject, SharedObjectDefaultDict
+from ..multiprocessing import (
+    SharedObject, SharedObjectDefaultDict, signal_process_ready
+)
 from ..logger import get_logger
 
 
 class CV2Visualizer:
     """OpenCV visualizer for RGB and depth images, fps is updated in window title"""
 
-    def __init__(self, window_name="Images", run_as_process=False, stream_camera=False):
+    def __init__(self, window_name="Images", *,
+                 run_as_process=False, stream_camera=False):
         """
         :param window_name: window name
         :param run_as_process: whether to run CV2Visualizer as a separate process.
@@ -164,6 +167,8 @@ class CV2Visualizer:
         vis_data = defaultdict(functools.partial(np.full, shape=(480, 848, 3),
                                                  fill_value=255, dtype=np.uint8))
 
+        signal_process_ready()  # current process is ready
+
         while not so_joined.triggered:
             # Sort names so they are ordered as color, depth, mask
             all_so_names = sorted(os.listdir("/dev/shm"))
@@ -250,4 +255,4 @@ class CV2Visualizer:
         self.close()
 
     def __repr__(self):
-        return f"<{self.__class__.__name__}: {self.window_name})>"
+        return f"<{self.__class__.__name__}: {self.window_name}>"

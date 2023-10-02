@@ -3,11 +3,12 @@ from typing import Dict, List, Union, Optional
 import numpy as np
 import open3d as o3d
 
-from ..logger import get_logger
-from ..lib3d import np2pcd
 from .cv2_visualizer import CV2Visualizer
 from .o3d_gui_visualizer import O3DGUIVisualizer
 from .utils import draw_mask, colorize_mask
+from ..multiprocessing import ctx, SharedObject, start_and_wait_for_process
+from ..lib3d import np2pcd
+from ..logger import get_logger
 try:
     from pynput.keyboard import Key, KeyCode, Listener
 except ImportError as e:
@@ -24,25 +25,84 @@ def _on_key_press(key):
 
 
 class Visualizer:
-    def __init__(self):
-        self.cv2_vis = CV2Visualizer()
-        self.o3d_vis = O3DGUIVisualizer()
+    def __init__(self, *,
+                 run_as_process=False, stream_camera=False, stream_robot=False):
+        """Visualizer managing CV2Visualizer and O3DGUIVisualizer
+        :param run_as_process: whether to run CV2Visualizer and O3DGUIVisualizer
+                               as separate processes.
+        :param stream_camera: whether to redraw camera stream when a new frame arrives
+        :param stream_robot: whether to update robot mesh when a new robot state arrives
+        """
+        if run_as_process:
+            self.cv2vis_proc = ctx.Process(
+                target=CV2Visualizer, args=(),
+                kwargs=dict(
+                    run_as_process=True,
+                    stream_camera=stream_camera,
+                )
+            )
+            start_and_wait_for_process(
+                self.cv2vis_proc, desc="<CV2Visualizer: 'Images'>", timeout=5
+            )
 
-        self.key_listener = Listener(on_press=_on_key_press)
-        self.key_listener.start()
+            self.o3dvis_proc = ctx.Process(
+                target=O3DGUIVisualizer, args=(),
+                kwargs=dict(
+                    run_as_process=True,
+                    stream_camera=stream_camera,
+                    stream_robot=stream_robot,
+                )
+            )
+            start_and_wait_for_process(
+                self.o3dvis_proc, desc="<O3DGUIVisualizer: 'Point Clouds'>", timeout=10
+            )
 
-    def reset(self, **observations):
-        self.cv2_vis.clear_image()
-        self.o3d_vis.clear_geometries()
+            # Create SharedObject to control visualizer and feed data
+            self.so_cv2vis_joined = SharedObject("join_viscv2")
+            self.so_o3dvis_joined = SharedObject("join_viso3d")
+            self.so_draw = SharedObject("draw_vis")
+            self.so_data_dict = {}  # {so_data_name: SharedObject(so_data_name)}
+        else:
+            self.cv2vis = CV2Visualizer()
+            self.o3dvis = O3DGUIVisualizer()
 
-        if len(observations) > 0:
-            self.show_observation(**observations)
+            self.key_listener = Listener(on_press=_on_key_press)
+            self.key_listener.start()
+
+        self.run_as_process = run_as_process
+
+    def reset(self, obs_dict={}):
+        if self.run_as_process:
+            # Unlink created SharedObject
+            for so_data in self.so_data_dict.values():
+                so_data.unlink()
+            self.so_data_dict = {}
+        else:
+            self.cv2vis.clear_image()
+            self.o3dvis.clear_geometries()
+
+        if len(obs_dict) > 0:
+            self.show_observation(obs_dict)
             self.render()
 
-    def show_observation(self, camera_names: Optional[List[str]] = None,
-                         **obs_dict: Dict[str, Union[np.ndarray,
-                                                     List[np.ndarray],
-                                                     o3d.geometry.Geometry]]):
+    def _show_observation_async(self,
+                                obs_dict: Dict[str, Union[SharedObject._object_types]]):
+        """Render observations
+        :param obs_dict: dict, {so_data_name: obs_data}
+                         See CV2Visualizer.__init__.__doc__ and
+                             O3DGUIVisualizer.__init__.__doc__
+                         for acceptable so_data_name
+        """
+        for so_data_name, data in obs_dict.items():
+            if so_data_name not in self.so_data_dict:
+                self.so_data_dict[so_data_name] = SharedObject(so_data_name, data=data)
+            else:
+                self.so_data_dict[so_data_name].assign(data)
+
+    def _show_observation_sync(self, *, camera_names: Optional[List[str]] = None,
+                               **obs_dict: Dict[str, Union[np.ndarray,
+                                                           List[np.ndarray],
+                                                           o3d.geometry.Geometry]]):
         """Render observations
         :param camera_names: camera names if obs_data are from multiple cameras
                              The order should match with order of obs_data
@@ -95,25 +155,48 @@ class Visualizer:
                     raise NotImplementedError(f"Unknown object {name = }")
 
         # Sort images based on key
-        self.cv2_vis.show_images([img for _, img in sorted(images.items())])
+        self.cv2vis.show_images([img for _, img in sorted(images.items())])
         for name, geometry in o3d_geometries.items():
-            self.o3d_vis.add_geometry(name, geometry, show=True)# show="xyz_image" in name)
+            self.o3dvis.add_geometry(name, geometry)
+
+    def show_observation(self, obs_dict) -> None:
+        """Render observations"""
+        if self.run_as_process:
+            self._show_observation_async(obs_dict)
+        else:
+            self._show_observation_sync(**obs_dict)
 
     def render(self):
-        global pause_render
-        if pause_render:
-            self.o3d_vis.toggle_pause(True)
-            pause_render = False
+        # TODO: What does pause_render do for run_as_process?
+        if self.run_as_process:
+            self.so_draw.trigger()
+        else:
+            global pause_render
+            if pause_render:
+                self.o3dvis.toggle_pause(True)
+                pause_render = False
 
-        # Render visualizer
-        # self.o3d_vis.render() returns only when not paused or single_step
-        self.cv2_vis.render()
-        self.o3d_vis.render(render_step_fn=self.cv2_vis.render)
+            # Render visualizer
+            # self.o3d_vis.render() returns only when not paused or single_step
+            self.cv2vis.render()
+            self.o3dvis.render(render_step_fn=self.cv2vis.render)
 
     def close(self):
-        self.cv2_vis.close()
-        self.o3d_vis.close()
+        """Close visualizers"""
+        if self.run_as_process:
+            self.so_cv2vis_joined.trigger()
+            self.cv2vis_proc.join()
+            self.so_o3dvis_joined.trigger()
+            self.o3dvis_proc.join()
+        else:
+            self.cv2vis.close()
+            self.o3dvis.close()
 
     def __del__(self):
-        self.key_listener.stop()
+        if not self.run_as_process:
+            self.key_listener.stop()
         self.close()
+
+        # Unlink created SharedObject
+        for so_data in self.so_data_dict.values():
+            so_data.unlink()
