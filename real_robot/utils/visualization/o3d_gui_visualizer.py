@@ -1291,6 +1291,7 @@ class O3DGUIVisualizer:
         # Add geometry to scene
         # Remove geometry with the same name
         if name in self.geometries:
+            T_world_obj = self._scene.scene.get_geometry_transform(name)
             self._scene.scene.remove_geometry(name)
         try:
             unlit_line_geometry = False
@@ -1331,14 +1332,17 @@ class O3DGUIVisualizer:
             if unlit_line_geometry:
                 node.mat_shader_index = 2  # Settings.UNLIT_LINE
             self.geometries[name] = node
-        elif (node := self.geometries[name]).mat_changed:  # update geometry material
-            current_selected_item = self._geometry_tree.selected_item
-            self._on_geometry_tree(node.id)
-            # Update geometry material using self.settings.material
-            self._scene.scene.modify_geometry_material(
-                node.name, self.settings.material
-            )
-            self._on_geometry_tree(current_selected_item)
+        else:  # changing existing geometry
+            if (node := self.geometries[name]).mat_changed:  # update geometry material
+                current_selected_item = self._geometry_tree.selected_item
+                self._on_geometry_tree(node.id)
+                # Update geometry material using self.settings.material
+                self._scene.scene.modify_geometry_material(
+                    node.name, self.settings.material
+                )
+                self._on_geometry_tree(current_selected_item)
+            # Update geometry pose to previous geometry pose
+            self._scene.scene.set_geometry_transform(name, T_world_obj)
 
         # Toggle geometry checkbox and show/hide
         self._on_geometry_toggle(
@@ -1608,7 +1612,7 @@ class O3DGUIVisualizer:
 
             # ----- Capture from RSDevice stream -----
             if self.stream_camera:  # capture whenever a new frame comes in
-                geometry_uids = []
+                redraw_geometry_uids = []
                 for so_data_name in [p for p in all_so_names
                                      if p.startswith("rs_") and p.endswith("_depth")]:
                     if so_dict[so_data_name].modified:
@@ -1619,11 +1623,11 @@ class O3DGUIVisualizer:
                             camera_name, data_dict[data_uid], all_so_names
                         )
 
-                        geometry_uids.append(data_uid)
+                        redraw_geometry_uids.append(data_uid)
 
-                if len(geometry_uids) > 0:  # camera stream is updated, redraw scene
+                if len(redraw_geometry_uids) > 0:  # camera stream is updated, redraw scene
                     self.add_geometries({data_uid: data_dict[data_uid]
-                                         for data_uid in geometry_uids})
+                                         for data_uid in redraw_geometry_uids})
             else:  # synchronized capturing with env (no redraw here)
                 # Capture color, depth, and pose stream
                 # for each camera sync, check if capture is triggered
@@ -1655,7 +1659,7 @@ class O3DGUIVisualizer:
 
             # ----- Fetch data and draw -----
             if so_draw.triggered:  # triggers redraw
-                geometry_uids = set()
+                redraw_geometry_uids = set()
 
                 so_data_names = [
                     p for p in all_so_names
@@ -1667,7 +1671,7 @@ class O3DGUIVisualizer:
                     data_source, data_uid = so_data_name.split('_', 1)
                     data_uid, data_fmt = data_uid.replace('|', '/').rsplit('_', 1)
                     if data_source == "rs":  # all capturing / updating is already done
-                        geometry_uids.add(f"{data_uid}/captured_pcd")
+                        redraw_geometry_uids.add(f"{data_uid}/captured_pcd")
                         continue
 
                     # Fetch data
@@ -1675,6 +1679,7 @@ class O3DGUIVisualizer:
                         data_dict[data_uid].colors = Vector3dVector(
                             so_dict[so_data_name].fetch(lambda x: x/255.).reshape(-1, 3)
                         )
+                        redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "depth":  # camera capture
                         camera_name = data_uid
                         data_prefix = f"{data_source}_{camera_name}"
@@ -1688,20 +1693,23 @@ class O3DGUIVisualizer:
                             1000.0 if depth_image.dtype == np.uint16 else 1.0
                         ).reshape(-1, 3))
                         self.add_camera(camera_name, *depth_image.shape[::-1], K)
+                        redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "pose":  # object / camera pose
                         T = so_dict[so_data_name].fetch().to_transformation_matrix()
                         if data_uid.endswith("_camera"):  # camera capture
                             self.update_camera_pose(data_uid, T, fmt="CV")
                             data_uid = f"{data_uid}/captured_pcd"
-                        data_dict[data_uid].transform(T)
+                        self._scene.scene.set_geometry_transform(data_uid, T)
                     elif data_fmt == "pts":
                         data_dict[data_uid].points = Vector3dVector(
                             so_dict[so_data_name].fetch()
                         )
+                        redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "xyzimg":
                         data_dict[data_uid].points = Vector3dVector(
                             so_dict[so_data_name].fetch().reshape(-1, 3)
                         )
+                        redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "qpos":
                         robot_name = so_data_name[:-5]  # xarm7_<robot_uid>
                         init_robot_geometries(robot_name)
@@ -1709,10 +1717,9 @@ class O3DGUIVisualizer:
                                                 qpos=so_dict[so_data_name].fetch())
                     else:
                         raise ValueError(f"Unknown {so_data_name = }")
-                    geometry_uids.add(data_uid)
 
                 self.add_geometries({data_uid: data_dict[data_uid]
-                                     for data_uid in geometry_uids})
+                                     for data_uid in redraw_geometry_uids})
 
             self.render()
 
