@@ -167,7 +167,7 @@ class XArm7:
         :param action: control action (unit for translation is meters)
                        If in delta control_mode, action needs to apply scale
         :return tgt_tcp_pose: target TCP pose in robot base frame (unit in mm)
-        :return gripper_pos: gripper action after rescaling [-10, 850] mm
+        :return gripper_pos: gripper action after rescaling [-10, 850]
         """
         cur_tcp_pose = self.get_tcp_pose(unit_in_mm=True)
 
@@ -207,7 +207,7 @@ class XArm7:
                                        self.safety_boundary_clip[1::2],
                                        self.safety_boundary_clip[0::2]))
 
-        # [-1, 1] => [-10, 850] mm
+        # [-1, 1] => [-10, 850]
         gripper_pos = clip_and_scale_action(action[-1], self.gripper_limits)
 
         self.logger.info(f"Setting {tgt_tcp_pose = }, {gripper_pos = }")
