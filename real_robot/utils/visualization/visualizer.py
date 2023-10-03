@@ -1,4 +1,4 @@
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union, Any, Optional
 
 import numpy as np
 import open3d as o3d
@@ -159,7 +159,7 @@ class Visualizer:
         self.cv2vis.show_images([img for _, img in sorted(images.items())])
         self.o3dvis.add_geometries(o3d_geometries)
 
-    def show_obs(self, obs_dict) -> None:
+    def show_obs(self, obs_dict: Dict[str, Any]) -> None:
         """Render observations
 
         :param obs_dict: dict, {so_data_name: obs_data}

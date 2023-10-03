@@ -1,11 +1,9 @@
-import time
-from collections import OrderedDict, defaultdict
-from typing import Dict, List, Sequence
+from collections import OrderedDict
+from typing import Dict, List, Union, Sequence
 
 import gym
 import numpy as np
 import pyrealsense2 as rs
-import open3d as o3d
 
 from mani_skill2.envs.sapien_env import BaseEnv as MS2BaseEnv
 from ..sensors.camera import CALIB_CAMERA_POSES, CameraConfig, Camera, parse_camera_cfgs
@@ -35,6 +33,8 @@ class XArmBaseEnv(gym.Env):
         with_hand_camera: bool = True,
         action_translation_scale=100.0,
         action_axangle_scale=0.1,
+        vis_stream_camera=False,
+        vis_stream_robot=False,
         **kwargs
     ):
         """
@@ -50,6 +50,10 @@ class XArmBaseEnv(gym.Env):
         :param axangle_scale: axangle action norm (rotation angle) is multiplied by 0.1
                               [-1, 0, 0] => rotate around [1, 0, 0] by -0.1 rad
                               Used for delta control_mode only.
+        :param vis_stream_camera: whether to redraw camera stream
+                                  when a new frame arrives
+        :param vis_stream_robot: whether to update robot mesh
+                                 when a new robot state arrives
         """
         super().__init__(*args, **kwargs)
 
@@ -103,8 +107,9 @@ class XArmBaseEnv(gym.Env):
         self._configure_cameras()
         self._configure_render_cameras()
 
-        # TODO: check Visualizer
-        self.visualizer = Visualizer()
+        self.visualizer = Visualizer(run_as_process=True,
+                                     stream_camera=vis_stream_camera,
+                                     stream_robot=vis_stream_robot)
 
         # NOTE: `seed` is deprecated in the latest gym.
         # Use a fixed seed to initialize to enhance determinism
@@ -222,8 +227,6 @@ class XArmBaseEnv(gym.Env):
 
         self.agent.reset()
 
-        # self.recent_sam_obs = OrderedDict()
-
         if self._is_ms2_env:
             obs = super().reset(seed=self._episode_seed)
         else:
@@ -323,7 +326,6 @@ class XArmBaseEnv(gym.Env):
         images = OrderedDict()
         for name, cam in self._cameras.items():
             images[name] = cam.get_images()
-        self.recent_camera_obs = images  # save for self.render()
         return images
 
     def get_camera_params(self) -> Dict[str, Dict[str, np.ndarray]]:
@@ -351,7 +353,9 @@ class XArmBaseEnv(gym.Env):
         return self._reward_mode
 
     def get_reward(self, **kwargs):
+        """Used for training in real world"""
         return 0.0  # TODO: update
+
         if self._is_ms2_env:
             return super().get_reward(**kwargs)
 
@@ -439,61 +443,16 @@ class XArmBaseEnv(gym.Env):
     # ---------------------------------------------------------------------- #
     # Visualization
     # ---------------------------------------------------------------------- #
-    def render(self, mode="human"):
-        if mode == "human":
-            obs_dict = defaultdict(list)
-            for cam_name, img_dict in self.recent_camera_obs.items():
-                obs_dict["camera_names"].append(cam_name)
-                obs_dict["color_images"].append(img_dict["rgb"])
-                if "depth" in img_dict:
-                    obs_dict["depth_images"].append(img_dict["depth"])
+    def render(self, obs_dict: Dict[str, Union[SharedObject._object_types]]):
+        """Render observations
 
-            if getattr(self, "recent_sam_obs", None) is not None:
-                obs_dict["color_images"] = list(
-                    self.recent_sam_obs["sam_rgb_images"]
-                )
-                obs_dict.pop("depth_images")  # TODO: visualize resized depth images
-                obs_dict["pred_masks"] = list(
-                    self.recent_sam_obs["pred_masks"]
-                )
-                obs_dict["xyz_images"] = list(
-                    self.recent_sam_obs["sam_xyz_images"]
-                )
-                for object_text in self.env_object_texts:
-                    obs_dict[f"{object_text}_pts"] = \
-                        self.recent_sam_obs["object_pcds"][object_text]
-                    obs_dict[f"{object_text}_filt_pts"] = obj_pts = \
-                        self.recent_sam_obs["object_filt_pcds"][object_text]
-                    obj_pts_mins, obj_pts_maxs = obj_pts.min(0), obj_pts.max(0)
-                    obs_dict[f"{object_text}_bbox"] = \
-                        o3d.geometry.AxisAlignedBoundingBox(
-                            obj_pts_mins, obj_pts_maxs
-                        )
-                    obs_dict[f"{object_text}_pos_pts"] = np.mean(
-                        [obj_pts_mins, obj_pts_maxs], axis=0
-                    )
-
-            self.visualizer.show_observation(**obs_dict)
-            self.visualizer.render()
-
-            #if self._obs_mode == 'state':
-            #    self.visualizer.update_object(
-            #        color_image=self.recent_sam_obs["color_image"],
-            #        depth_image=self.recent_sam_obs["depth_image"],
-            #        pred_masks=self.recent_sam_obs["pred_masks"],
-            #        xyz_image=self.recent_sam_obs["world_xyz_image"],
-            #        cube_pts=self.recent_valid_cube_pts,
-            #        bowl_pts=self.recent_valid_bowl_pts,
-            #    )
-            #elif self._obs_mode == "image":
-            #    self.visualizer.update_object(
-            #        color_image=self.recent_sam_obs["color_image"],
-            #        depth_image=self.recent_sam_obs["depth_image"],
-            #    )
-            #else:
-            #    raise NotImplementedError()
-        else:
-            raise NotImplementedError(mode)
+        :param obs_dict: dict, {so_data_name: obs_data}
+                         See CV2Visualizer.__init__.__doc__ and
+                             O3DGUIVisualizer.__init__.__doc__
+                         for acceptable so_data_name
+        """
+        self.visualizer.show_obs(obs_dict)
+        self.visualizer.render()
 
     def __del__(self):
         self.so_agent_joined.trigger()
