@@ -307,6 +307,7 @@ class O3DGUIVisualizer:
               Only "join_viso3d" is created by this process.
             * "join_viso3d": If triggered, the O3DGUIVisualizer process is joined.
             * "draw_vis": If triggered, redraw the images.
+            * "reset_vis": If triggered, call self.clear_geometries().
             * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
             * "sync_xarm7_<robot_uid>": If triggered, fetch joint states from robot.
             Corresponding data have the same prefix (implemented as sorting)
@@ -1567,6 +1568,7 @@ class O3DGUIVisualizer:
         # O3DGUIVisualizer control
         so_joined = SharedObject("join_viso3d")
         so_draw = SharedObject("draw_vis")
+        so_reset = SharedObject("reset_vis")
         so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
 
         data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
@@ -1776,6 +1778,9 @@ class O3DGUIVisualizer:
 
                 self.add_geometries({data_uid: data_dict[data_uid]
                                      for data_uid in redraw_geometry_uids})
+
+            if so_reset.triggered:  # triggers reset
+                self.clear_geometries()
 
             self.render()
 

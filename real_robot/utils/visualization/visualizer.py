@@ -61,6 +61,7 @@ class Visualizer:
             self.so_cv2vis_joined = SharedObject("join_viscv2")
             self.so_o3dvis_joined = SharedObject("join_viso3d")
             self.so_draw = SharedObject("draw_vis")
+            self.so_reset = SharedObject("reset_vis")
             self.so_data_dict = {}  # {so_data_name: SharedObject(so_data_name)}
         else:
             self.cv2vis = CV2Visualizer()
@@ -77,6 +78,7 @@ class Visualizer:
             for so_data in self.so_data_dict.values():
                 so_data.unlink()
             self.so_data_dict = {}
+            self.so_reset.trigger()  # triggers reset
         else:
             self.cv2vis.clear_image()
             self.o3dvis.clear_geometries()
@@ -196,6 +198,8 @@ class Visualizer:
             # Unlink created SharedObject
             for so_data in self.so_data_dict.values():
                 so_data.unlink()
+            self.so_draw.unlink()
+            self.so_reset.unlink()
         else:
             self.cv2vis.close()
             self.o3dvis.close()

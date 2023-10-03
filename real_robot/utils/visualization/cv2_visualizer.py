@@ -28,6 +28,7 @@ class CV2Visualizer:
               Only "join_viscv2" is created by this process.
             * "join_viscv2": If triggered, the CV2Visualizer process is joined.
             * "draw_vis": If triggered, redraw the images.
+            * "reset_vis": If triggered, call self.clear_image().
             * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
             Corresponding data have the same prefix (implemented as sorting)
             * Data unique to CV2Visualizer have prefix "viscv2_<image_uid>_"
@@ -161,6 +162,7 @@ class CV2Visualizer:
         # CV2Visualizer control
         so_joined = SharedObject("join_viscv2")
         so_draw = SharedObject("draw_vis")
+        so_reset = SharedObject("reset_vis")
         so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
 
         # {"rs_<device_uid>_color": image}
@@ -232,6 +234,9 @@ class CV2Visualizer:
                     else:
                         images.append(image)
                 self.show_images(images)
+
+            if so_reset.triggered:  # triggers reset
+                self.clear_image()
 
             self.render()
 
