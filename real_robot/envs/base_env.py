@@ -8,7 +8,10 @@ import numpy as np
 import pyrealsense2 as rs
 
 from mani_skill2.envs.sapien_env import BaseEnv as MS2BaseEnv
-from ..sensors.camera import CALIB_CAMERA_POSES, CameraConfig, Camera, parse_camera_cfgs
+from ..sensors.camera import (
+    CALIB_CAMERA_POSES, CameraConfig, Camera,
+    parse_camera_cfgs, update_camera_cfgs_from_dict
+)
 from ..agents import XArm7
 from ..utils.logger import get_logger
 from ..utils.common import (
@@ -31,6 +34,8 @@ class XArmBaseEnv(gym.Env):
         image_obs_mode=None,
         control_mode="pd_ee_delta_pos",
         motion_mode="position",
+        camera_cfgs: dict = {},
+        render_camera_cfgs: dict = {},
         xarm_ip="192.168.1.229",
         safety_boundary_mm: List[int] = [550, 0, 50, -600, 280, 0],
         boundary_clip_mm: int = 10,
@@ -44,18 +49,27 @@ class XArmBaseEnv(gym.Env):
         **kwargs
     ):
         """
+        :param obs_mode: observation modes, see XArmBaseEnv.SUPPORTED_OBS_MODES
+        :param image_obs_mode: image observation modes,
+                               see XArmBaseEnv.SUPPORTED_IMAGE_OBS_MODES
         :param control_mode: xArm control mode (determines set_action type)
         :param motion_mode: xArm motion mode (determines xArm motion mode)
+        :param camera_cfgs: overrides camera configurations.
+                            E.g., {"fps": 60}  # sets all camera fps to 60
+                            # sets front_camera depth sensor preset
+                            {"front_camera": {"preset": "High Accuracy"}}
+        :param render_camera_cfgs: overrides render camera configurations
         :param xarm_ip: xArm7 ip address, see controller box
         :param safety_boundary_mm: [x_max, x_min, y_max, y_min, z_max, z_min] (mm)
         :param boundary_clip_mm: clip action when TCP position to boundary is
                                  within boundary_clip_eps (mm). No clipping if None.
         :param with_hand_camera: whether to include hand camera mount in TCP offset.
-        :param translation_scale: action [-1, 1] maps to [-100mm, 100mm],
-                                  Used for delta control_mode only.
-        :param axangle_scale: axangle action norm (rotation angle) is multiplied by 0.1
-                              [-1, 0, 0] => rotate around [1, 0, 0] by -0.1 rad
-                              Used for delta control_mode only.
+        :param action_translation_scale: action [-1, 1] maps to [-100mm, 100mm],
+                                         Used for delta control_mode only.
+        :param action_axangle_scale: axangle action norm (rotation angle) is multiplied
+                                     by this scale.
+                                     [-1, 0, 0] => rotate around [1, 0, 0] by -0.1 rad
+                                     Used for delta control_mode only.
         :param vis_stream_camera: whether to redraw camera stream
                                   when a new frame arrives
         :param vis_stream_robot: whether to update robot mesh
@@ -119,8 +133,9 @@ class XArmBaseEnv(gym.Env):
         self.action_translation_scale = action_translation_scale
         self.action_axangle_scale = action_axangle_scale
         self._configure_agent()
-        self._configure_cameras()
-        self._configure_render_cameras()
+        self._configure_cameras(camera_cfgs)  # create and override CameraConfig
+        self._configure_render_cameras(render_camera_cfgs)
+        self._setup_cameras()  # load and start RSDevice cameras
 
         self.visualizer = Visualizer(run_as_process=True,
                                      stream_camera=vis_stream_camera,
@@ -128,7 +143,7 @@ class XArmBaseEnv(gym.Env):
 
         # NOTE: `seed` is deprecated in the latest gym.
         # Use a fixed seed to initialize to enhance determinism
-        self.seed(2022)
+        self.seed(2023)
         obs = self.reset()
         self.observation_space = convert_observation_to_space(obs)
         if self._obs_mode == "image":
@@ -201,13 +216,15 @@ class XArmBaseEnv(gym.Env):
         ]
         return camera_configs
 
-    def _configure_cameras(self):
+    def _configure_cameras(self, camera_cfgs: dict):
         """Configure and create RealSense cameras"""
         self._camera_cfgs = OrderedDict()
         self._camera_cfgs.update(parse_camera_cfgs(self._register_cameras()))
 
         self._agent_camera_cfgs = parse_camera_cfgs(self.agent.cameras)
         self._camera_cfgs.update(self._agent_camera_cfgs)
+
+        update_camera_cfgs_from_dict(self._camera_cfgs, camera_cfgs)
 
         # Select camera_cfgs based on image_obs_mode
         camera_cfgs = OrderedDict()
@@ -222,6 +239,20 @@ class XArmBaseEnv(gym.Env):
             raise ValueError(f"Unknown image_obs_mode: {self._image_obs_mode}")
         self._camera_cfgs = camera_cfgs
 
+    def _register_render_cameras(self) -> Sequence[CameraConfig]:
+        """Register cameras for rendering."""
+        return []
+
+    def _configure_render_cameras(self, camera_cfgs: dict):
+        """Configure and create render cameras"""
+        self._render_camera_cfgs = parse_camera_cfgs(
+            self._register_render_cameras()
+        )
+
+        update_camera_cfgs_from_dict(self._render_camera_cfgs, camera_cfgs)
+
+    def _setup_cameras(self):
+        """Load and start Camera instances (Wrapper for RSDevice)"""
         self._cameras = OrderedDict()
         for uid, camera_cfg in self._camera_cfgs.items():
             self._cameras[uid] = Camera(
@@ -229,20 +260,13 @@ class XArmBaseEnv(gym.Env):
                 record_bag_path=self.log_dir / "camera" if self.record_camera else None
             )
 
-    def _register_render_cameras(self) -> Sequence[CameraConfig]:
-        """Register cameras for rendering."""
-        return []
-
-    def _configure_render_cameras(self):
-        """Configure and create render cameras"""
-        self._render_camera_cfgs = parse_camera_cfgs(
-            self._register_render_cameras()
-        )
-
         # Cameras for rendering only
         self._render_cameras = OrderedDict()
         for uid, camera_cfg in self._render_camera_cfgs.items():
-            self._render_cameras[uid] = Camera(camera_cfg)
+            self._render_cameras[uid] = Camera(
+                camera_cfg,
+                record_bag_path=self.log_dir / "camera" if self.record_camera else None
+            )
 
     # ---------------------------------------------------------------------- #
     # Reset

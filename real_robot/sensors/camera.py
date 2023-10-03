@@ -1,6 +1,6 @@
 from pathlib import Path
 from collections import OrderedDict
-from typing import Dict, Optional
+from typing import Dict, Union, Any, Optional
 
 import numpy as np
 from sapien.core import Pose
@@ -76,6 +76,28 @@ def parse_camera_cfgs(camera_cfgs):
         return OrderedDict([(camera_cfgs.uid, camera_cfgs)])
     else:
         raise TypeError(type(camera_cfgs))
+
+
+def update_camera_cfgs_from_dict(camera_cfgs: Dict[str, CameraConfig],
+                                 cfg_dict: Dict[str, Union[Any, Dict[str, Any]]]):
+    # First, apply global configuration
+    for k, v in cfg_dict.items():
+        if k in camera_cfgs:  # camera_name, camera-specific config
+            continue
+        for cfg in camera_cfgs.values():
+            if not hasattr(cfg, k):
+                raise AttributeError(f"{k} is not a valid attribute of CameraConfig")
+            else:
+                setattr(cfg, k, v)
+
+    # Then, apply camera-specific configuration
+    for name, v in cfg_dict.items():
+        if name not in camera_cfgs:  # not camera_name, global config
+            continue
+        cfg = camera_cfgs[name]
+        for k in v:
+            assert hasattr(cfg, k), f"{k} is not a valid attribute of CameraConfig"
+        cfg.__dict__.update(v)
 
 
 class Camera:
