@@ -29,6 +29,7 @@ if not installing from source.
   `RSDevice` as a separate process)
 * Enabled `RSDevice` to record camera streams as a rosbag file
 * Enabled `XArm7` to run as a separate process (for streaming robot states)
+* Enabled `CV2Visualizer` and `O3DGUIVisualizer` to run as separate processes (for visualization)
 
 ### API changes
 * `real_robot.agents.xarm`

@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     setup(
         name='real_robot',
-        version='0.1.0.dev20230929',
+        version='0.1.0a1',
         description="Real Robot xArm7",
         python_requires=">=3.8",
         install_requires=[
