@@ -1,3 +1,5 @@
+from pathlib import Path
+from datetime import datetime
 from collections import OrderedDict
 from typing import Dict, List, Union, Sequence
 
@@ -8,6 +10,7 @@ import pyrealsense2 as rs
 from mani_skill2.envs.sapien_env import BaseEnv as MS2BaseEnv
 from ..sensors.camera import CALIB_CAMERA_POSES, CameraConfig, Camera, parse_camera_cfgs
 from ..agents import XArm7
+from ..utils.logger import get_logger
 from ..utils.common import (
     convert_observation_to_space, vectorize_pose, flatten_state_dict,
     clip_and_scale_action
@@ -36,6 +39,8 @@ class XArmBaseEnv(gym.Env):
         action_axangle_scale=0.1,
         vis_stream_camera=False,
         vis_stream_robot=False,
+        log_dir=Path.home() / "real_robot_logs",
+        record_camera=False,
         **kwargs
     ):
         """
@@ -55,6 +60,8 @@ class XArmBaseEnv(gym.Env):
                                   when a new frame arrives
         :param vis_stream_robot: whether to update robot mesh
                                  when a new robot state arrives
+        :param log_dir: path to save log files and rosbag recordings if not None.
+        :param record_camera: whether to record camera streams as rosbags
         """
         super().__init__(*args, **kwargs)
 
@@ -96,6 +103,13 @@ class XArmBaseEnv(gym.Env):
                 f"Unsupported reward mode: {reward_mode}"
             )
         self._reward_mode = reward_mode
+
+        # Setup log_dir
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_dir = Path(log_dir) / timestamp
+        self.log_dir.mkdir(parents=True, exist_ok=False)
+        get_logger(log_file=self.log_dir / "master.log")  # root logger log file
+        self.record_camera = record_camera
 
         # Configure agent and cameras
         self.xarm_ip = xarm_ip
@@ -210,7 +224,10 @@ class XArmBaseEnv(gym.Env):
 
         self._cameras = OrderedDict()
         for uid, camera_cfg in self._camera_cfgs.items():
-            self._cameras[uid] = Camera(camera_cfg)
+            self._cameras[uid] = Camera(
+                camera_cfg,
+                record_bag_path=self.log_dir / "camera" if self.record_camera else None
+            )
 
     def _register_render_cameras(self) -> Sequence[CameraConfig]:
         """Register cameras for rendering."""
