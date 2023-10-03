@@ -82,11 +82,10 @@ class Visualizer:
             self.o3dvis.clear_geometries()
 
         if len(obs_dict) > 0:
-            self.show_observation(obs_dict)
+            self.show_obs(obs_dict)
             self.render()
 
-    def _show_observation_async(self,
-                                obs_dict: Dict[str, Union[SharedObject._object_types]]):
+    def _show_obs_async(self, obs_dict: Dict[str, Union[SharedObject._object_types]]):
         """Render observations
         :param obs_dict: dict, {so_data_name: obs_data}
                          See CV2Visualizer.__init__.__doc__ and
@@ -99,10 +98,10 @@ class Visualizer:
             else:
                 self.so_data_dict[so_data_name].assign(data)
 
-    def _show_observation_sync(self, *, camera_names: Optional[List[str]] = None,
-                               **obs_dict: Dict[str, Union[np.ndarray,
-                                                           List[np.ndarray],
-                                                           o3d.geometry.Geometry]]):
+    def _show_obs_sync(self, *, camera_names: Optional[List[str]] = None,
+                       **obs_dict: Dict[str, Union[np.ndarray,
+                                                   List[np.ndarray],
+                                                   o3d.geometry.Geometry]]):
         """Render observations
         :param camera_names: camera names if obs_data are from multiple cameras
                              The order should match with order of obs_data
@@ -156,15 +155,20 @@ class Visualizer:
 
         # Sort images based on key
         self.cv2vis.show_images([img for _, img in sorted(images.items())])
-        for name, geometry in o3d_geometries.items():
-            self.o3dvis.add_geometry(name, geometry)
+        self.o3dvis.add_geometries(o3d_geometries)
 
-    def show_observation(self, obs_dict) -> None:
-        """Render observations"""
+    def show_obs(self, obs_dict) -> None:
+        """Render observations
+
+        :param obs_dict: dict, {so_data_name: obs_data}
+                         See CV2Visualizer.__init__.__doc__ and
+                             O3DGUIVisualizer.__init__.__doc__
+                         for acceptable so_data_name
+        """
         if self.run_as_process:
-            self._show_observation_async(obs_dict)
+            self._show_obs_async(obs_dict)
         else:
-            self._show_observation_sync(**obs_dict)
+            self._show_obs_sync(**obs_dict)
 
     def render(self):
         # TODO: What does pause_render do for run_as_process?
@@ -188,6 +192,10 @@ class Visualizer:
             self.cv2vis_proc.join()
             self.so_o3dvis_joined.trigger()
             self.o3dvis_proc.join()
+
+            # Unlink created SharedObject
+            for so_data in self.so_data_dict.values():
+                so_data.unlink()
         else:
             self.cv2vis.close()
             self.o3dvis.close()
@@ -196,7 +204,3 @@ class Visualizer:
         if not self.run_as_process:
             self.key_listener.stop()
         self.close()
-
-        # Unlink created SharedObject
-        for so_data in self.so_data_dict.values():
-            so_data.unlink()

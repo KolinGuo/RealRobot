@@ -35,6 +35,8 @@ if not installing from source.
   * Change `XArm7` parameters for clarity (`safety_boundary` => `safety_boundary_mm`, `boundary_clip_eps` => `boundary_clip_mm`)
   * Add `get_gripper_position()` to get gripper opening width in mm or m
   * Add `gripper_speed` parameter to `set_action()` to control gripper speed
+* `real_robot.utils.visualization.visualizer`
+  * Rename `Visualizer` method `show_observation()` => `show_obs()`
 * `real_robot.sensors.camera`
   * `CameraConfig` now accepts an `fps` parameter
   * Rename `CameraConfig` parameter `parent_pose_fn` => `parent_pose_so_name`
