@@ -1,3 +1,4 @@
+from pathlib import Path
 from collections import OrderedDict
 from typing import Dict, Optional
 
@@ -6,12 +7,11 @@ from sapien.core import Pose
 from gym import spaces
 
 from ..utils.camera import pose_CV_ROS, pose_ROS_CV
-from ..utils.realsense import _default_bag_path, RSDevice
+from ..utils.realsense import RSDevice
 from ..utils.multiprocessing import ctx, SharedObject, start_and_wait_for_process
-from .. import REPO_ROOT
 
 
-CALIB_CAMERA_POSE_DIR = REPO_ROOT / "hec_camera_poses"
+CALIB_CAMERA_POSE_DIR = Path(__file__).resolve().parents[1] / "assets/hec_camera_poses"
 CALIB_CAMERA_POSES = {
     "front_camera": Pose.from_transformation_matrix(np.load(
         CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230726_CSE4144_front.npy"
@@ -81,11 +81,10 @@ def parse_camera_cfgs(camera_cfgs):
 class Camera:
     """Wrapper for RealSense camera (RSDevice)"""
 
-    def __init__(self, camera_cfg: CameraConfig, *,
-                 record_bag: bool = False, bag_path=_default_bag_path):
+    def __init__(self, camera_cfg: CameraConfig, *, record_bag_path=None):
         """
-        :param record_bag: whether to record camera streams as a rosbag file.
-        :param bag_path: path to save bag recording. Must end with ".bag" if it's a file
+        :param record_bag_path: path to save bag recording if not None.
+                                Must end with ".bag" if it's a file
         """
         self.camera_cfg = camera_cfg
         self.uid = camera_cfg.uid
@@ -96,8 +95,7 @@ class Camera:
         self.fps = camera_cfg.fps
         self.parent_pose_so_name = camera_cfg.parent_pose_so_name
 
-        self.record_bag = record_bag
-        self.bag_path = bag_path
+        self.record_bag_path = record_bag_path
 
         config = (self.width, self.height, self.fps)
         self.device_proc = ctx.Process(
@@ -108,8 +106,7 @@ class Camera:
                 preset=camera_cfg.preset,
                 color_option_kwargs=camera_cfg.color_option_kwargs,
                 depth_option_kwargs=camera_cfg.depth_option_kwargs,
-                record_bag=record_bag,
-                bag_path=bag_path,
+                record_bag_path=record_bag_path,
                 run_as_process=True,
                 parent_pose_so_name=self.parent_pose_so_name,
                 local_pose=self.local_pose,
