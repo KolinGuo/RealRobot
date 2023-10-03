@@ -530,7 +530,7 @@ class XArmBaseEnv(gym.Env):
     # ---------------------------------------------------------------------- #
     # Visualization
     # ---------------------------------------------------------------------- #
-    def render(self, obs_dict: Dict[str, Union[SharedObject._object_types]]):
+    def render(self, obs_dict: Dict[str, Union[SharedObject._object_types]] = {}):
         """Render observations
 
         :param obs_dict: dict, {so_data_name: obs_data}
