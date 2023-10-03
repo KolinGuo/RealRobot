@@ -9,7 +9,8 @@ from mani_skill2.envs.sapien_env import BaseEnv as MS2BaseEnv
 from ..sensors.camera import CALIB_CAMERA_POSES, CameraConfig, Camera, parse_camera_cfgs
 from ..agents import XArm7
 from ..utils.common import (
-    convert_observation_to_space, vectorize_pose, flatten_state_dict
+    convert_observation_to_space, vectorize_pose, flatten_state_dict,
+    clip_and_scale_action
 )
 from ..utils.visualization import Visualizer
 from ..utils.multiprocessing import ctx, SharedObject, start_and_wait_for_process
@@ -154,9 +155,17 @@ class XArmBaseEnv(gym.Env):
         start_and_wait_for_process(self.agent_proc, desc="<XArm7>", timeout=5)
 
         # Create SharedObject to control XArm7
-        self.so_agent_joined = SharedObject("join_xarm7")
-        self.so_agent_start = SharedObject("start_xarm7")
+        self.so_agent_joined = SharedObject("join_xarm7_real")
+        self.so_agent_start = SharedObject("start_xarm7_real")
+        # Create SharedObject to fetch XArm7 states
+        self.so_agent_sync = SharedObject("sync_xarm7_real")
+        self.so_agent_qpos = SharedObject("xarm7_real_qpos")
+        self.so_agent_qvel = SharedObject("xarm7_real_qvel")
+        self.so_agent_qf = SharedObject("xarm7_real_qf")
+        self.so_agent_tcp_pose = SharedObject("xarm7_real_tcp_pose")
         self.so_agent_start.assign(True)  # start the XArm7 to stream robot states
+        # (qpos, qvel, qf, tcp_pose) for self.fetch_agent_state()
+        self.agent_state_buffer = None
 
         self.agent = XArm7(
             self.xarm_ip,
@@ -226,6 +235,8 @@ class XArmBaseEnv(gym.Env):
         self._elapsed_steps = 0
 
         self.agent.reset()
+        # (qpos, qvel, qf, tcp_pose) for self.fetch_agent_state()
+        self.agent_state_buffer = None
 
         if self._is_ms2_env:
             obs = super().reset(seed=self._episode_seed)
@@ -270,6 +281,7 @@ class XArmBaseEnv(gym.Env):
         pass
 
     def update_render(self):
+        """Update simulation renderer"""
         pass
 
     # ---------------------------------------------------------------------- #
@@ -296,6 +308,46 @@ class XArmBaseEnv(gym.Env):
         else:
             raise NotImplementedError(self._obs_mode)
 
+    def fetch_agent_state(self):
+        """Fetch synchronized agent states into buffer"""
+        qvel = np.zeros(9, dtype=np.float32)
+        qf = np.zeros(9, dtype=np.float32)
+
+        # Trigger fetching agent states in other processes (e.g., visualization)
+        self.so_agent_sync.trigger()
+        qpos = self.so_agent_qpos.fetch()  # [8,]
+        qvel[:8] = self.so_agent_qvel.fetch()  # [8,]
+        qf[:8] = self.so_agent_qf.fetch()      # [8,]
+        tcp_pose = self.so_agent_tcp_pose.fetch()  # in world frame, sapien.core.Pose
+
+        # Convert qpos/qvel/qf align with pris_finger URDF
+        gripper_qpos = clip_and_scale_action(
+            qpos[-1] * 1000.0, self.agent.joint_limits_ms2[-1, :],
+            self.agent.gripper_limits
+        )
+
+        self.agent_state_buffer = (
+            np.concatenate([qpos[:-1], [gripper_qpos, gripper_qpos]], dtype=np.float32),
+            qvel, qf, tcp_pose
+        )
+
+    def _get_obs_agent(self):
+        self.fetch_agent_state()  # fetch synchronized agent states into buffer
+
+        obs = OrderedDict(
+            qpos=self.agent_state_buffer[0], qvel=self.agent_state_buffer[1]
+        )
+        obs["base_pose"] = vectorize_pose(self.agent.robot.pose)
+        return obs
+
+    def _get_obs_extra(self) -> OrderedDict:
+        # NOTE: tcp_pose needs self.fetch_agent_state() to be called first
+        # which usually happens in _get_obs_agent()
+        obs = OrderedDict(
+            tcp_pose=vectorize_pose(self.agent_state_buffer[-1]),
+        )
+        return obs
+
     def _get_obs_state_dict(self):
         """Get (GT) state-based observations."""
         return OrderedDict(
@@ -303,21 +355,8 @@ class XArmBaseEnv(gym.Env):
             extra=self._get_obs_extra(),
         )
 
-    def _get_obs_agent(self):
-        obs = OrderedDict()
-        obs = self.agent.get_proprioception()
-        obs["base_pose"] = vectorize_pose(self.agent.robot.pose)
-        return obs
-
-    def _get_obs_extra(self) -> OrderedDict:
-        # TODO: add using SAM on images for state obs
-        obs = OrderedDict(
-            tcp_pose=vectorize_pose(self.agent.get_tcp_pose()),
-        )
-        return obs
-
     def take_picture(self):
-        """Take pictures from all cameras for syncing camera pose"""
+        """Take pictures from all cameras with synchronized camera pose"""
         for cam in self._cameras.values():
             cam.take_picture()
 
@@ -368,6 +407,7 @@ class XArmBaseEnv(gym.Env):
             raise NotImplementedError(self._reward_mode)
 
     def compute_dense_reward(self, **kwargs):
+        """Used for training in real world"""
         if self._is_ms2_env:
             return super().compute_dense_reward(**kwargs)
 
@@ -418,14 +458,18 @@ class XArmBaseEnv(gym.Env):
                               skip_gripper=skip_gripper, wait=wait)
 
     def evaluate(self, **kwargs) -> dict:
-        """Evaluate whether the task succeeds."""
+        """Evaluate whether the task succeeds. Used for training in real world"""
+        return {}  # TODO: update
+
         if self._is_ms2_env:
             return super().evaluate(**kwargs)
 
         raise NotImplementedError
 
     def get_info(self, **kwargs) -> dict:
+        """Used for training in real world"""
         return {}  # TODO: update
+
         if self._is_ms2_env:
             return super().get_info(**kwargs)
 
@@ -434,7 +478,9 @@ class XArmBaseEnv(gym.Env):
         return info
 
     def get_done(self, info: dict, **kwargs):
+        """Used for training in real world"""
         return False  # TODO: update
+
         if self._is_ms2_env:
             return super().get_done(info, **kwargs)
 
