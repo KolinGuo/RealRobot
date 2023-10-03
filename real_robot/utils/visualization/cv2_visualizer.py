@@ -166,8 +166,9 @@ class CV2Visualizer:
         so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
 
         # {"rs_<device_uid>_color": image}
-        vis_data = defaultdict(functools.partial(np.full, shape=(480, 848, 3),
-                                                 fill_value=255, dtype=np.uint8))
+        vis_data = defaultdict(functools.partial(
+            np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
+        ))
 
         signal_process_ready()  # current process is ready
 
@@ -237,6 +238,11 @@ class CV2Visualizer:
 
             if so_reset.triggered:  # triggers reset
                 self.clear_image()
+                so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
+                # {"rs_<device_uid>_color": image}
+                vis_data = defaultdict(functools.partial(
+                    np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
+                ))
 
             self.render()
 

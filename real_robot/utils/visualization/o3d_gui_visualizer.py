@@ -1781,6 +1781,9 @@ class O3DGUIVisualizer:
 
             if so_reset.triggered:  # triggers reset
                 self.clear_geometries()
+                so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
+                data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
+                urdf_data_dict = {}  # {xarm7_<robot_uid>: (URDF, [geometry name])}
 
             self.render()
 
