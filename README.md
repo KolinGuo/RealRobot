@@ -17,6 +17,14 @@ cd RealRobot && pip install -e .
 Calibrated camera poses are stored in [real_robot/assets/hec_camera_poses/](real_robot/assets/hec_camera_poses) and
 loaded in [real_robot/sensors/camera.py](real_robot/sensors/camera.py).
 
+## Notes
+
+To fix an unindexed rosbag recorded from `RSDevice`, do
+```bash
+apt install -y python3-rosbag
+rosbag reindex <bag_path>
+```
+
 ## Changelog
 
 <details>
