@@ -14,7 +14,7 @@ from ..utils.multiprocessing import ctx, SharedObject, start_and_wait_for_proces
 CALIB_CAMERA_POSE_DIR = Path(__file__).resolve().parents[1] / "assets/hec_camera_poses"
 CALIB_CAMERA_POSES = {
     "front_camera": Pose.from_transformation_matrix(np.load(
-        CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230726_CSE4144_front.npy"
+        CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230918_CSE4144_front_jiacheng.npy"
     )) * pose_CV_ROS
 }
 
