@@ -1,12 +1,15 @@
-import multiprocessing as mp
-from multiprocessing.shared_memory import SharedMemory
+import os
 import time
-import numpy as np
+import tempfile
 import ctypes
-
 from time import perf_counter
 from contextlib import AbstractContextManager
+import multiprocessing as mp
+from multiprocessing.shared_memory import SharedMemory
+
+import numpy as np
 from real_robot.utils.logger import get_logger
+os.environ["REAL_ROBOT_LOG_DIR"] = tempfile.TemporaryDirectory().name
 _logger = get_logger("Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s")
 
 

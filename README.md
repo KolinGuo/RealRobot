@@ -38,6 +38,7 @@ rosbag reindex <bag_path>
 * Enabled `RSDevice` to record camera streams as a rosbag file
 * Enabled `XArm7` to run as a separate process (for streaming robot states)
 * Enabled `CV2Visualizer` and `O3DGUIVisualizer` to run as separate processes (for visualization)
+* Added a default `FileHandler` to all Logger created through `real_robot.utils.logger.get_logger`
 
 ### API changes
 * `real_robot.agents.xarm`
@@ -59,6 +60,8 @@ rosbag reindex <bag_path>
   * `XArm7` will not clear *"Safety Boundary Limit"* error automatically in `set_action()`
   * For `motion_mode == "position"`, switch from using `set_tool_position()` to `set_position()`
   * Enable gripper and set to maximum speed in `reset()`
+* Remove all Loggers created as global variables (they will be created
+  at import, which might not be saved under `REAL_ROBOT_LOG_DIR`)
 
 </p>
 </details>

@@ -11,7 +11,6 @@ from .multiprocessing import SharedObject, signal_process_ready
 from .logger import get_logger
 
 
-_logger = get_logger("realsense.py")
 RS_DEVICES = None  # {device_sn: rs.device}
 
 
@@ -36,11 +35,12 @@ def get_connected_rs_devices(
                 fw_version = d.get_info(rs.camera_info.firmware_version)
                 usb_type = d.get_info(rs.camera_info.usb_type_descriptor)
 
-                _logger.info(f"Found {name} (S/N: {serial} "
-                             f"FW: {fw_version} on USB {usb_type})")
+                get_logger("realsense.py").info(
+                    f"Found {name} (S/N: {serial} FW: {fw_version} on USB {usb_type})"
+                )
                 assert "D435" in name, "Only support D435 currently"
                 RS_DEVICES[serial] = d
-        _logger.info(f"Found {len(RS_DEVICES)} devices")
+        get_logger("realsense.py").info(f"Found {len(RS_DEVICES)} devices")
 
     if device_sn is None:
         return list(RS_DEVICES.keys())

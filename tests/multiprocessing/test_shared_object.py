@@ -1,20 +1,20 @@
 """Unittests for real_robot.utils.multiprocessing.shared_object"""
+import os
 import uuid
 import random
 import string
+import tempfile
 from time import perf_counter
-import multiprocessing as mp
 from typing import Union, Tuple
 
 import numpy as np
 from sapien.core import Pose
 from transforms3d.euler import euler2quat
 
-from real_robot.utils.multiprocessing import SharedObject
+from real_robot.utils.multiprocessing import ctx, SharedObject
 from real_robot.utils.logger import get_logger
 
-_ctx = mp.get_context("forkserver" if "forkserver" in mp.get_all_start_methods()
-                      else "spawn")
+os.environ["REAL_ROBOT_LOG_DIR"] = tempfile.TemporaryDirectory().name
 _logger = get_logger("Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s")
 NDARRAY_NBYTES_LIMIT = 20 * 1024**2  # 20 MiB
 
@@ -1078,8 +1078,8 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [_ctx.Process(target=self.child_test_race_condition_with_extra_bool,
-                              args=()) for _ in range(n_iters)]
+        procs = [ctx.Process(target=self.child_test_race_condition_with_extra_bool,
+                             args=()) for _ in range(n_iters)]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))
@@ -1118,8 +1118,8 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [_ctx.Process(target=self.child_test_race_condition_with_extra_bool,
-                              args=()) for _ in range(n_iters*5)]
+        procs = [ctx.Process(target=self.child_test_race_condition_with_extra_bool,
+                             args=()) for _ in range(n_iters*5)]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))
@@ -1176,8 +1176,8 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [_ctx.Process(target=self.child_test_race_condition_with_modified,
-                              args=()) for _ in range(n_iters)]
+        procs = [ctx.Process(target=self.child_test_race_condition_with_modified,
+                             args=()) for _ in range(n_iters)]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))
@@ -1212,8 +1212,8 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [_ctx.Process(target=self.child_test_race_condition_with_modified,
-                              args=()) for _ in range(n_iters*5)]
+        procs = [ctx.Process(target=self.child_test_race_condition_with_modified,
+                             args=()) for _ in range(n_iters*5)]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))

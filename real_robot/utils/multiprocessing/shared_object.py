@@ -53,7 +53,6 @@ except ModuleNotFoundError as e:
     raise e
 
 
-_logger = get_logger("SharedObject")
 _encoding = "utf8"
 
 
@@ -215,7 +214,7 @@ class SharedObject:
             if not isinstance(data, np.ndarray) or data.flags.owndata:
                 return data
             else:
-                _logger.warning(
+                get_logger("SharedObject").warning(
                     "Fetching ndarray with fn that does not trigger a copy "
                     "induces an extra copy. Consider changing to improve performance."
                 )
@@ -348,7 +347,9 @@ class SharedObject:
         # fill data
         if data is not None:
             if not created:
-                _logger.warning(f"Implicitly overwriting data of {self!r}")
+                get_logger("SharedObject").warning(
+                    f"Implicitly overwriting data of {self!r}"
+                )
             self._assign(data, object_type_idx, nbytes, np_metas)
 
     def _preprocess_data(self, data: Union[_object_types]) -> tuple:

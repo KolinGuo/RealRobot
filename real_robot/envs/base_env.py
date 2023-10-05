@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from datetime import datetime
 from collections import OrderedDict
@@ -119,10 +120,10 @@ class XArmBaseEnv(gym.Env):
         self._reward_mode = reward_mode
 
         # Setup log_dir
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_dir = Path(log_dir) / timestamp
+        self.log_dir = Path(log_dir) / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_dir.mkdir(parents=True, exist_ok=False)
-        get_logger(log_file=self.log_dir / "master.log")  # root logger log file
+        os.environ["REAL_ROBOT_LOG_DIR"] = str(self.log_dir)
+        get_logger(log_file=self.log_dir / "3rd_party.log")  # root logger log file
         self.record_camera = record_camera
 
         # Configure agent and cameras

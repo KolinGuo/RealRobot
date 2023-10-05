@@ -5,13 +5,13 @@ from typing import Dict, Type
 import gym
 from gym.envs.registration import EnvSpec as GymEnvSpec
 
-from real_robot import logger
 from real_robot.envs.base_env import XArmBaseEnv
 from real_robot.utils.wrappers.observation import (
     PointCloudObservationWrapper,
     RGBDObservationWrapper,
     RobotSegmentationObservationWrapper,
 )
+from real_robot.utils.logger import get_logger
 
 
 class EnvSpec:
@@ -54,7 +54,7 @@ def register(
 ):
     """Register a real_robot environment."""
     if name in REGISTERED_ENVS:
-        logger.warning(f"Env {name} already registered")
+        get_logger("registration").warning(f"Env {name} already registered")
     if not issubclass(cls, XArmBaseEnv):
         raise TypeError(f"Env {name} must inherit from XArmBaseEnv")
     REGISTERED_ENVS[name] = EnvSpec(
@@ -141,12 +141,13 @@ def register_env(uid: str, max_episode_steps=None, override=False, **kwargs):
             if override:
                 from gym.envs.registration import registry
 
-                logger.warning(f"Override registered env {uid}")
+                get_logger("registration").warning(f"Override registered env {uid}")
                 REGISTERED_ENVS.pop(uid)
                 registry.env_specs.pop(uid)
             else:
-                logger.warning(f"Env {uid} is already registered. "
-                               "Skip registration.")
+                get_logger("registration").warning(
+                    f"Env {uid} is already registered. Skip registration."
+                )
                 return cls
 
         # Register for real_robot

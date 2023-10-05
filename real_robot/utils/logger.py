@@ -1,10 +1,20 @@
+import os
 import sys
 import logging
 from copy import deepcopy
+from pathlib import Path
+from datetime import datetime
+import multiprocessing as mp
 
 
 _registry = []
 _format = "[%(asctime)s] [%(name)s] [%(filename)s:%(lineno)d] [%(levelname)s] %(message)s"
+_log_dir = Path(os.getenv(
+    "REAL_ROBOT_LOG_DIR",
+    Path.home() / f"real_robot_logs/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+))
+_current_pid = -1
+_default_file_handler = None
 
 
 class ColorFormatter(logging.Formatter):
@@ -51,27 +61,45 @@ class ColorFormatter(logging.Formatter):
         return self._color_styles[self.LEVEL_COLORS.get(record.levelno)].format(record)
 
 
-def get_logger(name=None, fmt=_format, datefmt=None, with_stream=True, stdout=False,
-               log_file=None, log_level=logging.INFO, log_file_level=logging.NOTSET):
+def get_logger(name=None, *, fmt=_format, datefmt=None,
+               with_stream=True, stdout=False, log_file=None,
+               log_level=logging.INFO, log_file_level=logging.NOTSET) -> logging.Logger:
     """Initialize a logger by name and add to registry.
+    By default, it will add a FileHandler to
+        _log_dir / "master.log" for main process
+        _log_dir / "<proc_name>_<proc_pid>.log" for child processes
 
     If logger is in _registry, that logger is directly returned
     If logger is a child of a logger in _registry, its kwargs are ignored and
         will use its parent's kwargs
 
-    Args:
-        name (str | None): Logger name. If not specified, get the root logger
-        fmt (str): logging format
-        datefmt (str): logging date format
-        with_stream (bool): whether to add StreamHandler
-        stdout (bool): StreamHandler outputs to stdout or stderr
-        log_file (str | None): log filename. If specified, a FileHandler will be added.
-        log_level (int): The logger level. Note that only the process of rank 0
-                         is affected, and other processes will set the level to
-                         "Error" thus be silent most of the time.
-    Returns:
-        logging.Logger: The expected logger.
+    :param name: Logger name. If not specified, get the root logger
+    :param fmt: stream logging format, default is logger._format
+    :param date_fmt: date (asctime) logging format, default is '%Y-%m-%d %H:%M:%S,uuu'
+    :param with_stream: whether to add StreamHandler for terminal output
+    :param stdout: StreamHandler outputs to sys.stdout or sys.stderr
+    :param log_file: log filename. If specified, a FileHandler will be added.
+    :param log_level: logger StreamHandler logging level.
+    :param log_file_level: logger FileHandler logging level.
+    :return logger: logging.Logger, the expected logger.
     """
+    # Initialize for a new process
+    global _registry, _log_dir, _current_pid, _default_file_handler
+    if _current_pid != os.getpid():  # this is a new process
+        _registry = []
+        _current_pid = os.getpid()
+        _log_dir = Path(os.getenv("REAL_ROBOT_LOG_DIR", _log_dir))
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        # Create default FileHandler
+        if mp.parent_process() is None:  # main process
+            _default_log_file = _log_dir / "master.log"
+        else:  # child process
+            cur_proc = mp.current_process()
+            _default_log_file = _log_dir / f"{cur_proc.name}_{cur_proc.pid}.log"
+        _default_file_handler = logging.FileHandler(_default_log_file)
+        _default_file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt=datefmt))
+        _default_file_handler.setLevel(log_file_level)
+
     if len(_registry) == 0:
         logging.basicConfig(format=_format, level=logging.NOTSET, handlers=[])
 
@@ -82,7 +110,7 @@ def get_logger(name=None, fmt=_format, datefmt=None, with_stream=True, stdout=Fa
         if logger is _logger or name is not None and name.startswith(_logger.name+'.'):
             return logger
 
-    logger.propagate = True  # allow propergate to root logger
+    logger.propagate = False  # allow propergate to root logger
     handlers = []
 
     if with_stream and name is not None:  # no stream for root logger
@@ -95,6 +123,7 @@ def get_logger(name=None, fmt=_format, datefmt=None, with_stream=True, stdout=Fa
 
     logger.handlers = []
 
+    logger.addHandler(_default_file_handler)
     for handler in handlers:
         if isinstance(handler, logging.FileHandler):
             handler.setFormatter(file_formatter)
@@ -108,6 +137,3 @@ def get_logger(name=None, fmt=_format, datefmt=None, with_stream=True, stdout=Fa
     # logger.setLevel(log_level)
     _registry.append(logger)
     return logger
-
-
-logger = get_logger("real_robot")
