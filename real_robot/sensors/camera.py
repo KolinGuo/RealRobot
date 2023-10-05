@@ -121,7 +121,8 @@ class Camera:
 
         config = (self.width, self.height, self.fps)
         self.device_proc = ctx.Process(
-            target=RSDevice, args=(self.device_sn, self.uid),
+            target=RSDevice, name=f"RSDevice_{self.uid}",
+            args=(self.device_sn, self.uid),
             kwargs=dict(
                 color_config=config,
                 depth_config=config,
@@ -134,11 +135,7 @@ class Camera:
                 local_pose=self.local_pose,
             )
         )
-        start_and_wait_for_process(
-            self.device_proc,
-            desc=f"<RSDevice: {self.uid} (S/N: {self.device_sn})>",
-            timeout=5
-        )
+        start_and_wait_for_process(self.device_proc, timeout=5)
 
         # Create SharedObject to control RSDevice and fetch data
         self.so_joined = SharedObject(f"join_rs_{self.uid}")

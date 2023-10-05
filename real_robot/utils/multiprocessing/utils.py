@@ -15,13 +15,11 @@ class SharedObjectDefaultDict(dict):
         return so
 
 
-def start_and_wait_for_process(process: mp.Process, *,
-                               desc=None, timeout: float = None) -> None:
+def start_and_wait_for_process(process: mp.Process, *, timeout: float = None) -> None:
     """Start and wait for process to be ready (finishes initialization)
     When the waiting process is ready, it should trigger SharedObject "proc_<pid>_ready"
 
     :param process: mp.Process
-    :param desc: process description for intuitive error message.
     :param timeout: If process is not ready after timeout seconds, raise a TimeoutError
                     If timeout is None, wait indefinitely
     """
@@ -33,8 +31,7 @@ def start_and_wait_for_process(process: mp.Process, *,
     while not so_ready.triggered:
         if timeout is not None and time.time() - start_time > timeout:
             raise TimeoutError(
-                f"Process {process.pid if desc is None else desc} did not become ready "
-                f"within {timeout=} seconds."
+                f"Process {process.name} did not become ready within {timeout=} seconds"
             )
 
 

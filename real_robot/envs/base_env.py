@@ -173,7 +173,7 @@ class XArmBaseEnv(gym.Env):
     def _configure_agent(self):
         """Create real robot agent"""
         self.agent_proc = ctx.Process(
-            target=XArm7,
+            target=XArm7, name="XArm7_state_stream",
             args=(self.xarm_ip, self._control_mode, self._motion_mode),
             kwargs=dict(
                 safety_boundary_mm=self.safety_boundary_mm,
@@ -182,7 +182,7 @@ class XArmBaseEnv(gym.Env):
                 run_as_process=True,
             )
         )
-        start_and_wait_for_process(self.agent_proc, desc="<XArm7>", timeout=5)
+        start_and_wait_for_process(self.agent_proc, timeout=5)
 
         # Create SharedObject to control XArm7
         self.so_agent_joined = SharedObject("join_xarm7_real")
