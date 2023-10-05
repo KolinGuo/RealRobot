@@ -45,7 +45,7 @@ class XArmBaseEnv(gym.Env):
         action_axangle_scale=0.1,
         vis_stream_camera=False,
         vis_stream_robot=False,
-        log_dir=Path.home() / "real_robot_logs",
+        logdir=Path.home() / "real_robot_logs",
         record_camera=False,
         **kwargs
     ):
@@ -75,7 +75,7 @@ class XArmBaseEnv(gym.Env):
                                   when a new frame arrives
         :param vis_stream_robot: whether to update robot mesh
                                  when a new robot state arrives
-        :param log_dir: path to save log files and rosbag recordings if not None.
+        :param logdir: path to save log files and rosbag recordings if not None.
         :param record_camera: whether to record camera streams as rosbags
         """
         super().__init__(*args, **kwargs)
@@ -120,10 +120,10 @@ class XArmBaseEnv(gym.Env):
         self._reward_mode = reward_mode
 
         # Setup log_dir
-        self.log_dir = Path(log_dir) / datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_dir.mkdir(parents=True, exist_ok=False)
-        os.environ["REAL_ROBOT_LOG_DIR"] = str(self.log_dir)
-        get_logger(log_file=self.log_dir / "3rd_party.log")  # root logger log file
+        self.logdir = Path(logdir) / datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.logdir.mkdir(parents=True, exist_ok=False)
+        os.environ["REAL_ROBOT_LOG_DIR"] = str(self.logdir)
+        get_logger(log_file=self.logdir / "3rd_party.log")  # root logger log file
         self.record_camera = record_camera
 
         # Configure agent and cameras
@@ -258,7 +258,7 @@ class XArmBaseEnv(gym.Env):
         for uid, camera_cfg in self._camera_cfgs.items():
             self._cameras[uid] = Camera(
                 camera_cfg,
-                record_bag_path=self.log_dir / "camera" if self.record_camera else None
+                record_bag_path=self.logdir / "camera" if self.record_camera else None
             )
 
         # Cameras for rendering only
@@ -266,7 +266,7 @@ class XArmBaseEnv(gym.Env):
         for uid, camera_cfg in self._render_camera_cfgs.items():
             self._render_cameras[uid] = Camera(
                 camera_cfg,
-                record_bag_path=self.log_dir / "camera" if self.record_camera else None
+                record_bag_path=self.logdir / "camera" if self.record_camera else None
             )
 
     # ---------------------------------------------------------------------- #
@@ -532,7 +532,8 @@ class XArmBaseEnv(gym.Env):
     # Visualization
     # ---------------------------------------------------------------------- #
     def render(self, obs_dict: Dict[str, Union[SharedObject._object_types]] = {}):
-        """Render observations
+        """Render observations by updating previously rendered obs with obs_dict.
+        Previous obs will be cached until reset.
 
         :param obs_dict: dict, {so_data_name: obs_data}
                          See CV2Visualizer.__init__.__doc__ and
