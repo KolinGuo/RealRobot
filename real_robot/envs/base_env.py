@@ -280,12 +280,12 @@ class XArmBaseEnv(gym.Env):
         # (qpos, qvel, qf, tcp_pose) for self.fetch_agent_state()
         self.agent_state_buffer = None
 
+        self.visualizer.reset()
+
         if self._is_ms2_env:
             obs = super().reset(seed=self._episode_seed)
         else:
             obs = self.get_obs()
-
-        self.visualizer.reset()
 
         return obs
 
