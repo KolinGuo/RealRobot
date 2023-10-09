@@ -259,7 +259,7 @@ class XArm7:
         if not skip_gripper:
             # NOTE: wait=False for gripper position (it should never block)
             ret_gripper = self.arm.set_gripper_position(
-                gripper_pos, speed=gripper_speed, wait=False
+                gripper_pos, speed=gripper_speed, wait=False, wait_motion=False
             )
 
         # Control xArm based on motion mode
@@ -359,7 +359,7 @@ class XArm7:
                 gripper_qpos, self.gripper_limits, self.joint_limits_ms2[-1, :]
             )
             ret_gripper = self.arm.set_gripper_position(
-                gripper_pos, speed=gripper_speed, wait=False
+                gripper_pos, speed=gripper_speed, wait=False, wait_motion=False
             )
 
         ret_arm = self.arm.set_servo_angle(
@@ -378,7 +378,7 @@ class XArm7:
         """
         ret_gripper = self.arm.set_gripper_position(
             gripper_pos * 10.0 if unit_in_mm else gripper_pos * 10000.0,
-            speed=speed, wait=wait
+            speed=speed, wait=wait, wait_motion=wait
         )
         return ret_gripper
 
@@ -387,8 +387,8 @@ class XArm7:
         :param speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
-        ret_gripper = self.arm.set_gripper_position(self.gripper_limits[0],
-                                                    speed=speed, wait=wait)
+        ret_gripper = self.arm.set_gripper_position(self.gripper_limits[0], speed=speed,
+                                                    wait=wait, wait_motion=wait)
         return ret_gripper
 
     def open_gripper(self, speed=None, wait=False):
@@ -396,8 +396,8 @@ class XArm7:
         :param speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
-        ret_gripper = self.arm.set_gripper_position(self.gripper_limits[1],
-                                                    speed=speed, wait=wait)
+        ret_gripper = self.arm.set_gripper_position(self.gripper_limits[1], speed=speed,
+                                                    wait=wait, wait_motion=wait)
         return ret_gripper
 
     @staticmethod
