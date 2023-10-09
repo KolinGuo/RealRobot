@@ -170,19 +170,30 @@ class CV2Visualizer:
             np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
         ))
 
+        def get_so_data_names(all_so_names: List[str]) -> List[str]:
+            """Get so_data_names acceptable by CV2Visualizer"""
+            return [
+                p for p in all_so_names
+                if p.startswith(("rs_", "vis_", "viscv2_"))
+                and p.endswith(("_color", "_depth", "_mask"))
+            ]
+
         signal_process_ready()  # current process is ready
 
         while not so_joined.triggered:
             # Sort names so they are ordered as color, depth, mask
             all_so_names = sorted(os.listdir("/dev/shm"))
 
-            so_data_names = [
-                p for p in all_so_names
-                if p.startswith(("rs_", "vis_", "viscv2_"))
-                and p.endswith(("_color", "_depth", "_mask"))
-            ]
+            # ----- Reset ----- #
+            if so_reset.triggered:  # triggers reset
+                self.clear_image()
+                so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
+                # {"rs_<device_uid>_color": image}
+                vis_data = defaultdict(functools.partial(
+                    np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
+                ))
 
-            # ----- Capture from RSDevice stream -----
+            # ----- Capture and update from RSDevice stream ----- #
             if self.stream_camera:  # capture whenever a new frame comes in
                 updated = False
                 for so_data_name in [p for p in all_so_names if p.startswith("rs_")
@@ -192,7 +203,7 @@ class CV2Visualizer:
                         updated = True
                 if updated:  # camera stream is updated, redraw images
                     images = []
-                    for so_data_name in so_data_names:
+                    for so_data_name in get_so_data_names(all_so_names):
                         if so_data_name.endswith("_mask"):
                             images += [vis_data[f"{so_data_name}_overlay"],
                                        vis_data[f"{so_data_name}_colorized"]]
@@ -208,10 +219,12 @@ class CV2Visualizer:
                         if (so_data_name := f"{so_name[5:]}_depth") in all_so_names:
                             vis_data[so_data_name] = so_dict[so_data_name].fetch()
 
-            # ----- Fetch data and draw -----
+            # ----- Fetch data and draw ----- #
             if so_draw.triggered:  # triggers redraw
+                # Sort names so they are ordered as color, depth, mask
+                all_so_names = sorted(os.listdir("/dev/shm"))  # get most updated list
                 images = []
-                for so_data_name in so_data_names:
+                for so_data_name in get_so_data_names(all_so_names):
                     # Fetch data or use captured RSDevice data
                     if so_data_name.endswith("_color"):
                         if so_data_name.startswith("rs_"):
@@ -235,14 +248,6 @@ class CV2Visualizer:
                     else:
                         images.append(image)
                 self.show_images(images)
-
-            if so_reset.triggered:  # triggers reset
-                self.clear_image()
-                so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
-                # {"rs_<device_uid>_color": image}
-                vis_data = defaultdict(functools.partial(
-                    np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
-                ))
 
             self.render()
 

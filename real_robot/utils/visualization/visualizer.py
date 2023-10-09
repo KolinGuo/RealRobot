@@ -1,4 +1,5 @@
 from typing import Dict, List, Union, Any, Optional
+import time
 
 import numpy as np
 import open3d as o3d
@@ -70,11 +71,12 @@ class Visualizer:
 
     def reset(self, obs_dict={}):
         if self.run_as_process:
+            self.so_reset.trigger()  # triggers reset
+            time.sleep(1e-3)  # sleep a while to wait for visualizer to finish reset
             # Unlink created SharedObject
             for so_data in self.so_data_dict.values():
                 so_data.unlink()
             self.so_data_dict = {}
-            self.so_reset.trigger()  # triggers reset
         else:
             self.cv2vis.clear_image()
             self.o3dvis.clear_geometries()

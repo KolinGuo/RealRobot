@@ -1264,32 +1264,33 @@ class O3DGUIVisualizer:
         if geometry_type & o3d.io.CONTAINS_TRIANGLES:
             mesh = o3d.io.read_triangle_model(path)
         if mesh is None:
-            print("[Info]", path, "appears to be a point cloud")
+            self.logger.debug(f"{path} appears to be a point cloud")
             cloud = None
             try:
                 cloud = o3d.io.read_point_cloud(path)
             except Exception:
                 pass
             if cloud is not None:
-                print("[Info] Successfully read", path)
                 if not cloud.has_normals():
                     cloud.estimate_normals()
                 cloud.normalize_normals()
                 geometry = cloud
             else:
-                print("[WARNING] Failed to read points", path)
+                self.logger.error(f"Failed to read points from {path}")
 
         if geometry is not None or mesh is not None:
             self.add_geometry(geometry_name,
                               geometry if mesh is None else mesh)
 
-    def add_geometry(self, name: str, geometry: _o3d_geometry_type, show: bool = None):
+    def add_geometry(self, name: str, geometry: _o3d_geometry_type,
+                     show: bool = None) -> bool:
         """Add a geometry to scene and update the _geometries_tree
         :param name: geometry name separated by '/', str.
                      Group names are nested starting from root.
                      Geometry and geometry group with same names can coexist.
         :param geometry: Open3D geometry
         :param show: whether to show geometry after loading
+        :return success: whether geometry is successfully added
         """
         name = name.split('/')
         # group_names can be [], ["g1"], ["g1", "g1/g2"]
@@ -1328,7 +1329,18 @@ class O3DGUIVisualizer:
                     name, geometry, self.settings.material
                 )
         except Exception as e:
-            print(e)
+            self.logger.error(e)
+
+        # NOTE: sometimes scene.add_geometry will fail with no warning/error
+        # E.g., when adding an empty pointcloud: o3d.geometry.PointCloud()
+        if not self._scene.scene.has_geometry(name):
+            self.logger.warning(f"Failed to add geometry {name}: {geometry}")
+            # Remove geometry node if exists
+            # because geometry is already removed from scene
+            if name in self.geometries:
+                self.logger.warning(f"Removing geometry {name} from scene")
+                self.remove_geometry(name)
+            return False
 
         if name not in self.geometries:  # adding new geometry
             # Update camera pose
@@ -1367,6 +1379,7 @@ class O3DGUIVisualizer:
             show if show is not None else node.cell.checkbox.checked,
             self.geometries[name]
         )
+        return True
 
     def add_geometries(self, geometry_dict: Dict[str, _o3d_geometry_type],
                        show: bool = None):
@@ -1418,7 +1431,7 @@ class O3DGUIVisualizer:
         elif name in self.geometry_groups:
             self._remove_geometry_node(self.geometry_groups[name])
         else:
-            print(f"No geometry or geometry group with {name = }")
+            self.logger.error(f"No geometry or geometry group with {name = }")
 
     def _remove_geometry_node(self, node: GeometryNode):
         """Remove a GeometryNode and its children, update GUI and scene.
@@ -1638,7 +1651,14 @@ class O3DGUIVisualizer:
             # Sort names so they are ordered as color, depth, mask
             all_so_names = sorted(os.listdir("/dev/shm"))
 
-            # ----- Capture from RSDevice stream -----
+            # ----- Reset ----- #
+            if so_reset.triggered:  # triggers reset
+                self.clear_geometries()
+                so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
+                data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
+                urdf_data_dict = {}  # {xarm7_<robot_uid>: (URDF, [geometry name])}
+
+            # ----- Capture and update from RSDevice stream ----- #
             if self.stream_camera:  # capture whenever a new frame comes in
                 redraw_geometry_uids = []
                 for so_data_name in [p for p in all_so_names
@@ -1668,7 +1688,7 @@ class O3DGUIVisualizer:
                             camera_name, data_dict[data_uid], all_so_names
                         )
 
-            # ----- Capture from robot state stream -----
+            # ----- Capture and update from robot state stream ----- #
             if self.stream_robot:  # update whenever a new robot state comes in
                 for so_data_name in [p for p in all_so_names
                                      if p.startswith("xarm7_") and p.endswith("_qpos")]:
@@ -1685,7 +1705,7 @@ class O3DGUIVisualizer:
                             robot_name, qpos=so_dict[f"{robot_name}_qpos"].fetch()
                         )
 
-            # ----- Fetch data and draw -----
+            # ----- Fetch data and draw ----- #
             if so_draw.triggered:  # triggers redraw
                 redraw_geometry_uids = set()
 
@@ -1704,6 +1724,8 @@ class O3DGUIVisualizer:
 
                     # Fetch data
                     if data_fmt == "color":  # PointCloud.colors
+                        if data_uid.endswith("_camera"):  # camera capture
+                            data_uid = f"{data_uid}/captured_pcd"
                         data_dict[data_uid].colors = Vector3dVector(
                             so_dict[so_data_name].fetch(lambda x: x/255.).reshape(-1, 3)
                         )
@@ -1729,6 +1751,8 @@ class O3DGUIVisualizer:
                             data_uid = f"{data_uid}/captured_pcd"
                         if data_uid not in self.geometries:  # add for the first time
                             self.add_geometry(data_uid, data_dict[data_uid])
+                        if not self._scene.scene.has_geometry(data_uid):
+                            self.logger.error(f"Geometry {data_uid=} is not in scene")
                         # NOTE: it's also possible to rescale coord frames
                         # with set_geometry_transform (maybe add another slider?)
                         self._scene.scene.set_geometry_transform(data_uid, T)
@@ -1778,12 +1802,6 @@ class O3DGUIVisualizer:
 
                 self.add_geometries({data_uid: data_dict[data_uid]
                                      for data_uid in redraw_geometry_uids})
-
-            if so_reset.triggered:  # triggers reset
-                self.clear_geometries()
-                so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
-                data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
-                urdf_data_dict = {}  # {xarm7_<robot_uid>: (URDF, [geometry name])}
 
             self.render()
 
