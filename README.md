@@ -25,6 +25,12 @@ apt install -y python3-rosbag
 rosbag reindex <bag_path>
 ```
 
+## Known Issue
+- [ ] When controlling xArm7 with `motion_mode="cartesian_online"` and `wait=True`,
+  sometimes the robot will be stuck indefinitely in `wait_move()` due to `get_state()`
+  returns wrong state (i.e., returns `state=1` thinking it's still in motion).
+  Simple solution can be just to control briefly via UFACTORY Studio to get it unstuck.
+
 ## Changelog
 
 <details>
@@ -62,6 +68,7 @@ rosbag reindex <bag_path>
   * Enable gripper and set to maximum speed in `reset()`
 * Remove all Loggers created as global variables (they will be created
   at import, which might not be saved under `REAL_ROBOT_LOG_DIR`)
+* Bugfix in xArm-Python-SDK: enable `wait=True` for modes other than position mode
 
 </p>
 </details>

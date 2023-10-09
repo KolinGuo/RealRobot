@@ -4,7 +4,7 @@ from setuptools import setup
 if __name__ == "__main__":
     setup(
         name='real_robot',
-        version='0.1.0a2',
+        version='0.1.0a3',
         description="Real Robot xArm7",
         python_requires=">=3.8",
         install_requires=[
