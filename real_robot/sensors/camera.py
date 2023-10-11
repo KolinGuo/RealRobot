@@ -135,7 +135,7 @@ class Camera:
                 local_pose=self.local_pose,
             )
         )
-        start_and_wait_for_process(self.device_proc, timeout=5)
+        start_and_wait_for_process(self.device_proc, timeout=30)
 
         # Create SharedObject to control RSDevice and fetch data
         self.so_joined = SharedObject(f"join_rs_{self.uid}")

@@ -42,7 +42,7 @@ class Visualizer:
                     stream_camera=stream_camera,
                 )
             )
-            start_and_wait_for_process(self.cv2vis_proc, timeout=5)
+            start_and_wait_for_process(self.cv2vis_proc, timeout=30)
 
             self.o3dvis_proc = ctx.Process(
                 target=O3DGUIVisualizer, name="O3DGUIVisualizer", args=(),
@@ -52,7 +52,7 @@ class Visualizer:
                     stream_robot=stream_robot,
                 )
             )
-            start_and_wait_for_process(self.o3dvis_proc, timeout=10)
+            start_and_wait_for_process(self.o3dvis_proc, timeout=30)
 
             # Create SharedObject to control visualizer and feed data
             self.so_cv2vis_joined = SharedObject("join_viscv2")

@@ -182,7 +182,7 @@ class XArmBaseEnv(gym.Env):
                 run_as_process=True,
             )
         )
-        start_and_wait_for_process(self.agent_proc, timeout=5)
+        start_and_wait_for_process(self.agent_proc, timeout=30)
 
         # Create SharedObject to control XArm7
         self.so_agent_joined = SharedObject("join_xarm7_real")
