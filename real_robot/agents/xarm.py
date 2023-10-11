@@ -107,7 +107,6 @@ class XArm7:
             self.reset()
 
     def __del__(self):
-        self.reset()
         self.arm.disconnect()
 
     def get_err_warn_code(self, show=False):
