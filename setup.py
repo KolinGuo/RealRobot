@@ -13,6 +13,7 @@ if __name__ == "__main__":
             'opencv-python', 'open3d', 'Pillow', 'scipy',  # for visualization
             'sapien'  # for sapien.core.Pose
         ],
+        package_dir={"": "real_robot"},
         package_data={"real_robot": ["assets/**"]},
         exclude_package_data={"": ["*.convex.stl"]},
     )
