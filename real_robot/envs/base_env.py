@@ -56,7 +56,7 @@ class XArmBaseEnv(gym.Env):
         :param control_mode: xArm control mode (determines set_action type)
         :param motion_mode: xArm motion mode (determines xArm motion mode)
         :param camera_cfgs: overrides camera configurations.
-                            E.g., {"fps": 60}  # sets all camera fps to 60
+                            E.g., {"config": (848, 480, 60)}  # sets all camera config
                             # sets front_camera depth sensor preset
                             {"front_camera": {"preset": "High Accuracy"}}
         :param render_camera_cfgs: overrides render camera configurations
@@ -211,8 +211,8 @@ class XArmBaseEnv(gym.Env):
             CameraConfig(
                 "front_camera", "146322072630",
                 CALIB_CAMERA_POSES["front_camera"],
-                848, 480, preset="High Accuracy",
-                depth_option_kwargs={rs.option.exposure: 1500},
+                config=(848, 480, 30), preset="High Accuracy",
+                # depth_option_kwargs={rs.option.exposure: 1500},
             ),
         ]
         return camera_configs

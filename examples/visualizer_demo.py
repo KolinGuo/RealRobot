@@ -102,7 +102,7 @@ if __name__ == "__main__":
     camera = Camera(CameraConfig(
         "front_camera", device_sn,
         CALIB_CAMERA_POSES["front_camera"],
-        848, 480, preset="High Accuracy",
+        (848, 480, 30), preset="High Accuracy",
     ))
 
     # demo_stream_obs()

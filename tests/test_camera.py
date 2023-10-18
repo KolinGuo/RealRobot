@@ -26,7 +26,7 @@ class TestCameraFPS:
         for width, height, fps in self._configs:
             camera_cfg = CameraConfig(
                 "front_camera", device_sn, Pose(),
-                width, height, fps, preset="High Accuracy",
+                (width, height, fps), preset="High Accuracy",
                 depth_option_kwargs={rs.option.exposure: 1500}
             )
             camera = Camera(camera_cfg)
@@ -34,7 +34,7 @@ class TestCameraFPS:
             n_iters = fps * 5
             start_time_ns = perf_counter_ns()
             for _ in range(n_iters):
-                while not camera.so_depth.modified:
+                while not camera.so_data_dict["depth"].modified:
                     pass
                 images = camera.get_images()
             elapsed_ns = perf_counter_ns() - start_time_ns
@@ -58,7 +58,7 @@ class TestCameraFPS:
         for width, height, fps in self._configs:
             camera_cfg = CameraConfig(
                 "front_camera", device_sn, Pose(),
-                width, height, fps, preset="High Accuracy",
+                (width, height, fps), preset="High Accuracy",
                 depth_option_kwargs={rs.option.exposure: 1500}
             )
             camera = Camera(camera_cfg, record_bag=True, bag_path="/tmp")
@@ -66,7 +66,7 @@ class TestCameraFPS:
             n_iters = fps * 5
             start_time_ns = perf_counter_ns()
             for _ in range(n_iters):
-                while not camera.so_depth.modified:
+                while not camera.so_data_dict["depth"].modified:
                     pass
                 images = camera.get_images()
             elapsed_ns = perf_counter_ns() - start_time_ns

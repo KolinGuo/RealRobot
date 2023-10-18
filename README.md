@@ -45,6 +45,7 @@ rosbag reindex <bag_path>
 * Enabled `XArm7` to run as a separate process (for streaming robot states)
 * Enabled `CV2Visualizer` and `O3DGUIVisualizer` to run as separate processes (for visualization)
 * Added a default `FileHandler` to all Logger created through `real_robot.utils.logger.get_logger`
+* Allow enabling selected camera streams from `RSDevice` and `sensors.camera.Camera`
 
 ### API changes
 * `real_robot.agents.xarm`
@@ -54,12 +55,11 @@ rosbag reindex <bag_path>
 * `real_robot.utils.visualization.visualizer`
   * Rename `Visualizer` method `show_observation()` => `show_obs()`
 * `real_robot.sensors.camera`
-  * `CameraConfig` now accepts an `fps` parameter
+  * `CameraConfig` now accepts a `config` parameter
   * Rename `CameraConfig` parameter `parent_pose_fn` => `parent_pose_so_name`
 * `real_robot.utils.realsense`
   * `RSDevice` now accepts `device_sn` instead of an `rs.device`
-  * `RSDevice` now accepts `color_config` and `depth_config` as parameters
-    (`width`, `height`, `fps`) instead of `rs.config`
+  * `RSDevice` now accepts `config` as parameter (`width`, `height`, `fps`) instead of `rs.config`
 
 ### Other changes
 * `real_robot.agents.xarm`

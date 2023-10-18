@@ -604,10 +604,9 @@ class XArm7:
             uid="hand_camera",
             device_sn="146322076186",
             pose=pose_tcp_cam,
-            width=848,
-            height=480,
+            config=(848, 480, 30),
             preset="High Accuracy",
-            depth_option_kwargs={rs.option.exposure: 1500},
+            # depth_option_kwargs={rs.option.exposure: 1500},
             parent_pose_so_name="xarm7_real_tcp_pose",
         )
 

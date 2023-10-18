@@ -1,5 +1,8 @@
+"""Interface for pyrealsense2 API"""
+import json
 from pathlib import Path
 from datetime import datetime
+from collections import defaultdict
 from typing import Dict, List, Tuple, Union, Optional
 
 import pyrealsense2 as rs
@@ -11,7 +14,18 @@ from .multiprocessing import SharedObject, signal_process_ready
 from .logger import get_logger
 
 
+# https://www.intelrealsense.com/compare-depth-cameras/
+SUPPORTED_RS_PRODUCTS = ("D415", "D435")
+
 RS_DEVICES = None  # {device_sn: rs.device}
+
+
+def check_rs_product_support(name: str) -> None:
+    """Check if the RealSense device is supported. Print warning otherwise"""
+    if name.split()[-1] not in SUPPORTED_RS_PRODUCTS:
+        get_logger("realsense.py").warning(
+            f'Only support {SUPPORTED_RS_PRODUCTS} currently, got "{name}"'
+        )
 
 
 def get_connected_rs_devices(
@@ -38,7 +52,7 @@ def get_connected_rs_devices(
                 get_logger("realsense.py").info(
                     f"Found {name} (S/N: {serial} FW: {fw_version} on USB {usb_type})"
                 )
-                assert "D435" in name, "Only support D435 currently"
+                check_rs_product_support(name)
                 RS_DEVICES[serial] = d
         get_logger("realsense.py").info(f"Found {len(RS_DEVICES)} devices")
 
@@ -51,7 +65,9 @@ def get_connected_rs_devices(
 
 
 class RSDevice:
-    """RealSense Device, only support D435 for now
+    """RealSense Device
+    Depth stream will be aligned to camera color frame and resolution
+        if Color stream is enabled.
 
     For best depth accuracy with D435,
         set preset="High Accuracy" and use (848, 480) depth resolution
@@ -61,23 +77,49 @@ class RSDevice:
     * https://dev.intelrealsense.com/docs/tuning-depth-cameras-for-best-performance
     """
 
-    def __init__(self, device_sn: str, uid: str = None,
-                 color_config=(848, 480, 30), depth_config=(848, 480, 30), *,
-                 preset="Default", color_option_kwargs={}, depth_option_kwargs={},
-                 record_bag_path=None, run_as_process=False,
-                 parent_pose_so_name: str = None, local_pose: Pose = pose_CV_ROS):
+    # Default format for camera streams, {stream_type: stream_format}
+    _default_stream_formats = {
+        rs.stream.color: rs.format.rgb8,
+        rs.stream.depth: rs.format.z16,
+        rs.stream.infrared: rs.format.y8,
+    }
+
+    def __init__(
+        self,
+        device_sn: str,
+        uid: str = None,
+        config: Union[Tuple[int], Dict[str, Union[int, Tuple[int]]]] = (848, 480, 30),
+        *,
+        preset: str = "Default",
+        color_option_kwargs={},
+        depth_option_kwargs={},
+        json_file: Optional[Union[str, Path]] = None,
+        record_bag_path: Optional[Union[str, Path]] = None,
+        run_as_process: bool = False,
+        parent_pose_so_name: Optional[str] = None,
+        local_pose: Pose = pose_CV_ROS
+    ):
         """
         :param device_sn: realsense device serial number
         :param uid: unique camera id, e.g. "hand_camera", "front_camera"
-        :param color_config: color sensor config, (width, height, fps)
-        :param depth_config: depth sensor config, (width, height, fps)
+        :param config: camera stream config, can be a tuple of (width, height, fps)
+                       or a dict with format {stream_type: (param1, param2, ...)}.
+                       If config is a tuple, enables color & depth streams with config.
+                       If config is a dict, enables streams given stream parameters.
+                       Possible stream parameters format:
+                           (width, height, fps) for video streams OR
+                           fps for motion_streams
+                       An example config dict:
+                       {"Color": (848, 480, 30), "Depth": (848, 480, 30),
+                        "Infrared 1": (848, 480, 30), "Acceleration": 250}
         :param preset: depth sensor preset, available options:
                        ["Custom", "Default", "Hand", "High Accuracy",
-                        "High Density", "Medium Density", "Remove Ir Pattern"].
+                        "High Density", "Medium Density"].
         :param color_option_kwargs: color sensor options kwargs.
                                     Available options see self.supported_color_options
         :param depth_option_kwargs: depth sensor options kwargs.
                                     Available options see self.supported_depth_options
+        :param json_file: path to a json file containing sensor configs
         :param record_bag_path: path to save bag recording if not None.
                                 Must end with ".bag" if it's a file
         :param run_as_process: whether to run RSDevice as a separate process.
@@ -89,6 +131,8 @@ class RSDevice:
             * "start_rs_<device_uid>": If True, starts the RSDevice; else, stops it.
             * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
             * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
+            * "rs_<device_uid>_infrared_1": Left IR image, [H, W] np.uint8 np.ndarray
+            * "rs_<device_uid>_infrared_2": Right IR image, [H, W] np.uint8 np.ndarray
             * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
             * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
                                       forward(x), left(y) and up(z), sapien.core.Pose
@@ -104,9 +148,15 @@ class RSDevice:
         self.name = self.device.get_info(rs.camera_info.name)
         self.serial_number = device_sn
         self.uid = device_sn if uid is None else uid.replace(' ', '_')
-        assert "D435" in self.name, f"Only support D435 currently, get {self!r}"
+        self.usb_type = self.device.get_info(rs.camera_info.usb_type_descriptor)
+        if self.usb_type != "3.2":
+            self.logger.warning(
+                f"Device {self!r} is connected with USB {self.usb_type}, not 3.2"
+            )
+        check_rs_product_support(self.name)
         self.color_sensor = self.device.first_color_sensor()
         self.depth_sensor = self.device.first_depth_sensor()
+        self._read_device_info()
         # Record to a rosbag file
         self.record_bag_path = None
         if record_bag_path is not None:
@@ -116,63 +166,169 @@ class RSDevice:
                 self.record_bag_path /= f"rs_{self.uid}_{timestamp}.bag"
             self.record_bag_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.config = self._create_rs_config(color_config, depth_config)
+        self.config = config
+        self.rs_config = self._create_rs_config(config)
         self.align = rs.align(rs.stream.color)
-        self.width, self.height = color_config[0], color_config[1]
 
         self.pipeline = None
         self.pipeline_profile = None
-        self.intrinsic_matrix = None
+        self.intrinsic_matrices = {}  # {stream_name: intrinsics}
         self.last_frame_num = None
 
-        self._load_depth_preset(preset)
-        self._set_sensor_options(color_option_kwargs, depth_option_kwargs)
+        self._configure_sensor_options(preset, color_option_kwargs, depth_option_kwargs,
+                                       json_file)
 
         if run_as_process:
             self.parent_pose_so_name = parent_pose_so_name
             self.local_pose = local_pose
             self.run_as_process()
 
-    def _create_rs_config(self, color_config: tuple, depth_config: tuple) -> rs.config:
-        config = rs.config()
-        if color_config is not None:
-            assert color_config in self.supported_color_configs, \
-                f"Not supported {color_config = }"
-            width, height, fps = color_config
-            config.enable_stream(rs.stream.color, width, height, rs.format.rgb8, fps)
-        if depth_config is not None:
-            assert depth_config in self.supported_depth_configs, \
-                f"Not supported {depth_config = }"
-            width, height, fps = depth_config
-            config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
+    def _read_device_info(self):
+        """Reads and stores useful device information
+
+        self.stream_name2type_idx: Mapping from stream name to stream type and index
+            {"Color": (rs.stream.color, 0),
+             "Infrared 1": (rs.stream.infrared, 1),  # Left IR
+             "Infrared 2": (rs.stream.infrared, 2),  # Right IR
+             "Depth": (rs.stream.depth, 0)}
+        self.supported_configs: Mapping from stream name to supported streaming configs
+            {"Color": [(848, 480, 60), ...],
+             "Depth": [(848, 480, 60), ...],
+             "Infrared 1": [(848, 480, 60), ...],
+             "Infrared 2": [(848, 480, 60), ...]}
+        self.all_intrinsics: Mapping from stream name to {stream_resolution: intrinsics}
+            {"Color": {"848x480": rs.intrinsics},
+             "Depth": {"848x480": rs.intrinsics},
+             "Infrared 1": {"848x480": rs.intrinsics},
+             "Infrared 2": {"848x480": rs.intrinsics}}
+        self.all_extrinsics: Mapping from "sensor1=>sensor2" to 4x4 extrinsic np.ndarray
+                "Color=>Depth" is the transformation from Color to Depth (T_depth_color)
+            {"Color=>Depth": np.ndarray,
+             "Depth=>Infrared 1": np.ndarray}
+        """
+        configs = defaultdict(list)
+        all_intrinsics = defaultdict(dict)
+        name2type_idx = {}
+        sensor_profiles = {}  # {"Color": rs.stream_profile}
+
+        for sensor in self.device.sensors:
+            for profile in sensor.profiles:
+                name = profile.stream_name()
+                stream_type = profile.stream_type()
+                stream_format = profile.format()
+                stream_idx = profile.stream_index()
+
+                if stream_type not in self._default_stream_formats:
+                    raise NotImplementedError(f"Unknown {stream_type=}")
+
+                # Not default format
+                if stream_format != self._default_stream_formats[stream_type]:
+                    continue
+
+                if profile.is_video_stream_profile():
+                    profile = profile.as_video_stream_profile()
+                    width, height = profile.width(), profile.height()
+                    configs[name].append((width, height, profile.fps()))
+                    all_intrinsics[name][f"{width}x{height}"] = profile.intrinsics
+                elif profile.is_motion_stream_profile():
+                    profile = profile.as_motion_stream_profile()
+                    configs[name].append(profile.fps())
+                    all_intrinsics[name] = profile.get_motion_intrinsics()
+                else:
+                    raise TypeError(f"Unknown stream {profile=}")
+                sensor_profiles[name] = profile
+                name2type_idx[name] = (stream_type, stream_idx)
+
+        all_extrinsics = {}
+        for sensor1 in sensor_profiles:
+            for sensor2 in sensor_profiles:
+                all_extrinsics[f"{sensor1}=>{sensor2}"] = self.rs_extr2np(
+                    sensor_profiles[sensor1].get_extrinsics_to(sensor_profiles[sensor2])
+                )
+
+        # {"Color": (rs.stream.color, 0), "Depth": (rs.stream.depth, 0)}
+        self.stream_name2type_idx = name2type_idx
+        # {"Color": [(848, 480, 60),]}
+        self.supported_configs = dict(configs)
+        # {"Color": {"848x480": rs.intrinsics}}
+        self.all_intrinsics = dict(all_intrinsics)
+        # {"Color=>Depth": np.ndarray}
+        # "Color=>Depth" is the transformation from Color to Depth, i.e., T_depth_color
+        self.all_extrinsics = all_extrinsics
+
+    def _create_rs_config(
+        self, config: Union[Tuple[int], Dict[str, Union[int, Tuple[int]]]]
+    ) -> rs.config:
+        """Create rs.config for rs.pipeline"""
+        rs_config = rs.config()
+        rs_config.enable_device(self.serial_number)
+
+        if isinstance(config, tuple):
+            assert config in self.supported_configs["Color"], \
+                f"Not supported {config=} for Color stream"
+            assert config in self.supported_configs["Depth"], \
+                f"Not supported {config=} for Depth stream"
+            width, height, fps = config
+            rs_config.enable_stream(rs.stream.color, width, height,
+                                    self._default_stream_formats[rs.stream.color], fps)
+            rs_config.enable_stream(rs.stream.depth, width, height,
+                                    self._default_stream_formats[rs.stream.depth], fps)
+            self.config = {"Color": config, "Depth": config}
+        else:
+            for stream_name, params in config.items():
+                assert stream_name in self.stream_name2type_idx, \
+                    (f"Unknown {stream_name=}. "
+                     f"Available: {list(self.stream_name2type_idx.keys())}")
+                stream_type, stream_idx = self.stream_name2type_idx[stream_name]
+                stream_format = self._default_stream_formats[stream_type]
+                if isinstance(params, tuple):
+                    width, height, fps = params
+                    rs_config.enable_stream(stream_type, stream_idx,
+                                            width, height, stream_format, fps)
+                else:
+                    fps = params
+                    rs_config.enable_stream(stream_type, stream_idx, stream_format, fps)
+
+        # warning about rs.align
+        if "Depth" in self.config and "Color" not in self.config:
+            self.logger.warning("Color stream is not enabled. "
+                                "Depth stream will not be aligned to Color frame")
+
         # Record camera streams as a rosbag file
         if self.record_bag_path is not None:
             self.logger.info(f'Enable recording {self!r} to file '
                              f'"{self.record_bag_path}"')
-            config.enable_record_to_file(str(self.record_bag_path))
-        return config
+            rs_config.enable_record_to_file(str(self.record_bag_path))
+        return rs_config
 
-    def _load_depth_preset(self, preset="Default"):
+    def _configure_sensor_options(
+        self,
+        preset="Default",
+        color_option_kwargs={},
+        depth_option_kwargs={},
+        json_file=None,
+    ) -> None:
+        """Configure sensor options (depth preset, color/depth sensor options, json)"""
+        # Load depth preset
         if preset not in (presets := self.supported_depth_presets):
-            raise ValueError(f"No preset named {preset}. "
-                             f"Available presets {presets}")
-
-        self.depth_sensor.set_option(rs.option.visual_preset,
-                                     presets.index(preset))
+            raise ValueError(f"Unknown {preset=}. Available presets: {presets}")
+        self.depth_sensor.set_option(rs.option.visual_preset, presets.index(preset))
         self.logger.info(f'Loaded "{preset}" preset for {self!r}')
 
-    def _set_sensor_options(self, color_option_kwargs, depth_option_kwargs):
+        # Set sensor options
         for key, value in color_option_kwargs.items():
             self.color_sensor.set_option(key, value)
-            self.logger.info(f'Setting Color "{key}" to {value}')
-
+            self.logger.info(f'Setting Color option "{key}" to {value}')
         for key, value in depth_option_kwargs.items():
             self.depth_sensor.set_option(key, value)
-            self.logger.info(f'Setting Depth "{key}" to {value}')
+            self.logger.info(f'Setting Depth option "{key}" to {value}')
 
-    def get_intrinsic_matrix(self) -> np.ndarray:
-        """Returns a 3x3 camera intrinsics matrix, available after self.start()"""
-        return self.intrinsic_matrix
+        # Load json config
+        if json_file is not None:
+            json_string = str(json.load(Path(json_file).open('r'))).replace("'", '"')
+            advanced_mode = rs.rs400_advanced_mode(self.device)
+            advanced_mode.load_json(json_string)
+            self.logger.info(f'Loaded json config from "{json_file}"')
 
     def start(self) -> bool:
         """Start the streaming pipeline"""
@@ -183,46 +339,58 @@ class RSDevice:
 
         self.pipeline = rs.pipeline()
 
-        self.config.enable_device(self.serial_number)
-        self.pipeline_profile = self.pipeline.start(self.config)
+        try:
+            self.pipeline_profile = self.pipeline.start(self.rs_config)
+            for _ in range(20):  # wait for white balance to stabilize
+                self.pipeline.wait_for_frames()
+        except RuntimeError as e:
+            e.args = (e.args[0] + f": {self.config=}",)
+            raise e
 
-        for _ in range(20):  # wait for white balance to stabilize
-            self.pipeline.wait_for_frames()
-
+        # Log enabled streams
         streams = self.pipeline_profile.get_streams()
         self.logger.info(f"Started device {self!r} with {len(streams)} streams")
         for i, stream in enumerate(streams):
             self.logger.info(f"Stream {i+1}: {stream}")
 
-        # with rs.align, camera intrinsics is color sensor intrinsics
-        stream_profile = self.pipeline_profile.get_stream(rs.stream.color)
-        intrinsics = stream_profile.as_video_stream_profile().intrinsics
-        self.intrinsic_matrix = np.array([[intrinsics.fx, 0, intrinsics.ppx],
-                                          [0, intrinsics.fy, intrinsics.ppy],
-                                          [0, 0, 1]])
+        # Stores camera intrinsics
+        frames = self.pipeline.wait_for_frames()
+        frames = self.align.process(frames)
+        for frame in frames:
+            profile = frame.profile
+            name = profile.stream_name()
+            if profile.is_video_stream_profile():
+                profile = profile.as_video_stream_profile()
+                self.intrinsic_matrices[name] = self.rs_intr2np(profile.intrinsics)
+            elif profile.is_motion_stream_profile():
+                # TODO: convert motion intrinsics to np.ndarray?
+                profile = profile.as_motion_stream_profile()
+                self.intrinsic_matrices[name] = profile.get_motion_intrinsics()
+            else:
+                raise TypeError(f"Unknown stream {profile=}")
         return True
 
-    def wait_for_frames(self) -> Tuple[np.ndarray, np.ndarray]:
+    def wait_for_frames(self) -> Dict[str, np.ndarray]:
         """Wait until a new set of frames becomes available.
         Each enabled stream in the pipeline is time-synchronized.
-        :return color_image: color image, [H, W, 3] np.uint8 array
-        :return depth_image: depth image, [H, W] np.uint16 array
+        :return ret_frames: dictionary {stream_name: np.ndarray}. Supported examples:
+                            "Color": color image, [H, W, 3] np.uint8 array
+                            "Depth": depth image, [H, W] np.uint16 array
+                            "Infrared 1/2": infrared image, [H, W] np.uint8 array
         """
-        assert self.pipeline is not None, f"Device {self!r} is not started"
+        if not self.is_running:
+            self.logger.error(f"Device {self!r} is not started")
+            return None
 
         frames = self.pipeline.wait_for_frames()
         frames = self.align.process(frames)
         self.last_frame_num = frames.get_frame_number()
         # self.logger.info(f"Received frame #{self.last_frame_num}")
 
-        color_frame = frames.get_color_frame()
-        depth_frame = frames.get_depth_frame()
-
         # Need to copy() so the device can release the frame from its internal memory
-        depth_image = np.asarray(depth_frame.data).copy()
-        color_image = np.asarray(color_frame.data).copy()
-
-        return color_image, depth_image
+        ret_frames = {frame.profile.stream_name(): np.asarray(frame.data).copy()
+                      for frame in frames}
+        return ret_frames
 
     def stop(self) -> bool:
         """Stop the streaming pipeline"""
@@ -233,7 +401,7 @@ class RSDevice:
         self.pipeline.stop()
         self.pipeline = None
         self.pipeline_profile = None
-        self.intrinsic_matrix = None
+        self.intrinsic_matrices = {}  # {stream_name: intrinsics}
         self.last_frame_num = None
         self.logger.info(f"Stopped device {self!r}")
         return True
@@ -248,15 +416,24 @@ class RSDevice:
         so_sync = SharedObject(f"sync_rs_{self.uid}")
         so_start = SharedObject(f"start_rs_{self.uid}", data=False)
         # data
-        so_color = SharedObject(
-            f"rs_{self.uid}_color",
-            data=np.zeros((self.height, self.width, 3), dtype=np.uint8)
-        )
-        so_depth = SharedObject(
-            f"rs_{self.uid}_depth",
-            data=np.zeros((self.height, self.width), dtype=np.uint16)
-        )
-        so_intr = SharedObject(f"rs_{self.uid}_intr", data=np.zeros((3, 3)))
+        so_data_dict = {}  # {stream_name: SharedObject}
+        for stream_name, params in self.config.items():
+            if isinstance(params, tuple):
+                W, H, _ = params
+                shape = (H, W, 3) if stream_name == "Color" else (H, W)
+                if stream_name == "Depth" and "Color" in self.config:  # rs.align
+                    shape = self.config["Color"][1::-1]  # (H, W)
+                dtype = np.uint16 if stream_name == "Depth" else np.uint8
+            else:
+                raise NotImplementedError(f"No support for {stream_name=} yet")
+
+            so_data_dict[stream_name] = SharedObject(
+                f"rs_{self.uid}_{stream_name.lower().replace(' ', '_')}",
+                data=np.zeros(shape, dtype=dtype)
+            )
+        if "Color" in so_data_dict or "Depth" in so_data_dict:  # intrinsics
+            so_data_dict["Intrinsics"] = SharedObject(f"rs_{self.uid}_intr",
+                                                      data=np.zeros((3, 3)))
         so_pose = SharedObject(f"rs_{self.uid}_pose", data=self.local_pose)
 
         if self.parent_pose_so_name is not None:
@@ -268,7 +445,8 @@ class RSDevice:
             start = so_start.fetch()
             if not device_started and start:
                 self.start()
-                so_intr.assign(self.intrinsic_matrix)
+                if "Intrinsics" in so_data_dict:
+                    so_data_dict["Intrinsics"].assign(self.get_intrinsic_matrix())
                 device_started = True
             elif device_started and not start:
                 self.stop()
@@ -282,18 +460,33 @@ class RSDevice:
                     so_pose.assign(so_parent_pose.fetch() * self.local_pose)
                 frames = self.align.process(frames)  # align depth image to color frame
 
-                so_color.assign(np.asarray(frames.get_color_frame().data))
-                so_depth.assign(np.asarray(frames.get_depth_frame().data))
+                # TODO: it's not guaranteed that the depth frame is assigned last,
+                # violating the assumption in visualizers
+                for frame in frames:
+                    so_data_dict[frame.profile.stream_name()].assign(
+                        np.asarray(frame.data)
+                    )
 
         self.logger.info(f"Process running {self!r} is joined")
         # Unlink created SharedObject
         so_joined.unlink()
         so_sync.unlink()
         so_start.unlink()
-        so_color.unlink()
-        so_depth.unlink()
-        so_intr.unlink()
         so_pose.unlink()
+        for so_data in so_data_dict.values():
+            so_data.unlink()
+
+    def get_intrinsic_matrix(self) -> Union[np.ndarray, Dict[str, np.ndarray]]:
+        """Returns a 3x3 camera intrinsics matrix, available after self.start()"""
+        if "Color" in self.intrinsic_matrices:
+            # with rs.align, camera intrinsics is color sensor intrinsics
+            return self.intrinsic_matrices["Color"]
+        elif "Depth" in self.intrinsic_matrices:
+            # If Color stream is not enabled,
+            #   rs.align will not align depth stream to color frame
+            return self.intrinsic_matrices["Depth"]
+        else:
+            return self.intrinsic_matrices
 
     @property
     def is_running(self) -> bool:
@@ -301,36 +494,13 @@ class RSDevice:
         return self.pipeline is not None
 
     @property
-    def supported_color_configs(self) -> List[Tuple[int]]:
-        """Return supported color configs as (width, height, fps)"""
-        configs = []
-        format = rs.format.rgb8
-        for profile in self.color_sensor.get_stream_profiles():
-            profile = profile.as_video_stream_profile()
-            if profile.format() == format:
-                configs.append((profile.width(), profile.height(), profile.fps()))
-        return configs
-
-    @property
-    def supported_depth_configs(self) -> List[Tuple[int]]:
-        """Return supported depth configs as (width, height, fps)"""
-        configs = []
-        format = rs.format.z16
-        for profile in self.depth_sensor.get_stream_profiles():
-            profile = profile.as_video_stream_profile()
-            if profile.format() == format:
-                configs.append((profile.width(), profile.height(), profile.fps()))
-        return configs
-
-    @property
     def supported_depth_presets(self) -> List[str]:
         presets = []
-        for i in range(10):
+        max_val = int(self.depth_sensor.get_option_range(rs.option.visual_preset).max)
+        for i in range(max_val+1):
             preset = self.depth_sensor.get_option_value_description(
                 rs.option.visual_preset, i
             )
-            if preset == "UNKNOWN":
-                break
             presets.append(preset)
         return presets
 
@@ -354,16 +524,37 @@ class RSDevice:
                 pass
         return options
 
+    @staticmethod
+    def rs_intr2np(intrinsics: rs.intrinsics) -> np.ndarray:
+        """Converts rs.intrinsics to 3x3 np.ndaray"""
+        intr = np.array([[intrinsics.fx, 0, intrinsics.ppx],
+                         [0, intrinsics.fy, intrinsics.ppy],
+                         [0, 0, 1]])
+        return intr
+
+    @staticmethod
+    def rs_extr2np(extrinsics: rs.extrinsics) -> np.ndarray:
+        """Converts rs.extrinsics to 4x4 np.ndaray"""
+        extr = np.eye(4)
+        extr[:3, :3] = np.asarray(extrinsics.rotation).reshape(3, 3).T
+        extr[:3, 3] = extrinsics.translation
+        return extr
+
     def __del__(self):
         self.stop()
 
     def __repr__(self):
-        return (f"<{self.__class__.__name__}: "
-                f"{self.name if self.uid == self.serial_number else self.uid} "
-                f"(S/N: {self.serial_number})>")
+        if self.uid == self.serial_number:
+            return (f"<{self.__class__.__name__}: {self.name} "
+                    f"(S/N: {self.serial_number})>")
+        else:
+            return (f"<{self.__class__.__name__}: {self.uid} "
+                    f"({self.name}, S/N: {self.serial_number})>")
 
 
 class RealSenseAPI:
+    """This API should only be used for testing, use sensors.Camera instead"""
+
     def __init__(self, **kwargs):
         self.logger = get_logger("RealSenseAPI")
 
@@ -393,27 +584,23 @@ class RealSenseAPI:
             device.start()
             self._enabled_devices.append(device)
 
-    def capture(self):
+    def capture(self) -> Union[Dict[str, np.ndarray], List[Dict[str, np.ndarray]]]:
         """Capture data from all _enabled_devices.
-        If n_cam == 1, first dimension is squeezed.
-        :return color_image: color image, [n_cam, H, W, 3] np.uint8 array
-        :return depth_image: depth image, [n_cam, H, W] np.uint16 array
+
+        :return frame_dicts: list of frame_dict, {stream_name: np.ndarray}.
+                             Supported examples:
+                             "Color": color image, [H, W, 3] np.uint8 array
+                             "Depth": depth image, [H, W] np.uint16 array
+                             "Infrared 1/2": infrared image, [H, W] np.uint8 array
         """
-        color_images = []
-        depth_images = []
+        frame_dicts = []
         for device in self._enabled_devices:
-            color_image, depth_image = device.wait_for_frames()
-            color_images.append(color_image)
-            depth_images.append(depth_image)
+            frame_dict = device.wait_for_frames()
+            frame_dicts.append(frame_dict)
 
         if len(self._enabled_devices) == 1:
-            color_images = color_images[0]
-            depth_images = depth_images[0]
-        else:
-            color_images = np.stack(color_images)
-            depth_images = np.stack(depth_images)
-
-        return color_images, depth_images
+            frame_dicts = frame_dicts[0]
+        return frame_dicts
 
     def disable_all_devices(self):
         for i in range(len(self._enabled_devices)):

@@ -1,6 +1,6 @@
 from pathlib import Path
 from collections import OrderedDict
-from typing import Dict, Union, Any, Optional
+from typing import Dict, Union, Tuple, Any, Optional
 
 import numpy as np
 from sapien.core import Pose
@@ -25,12 +25,12 @@ class CameraConfig:
         uid: str,
         device_sn: str,
         pose: Pose = pose_CV_ROS,
-        width: int = 848,
-        height: int = 480,
-        fps: int = 30, *,
-        preset="Default",
-        depth_option_kwargs={},
+        config: Union[Tuple[int], Dict[str, Union[int, Tuple[int]]]] = (848, 480, 30),
+        *,
+        preset: str = "Default",
         color_option_kwargs={},
+        depth_option_kwargs={},
+        json_file: Optional[Union[str, Path]] = None,
         parent_pose_so_name: Optional[str] = None,
     ):
         """Camera configuration.
@@ -41,12 +41,20 @@ class CameraConfig:
                      Format is forward(x), left(y) and up(z)
                      If parent_pose_so_name is not None, this is pose relative to
                      parent link.
-        :param width: width of the camera
-        :param height: height of the camera
-        :param fps: camera streaming fps
+        :param config: camera stream config, can be a tuple of (width, height, fps)
+                       or a dict with format {stream_type: (param1, param2, ...)}.
+                       If config is a tuple, enables color & depth streams with config.
+                       If config is a dict, enables streams given stream parameters.
+                       Possible stream parameters format:
+                           (width, height, fps) for video streams OR
+                           fps for motion_streams
+                       An example config dict:
+                       {"Color": (848, 480, 30), "Depth": (848, 480, 30),
+                        "Infrared 1": (848, 480, 30), "Acceleration": 250}
         :param preset: depth sensor presets
-        :param depth_option_kwargs: depth sensor optional keywords
         :param color_option_kwargs: color sensor optional keywords
+        :param depth_option_kwargs: depth sensor optional keywords
+        :param json_file: path to a json file containing sensor configs
         :param parent_pose_so_name: SharedObject name of camera's parent link pose
                                     in world frame. Defaults to None (camera has no
                                     mounting parent link).
@@ -54,13 +62,12 @@ class CameraConfig:
         self.uid = uid
         self.device_sn = device_sn
         self.pose = pose
-        self.width = width
-        self.height = height
-        self.fps = fps
+        self.config = config
 
         self.preset = preset
-        self.depth_option_kwargs = depth_option_kwargs
         self.color_option_kwargs = color_option_kwargs
+        self.depth_option_kwargs = depth_option_kwargs
+        self.json_file = json_file
         self.parent_pose_so_name = parent_pose_so_name
 
     def __repr__(self) -> str:
@@ -103,7 +110,15 @@ def update_camera_cfgs_from_dict(camera_cfgs: Dict[str, CameraConfig],
 class Camera:
     """Wrapper for RealSense camera (RSDevice)"""
 
-    def __init__(self, camera_cfg: CameraConfig, *, record_bag_path=None):
+    _stream_name2obs_key = {
+        "Color": "rgb",
+        "Depth": "depth",
+        "Infrared 1": "ir_l",
+        "Infrared 2": "ir_r",
+    }
+
+    def __init__(self, camera_cfg: CameraConfig, *,
+                 record_bag_path: Optional[Union[str, Path]] = None):
         """
         :param record_bag_path: path to save bag recording if not None.
                                 Must end with ".bag" if it's a file
@@ -112,23 +127,23 @@ class Camera:
         self.uid = camera_cfg.uid
         self.device_sn = camera_cfg.device_sn
         self.local_pose = camera_cfg.pose
-        self.width = camera_cfg.width
-        self.height = camera_cfg.height
-        self.fps = camera_cfg.fps
+        self.config = camera_cfg.config
+        if isinstance(self.config, tuple):
+            self.config = {"Color": self.config, "Depth": self.config}
+        self.config = dict(sorted(self.config.items()))  # sort config by stream_name
         self.parent_pose_so_name = camera_cfg.parent_pose_so_name
 
         self.record_bag_path = record_bag_path
 
-        config = (self.width, self.height, self.fps)
         self.device_proc = ctx.Process(
             target=RSDevice, name=f"RSDevice_{self.uid}",
             args=(self.device_sn, self.uid),
             kwargs=dict(
-                color_config=config,
-                depth_config=config,
+                config=self.config,
                 preset=camera_cfg.preset,
                 color_option_kwargs=camera_cfg.color_option_kwargs,
                 depth_option_kwargs=camera_cfg.depth_option_kwargs,
+                json_file=camera_cfg.json_file,
                 record_bag_path=record_bag_path,
                 run_as_process=True,
                 parent_pose_so_name=self.parent_pose_so_name,
@@ -141,18 +156,26 @@ class Camera:
         self.so_joined = SharedObject(f"join_rs_{self.uid}")
         self.so_sync = SharedObject(f"sync_rs_{self.uid}")
         self.so_start = SharedObject(f"start_rs_{self.uid}")
-        self.so_color = SharedObject(f"rs_{self.uid}_color")
-        self.so_depth = SharedObject(f"rs_{self.uid}_depth")
-        self.so_intr = SharedObject(f"rs_{self.uid}_intr")
+        self.so_data_dict = {}  # {obs_key: SharedObject}
+        for stream_name in self.config:
+            self.so_data_dict[self._stream_name2obs_key[stream_name]] = SharedObject(
+                f"rs_{self.uid}_{stream_name.lower().replace(' ', '_')}"
+            )
+        self.so_intr = None
+        if "rgb" in self.so_data_dict or "depth" in self.so_data_dict:  # intrinsics
+            self.so_intr = SharedObject(f"rs_{self.uid}_intr")
         self.so_pose = SharedObject(f"rs_{self.uid}_pose")
 
         self.so_start.assign(True)  # start the RSDevice
-        # Wait for intrinsic matrix
-        while not self.so_intr.modified:
-            pass
-        self.intrinsic_matrix = self.so_intr.fetch()
+        self.intrinsic_matrix = None
+        if self.so_intr is not None:
+            # Wait for intrinsic matrix
+            while not self.so_intr.modified:
+                pass
+            self.intrinsic_matrix = self.so_intr.fetch()
 
-        self.camera_buffer = None  # (pose, rgb, depth) for self.take_picture()
+        self._camera_buffer = {}  # {obs_key: np.ndarray} for self.take_picture()
+        self._camera_pose = self.so_pose.fetch()
 
     def take_picture(self):
         """Fetch images and camera pose from the camera"""
@@ -161,24 +184,25 @@ class Camera:
         # Trigger camera capture in other processes
         self.so_sync.trigger()
 
-        self.camera_buffer = (
-            self.so_pose.fetch(),
-            self.so_color.fetch(),
-            self.so_depth.fetch(lambda d: d[..., None].astype(np.float32)) / 1000.0
-        )
+        for obs_key, so_data in self.so_data_dict.items():
+            if obs_key == "depth":
+                self._camera_buffer["depth"] = so_data.fetch(
+                    lambda d: d[..., None].astype(np.float32)
+                ) / 1000.0
+            else:
+                self._camera_buffer[obs_key] = so_data.fetch()
+        self._camera_pose = self.so_pose.fetch()
 
     def get_images(self, take_picture=False) -> Dict[str, np.ndarray]:
         """Get (raw) images from the camera. Takes ~300 us for 848x480 @ 60fps
         :return rgb: color image, [H, W, 3] np.uint8 array
         :return depth: depth image, [H, W, 1] np.float32 array
+        :return ir_l: left IR image, [H, W] np.uint8 array
+        :return ir_r: right IR image, [H, W] np.uint8 array
         """
         if take_picture:
             self.take_picture()
-
-        return {
-            "rgb": self.camera_buffer[1],
-            "depth": self.camera_buffer[2],
-        }
+        return self._camera_buffer
 
     @property
     def pose(self) -> Pose:
@@ -212,7 +236,7 @@ class Camera:
 
     def get_params(self):
         """Get camera parameters."""
-        pose = self.camera_buffer[0]
+        pose = self._camera_pose
         return dict(
             extrinsic_cv=self.get_extrinsic_matrix(pose),
             cam2world_cv=self.get_model_matrix(pose),
@@ -221,15 +245,24 @@ class Camera:
 
     @property
     def observation_space(self) -> spaces.Dict:
-        height, width = self.height, self.width
-        obs_spaces = OrderedDict(
-            rgb=spaces.Box(
-                low=0, high=255, shape=(height, width, 3), dtype=np.uint8
-            ),
-            depth=spaces.Box(
-                low=0, high=np.inf, shape=(height, width, 1), dtype=np.float32
-            ),
-        )
+        obs_spaces = OrderedDict()
+        for stream_name, params in self.config.items():
+            if isinstance(params, tuple):
+                W, H, _ = params
+                if stream_name == "Color":
+                    shape = (H, W, 3)
+                elif stream_name == "Depth":
+                    shape = (self.config["Color"][1::-1] + (1,)
+                             if "Color" in self.config else (H, W, 1))
+                else:
+                    shape = (H, W)
+                dtype = np.float32 if stream_name == "Depth" else np.uint8
+                obs_spaces[self._stream_name2obs_key[stream_name]] = spaces.Box(
+                    low=0, high=255 if dtype == np.uint8 else np.inf,
+                    shape=shape, dtype=dtype
+                )
+            else:
+                raise NotImplementedError(f"No support for {stream_name=} yet")
         return spaces.Dict(obs_spaces)
 
     def __del__(self):
@@ -238,4 +271,4 @@ class Camera:
 
     def __repr__(self):
         return (f"<{self.__class__.__name__}: {self.uid} (S/N: {self.device_sn}) "
-                f"{self.width}x{self.height} @ {self.fps}fps>")
+                f"config={self.config}>")
