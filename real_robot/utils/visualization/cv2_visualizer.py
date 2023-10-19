@@ -56,7 +56,7 @@ class CV2Visualizer:
     @staticmethod
     def preprocess_image(image: np.ndarray, depth_scale=1000.0) -> np.ndarray:
         """Preprocess image for plotting with cv2 (RGB2BGR, applyColorMap for depth)
-        :param image: depth or RGB color image
+        :param image: depth, grayscale or RGB color image
         :param depth_scale: used to apply color map on np.floating depth_image
         :return image: color image in BGR format, [H, W, 3] np.uint8 np.ndarray
         """
@@ -65,13 +65,15 @@ class CV2Visualizer:
         dtype = image.dtype
         if ndim == 3 and channels == 3 and dtype == np.uint8:  # rgb
             return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        elif ndim == 2 or (ndim == 3 and channels == 1):  # depth
+        elif ndim == 2 or (ndim == 3 and channels == 1):  # depth or grayscale
             # Depth image colormap is taken from
             # https://github.com/IntelRealSense/librealsense/blob/8ffb17b027e100c2a14fa21f01f97a1921ec1e1b/wrappers/python/examples/opencv_viewer_example.py#L56
             if dtype == np.uint16:
                 alpha = 0.03
             elif np.issubdtype(dtype, np.floating):
                 alpha = 0.03 * depth_scale
+            elif dtype == np.uint8:
+                return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
             else:
                 raise TypeError(f"Unknown depth image dtype: {dtype}")
             return cv2.applyColorMap(
@@ -175,8 +177,10 @@ class CV2Visualizer:
             return [
                 p for p in all_so_names
                 if p.startswith(("rs_", "vis_", "viscv2_"))
-                and p.endswith(("_color", "_depth", "_mask"))
+                and p.endswith(("_color", "_depth", "_infrared_1", "_infrared_2",
+                                "_mask"))
             ]
+        rs_so_name_suffix = ("_color", "_depth", "_infrared_1", "_infrared_2")
 
         signal_process_ready()  # current process is ready
 
@@ -197,7 +201,7 @@ class CV2Visualizer:
             if self.stream_camera:  # capture whenever a new frame comes in
                 updated = False
                 for so_data_name in [p for p in all_so_names if p.startswith("rs_")
-                                     and p.endswith(("_color", "_depth"))]:
+                                     and p.endswith(rs_so_name_suffix)]:
                     if (so_data := so_dict[so_data_name]).modified:
                         vis_data[so_data_name] = so_data.fetch()
                         updated = True
@@ -214,10 +218,10 @@ class CV2Visualizer:
                 # for each camera sync, check if capture is triggered
                 for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
                     if so_dict[so_name].triggered:
-                        if (so_data_name := f"{so_name[5:]}_color") in all_so_names:
-                            vis_data[so_data_name] = so_dict[so_data_name].fetch()
-                        if (so_data_name := f"{so_name[5:]}_depth") in all_so_names:
-                            vis_data[so_data_name] = so_dict[so_data_name].fetch()
+                        for so_data_name in [f"{so_name[5:]}{suffix}"
+                                             for suffix in rs_so_name_suffix]:
+                            if so_data_name in all_so_names:
+                                vis_data[so_data_name] = so_dict[so_data_name].fetch()
 
             # ----- Fetch data and draw ----- #
             if so_draw.triggered:  # triggers redraw
@@ -232,8 +236,8 @@ class CV2Visualizer:
                         else:
                             vis_data[so_data_name] = color_image = image \
                                 = so_dict[so_data_name].fetch()
-                    elif (so_data_name.endswith("_depth") and
-                          so_data_name.startswith("rs_")):
+                    elif (so_data_name.startswith("rs_") and
+                          not so_data_name.endswith("_mask")):
                         image = vis_data[so_data_name]
                     else:
                         vis_data[so_data_name] = image = so_dict[so_data_name].fetch()
