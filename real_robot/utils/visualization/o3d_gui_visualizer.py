@@ -1603,7 +1603,7 @@ class O3DGUIVisualizer:
                 pcd.colors = Vector3dVector(pts_color)
             pcd.points = Vector3dVector(depth2xyz(depth_image, K).reshape(-1, 3))
             pcd.transform(T_world_camROS @ T_ROS_CV)
-            self.add_camera(camera_name, *depth_image.shape[::-1], K,
+            self.add_camera(camera_name, *depth_image.shape[1::-1], K,
                             T_world_camROS, fmt="ROS")
 
         def init_urdf_geometries(robot_name: str, *, urdf_so_name: str = None):
@@ -1742,7 +1742,7 @@ class O3DGUIVisualizer:
                             depth_image, K,
                             1000.0 if depth_image.dtype == np.uint16 else 1.0
                         ).reshape(-1, 3))
-                        self.add_camera(camera_name, *depth_image.shape[::-1], K)
+                        self.add_camera(camera_name, *depth_image.shape[1::-1], K)
                         redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "pose":  # object / camera pose
                         T = so_dict[so_data_name].fetch().to_transformation_matrix()
