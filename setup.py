@@ -8,12 +8,15 @@ if __name__ == "__main__":
         description="Real Robot xArm7",
         python_requires=">=3.8",
         install_requires=[
-            'xarm', 'pyrealsense2', 'numpy', 'gym', 'transforms3d',
+            'pyrealsense2', 'numpy', 'gym', 'transforms3d',
             'urchin',  # loading URDF
             'opencv-python', 'open3d', 'Pillow', 'scipy',  # for visualization
             'sapien'  # for sapien.core.Pose
         ],
-        package_dir={"": "real_robot"},
+        package_dir={
+            "real_robot": "real_robot",
+            "xarm": "3rd_party/xArm-Python-SDK/xarm"
+        },
         package_data={"real_robot": ["assets/**"]},
         exclude_package_data={"": ["*.convex.stl"]},
     )

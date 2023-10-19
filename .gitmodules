@@ -1,4 +1,4 @@
 [submodule "xArm-Python-SDK"]
-	path = xArm-Python-SDK
-	url = git@github.com:KolinGuo/xArm-Python-SDK.git
+	path = 3rd_party/xArm-Python-SDK
+	url = https://github.com/KolinGuo/xArm-Python-SDK.git
 	branch = custom
