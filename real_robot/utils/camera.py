@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 import numpy as np
 import cv2
 from sapien.core import Pose
@@ -121,3 +121,34 @@ def resize_obs_image(rgb_image, depth_image, intr_params: Tuple, new_size,
     rgb_image = cv2.resize(rgb_image, new_size, interpolation=interpolation)
     depth_image = cv2.resize(depth_image, new_size, interpolation=interpolation)
     return rgb_image, depth_image, intr_params
+
+
+def register_depth(
+    depth_unaligned: np.ndarray,
+    k_depth: np.ndarray,
+    k_color: np.ndarray,
+    T_color_depth: np.ndarray,
+    color_im_size: Tuple[int],
+    dist_color: Optional[np.ndarray] = None,
+    depth_dilation: bool = False
+) -> np.ndarray:
+    """Register depth to color frame (a.k.a., align_depth_to_color)
+    This will align depth image to color frame (intrinsics, extrinsics, and resolution)
+
+    :param depth_unaligned: unaligned depth image.
+                            [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
+    :param k_depth: depth camera intrinsic matrix, [3, 3] np.floating np.ndarray
+    :param k_color: color camera intrinsic matrix, [3, 3] np.floating np.ndarray
+    :param T_color_depth: extrinsics from depth camera to color camera, following
+                          OpenCV frame convention. [4, 4] np.floating np.ndarray
+    :param color_im_size: color image size, (width, height)
+    :param dist_color: color camera distortion coefficients, [5,] np.floating np.ndarray
+    :param depth_dilation: whether to dilate depth to avoid holes and occlusion errors.
+    :return depth: aligned depth image, [H, W] np.uint16/np.floating np.ndarray
+    """
+    depth = cv2.rgbd.registerDepth(
+        k_depth, k_color, dist_color, T_color_depth, depth_unaligned,
+        color_im_size, depthDilation=depth_dilation
+    )
+    depth[np.isnan(depth) | np.isinf(depth) | (depth < 0)] = 0.0
+    return depth
