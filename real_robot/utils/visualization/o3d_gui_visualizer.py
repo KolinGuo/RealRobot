@@ -261,7 +261,10 @@ class GeometryNode:
         """Returns the display name in geometries_panel"""
         # self.parent can be root node
         if self.parent is not None and self.parent.parent is not None:
-            return self.name.removeprefix(self.parent.name + '/')
+            # NOTE: removeprefix is not in python3.8
+            # return self.name.removeprefix(self.parent.name + '/')
+            return self.name[len(prefix):] if self.name.startswith(
+                (prefix := self.parent.name + '/')) else self.name
         return self.name
 
     def __repr__(self) -> str:
