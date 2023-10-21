@@ -1732,7 +1732,7 @@ class O3DGUIVisualizer:
                         redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "depth":  # camera capture
                         camera_name = data_uid
-                        data_prefix = f"{data_source}_{camera_name}"
+                        data_prefix = f"{data_source}_{camera_name}".replace('/', '|')
                         data_uid = f"{camera_name}/captured_pcd"
 
                         K = so_dict[f"{data_prefix}_intr"].fetch()
