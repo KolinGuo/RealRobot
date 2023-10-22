@@ -183,7 +183,7 @@ class RSDevice:
             self.local_pose = local_pose
             self.run_as_process()
 
-    def _read_device_info(self):
+    def _read_device_info(self) -> None:
         """Reads and stores useful device information
 
         self.stream_name2type_idx: Mapping from stream name to stream type and index
@@ -539,6 +539,127 @@ class RSDevice:
         extr[:3, :3] = np.asarray(extrinsics.rotation).reshape(3, 3).T
         extr[:3, 3] = extrinsics.translation
         return extr
+
+    def print_device_info(self) -> None:
+        """Print device information (similar to running `rs-enumerate-devices -c`)
+        This includes:
+            supported_configs, all_intrinsics, all_extrinsics
+
+        Only prints information with self._default_stream_formats
+        """
+        tab = "    "
+
+        # ----- Device Info ----- #
+        firmware_version = self.device.get_info(rs.camera_info.firmware_version)
+        rec_fw_ver = self.device.get_info(rs.camera_info.recommended_firmware_version)
+        physical_port = self.device.get_info(rs.camera_info.physical_port)
+        debug_op_code = self.device.get_info(rs.camera_info.debug_op_code)
+        advanced_mode = self.device.get_info(rs.camera_info.advanced_mode)
+        product_id = self.device.get_info(rs.camera_info.product_id)
+        camera_locked = self.device.get_info(rs.camera_info.camera_locked)
+        product_line = self.device.get_info(rs.camera_info.product_line)
+        asic_serial_number = self.device.get_info(rs.camera_info.asic_serial_number)
+        firmware_update_id = self.device.get_info(rs.camera_info.firmware_update_id)
+        device_info = (
+            f"Device info:\n"
+            f"{tab}Name                          : {tab}{self.name}\n"
+            f"{tab}Serial Number                 : {tab}{self.serial_number}\n"
+            f"{tab}Firmware Version              : {tab}{firmware_version}\n"
+            f"{tab}Recommended Firmware Version  : {tab}{rec_fw_ver}\n"
+            f"{tab}Physical Port                 : {tab}{physical_port}\n"
+            f"{tab}Debug Op Code                 : {tab}{debug_op_code}\n"
+            f"{tab}Advanced Mode                 : {tab}{advanced_mode}\n"
+            f"{tab}Product Id                    : {tab}{product_id}\n"
+            f"{tab}Camera Locked                 : {tab}{camera_locked}\n"
+            f"{tab}Usb Type Descriptor           : {tab}{self.usb_type}\n"
+            f"{tab}Product Line                  : {tab}{product_line}\n"
+            f"{tab}Asic Serial Number            : {tab}{asic_serial_number}\n"
+            f"{tab}Firmware Update Id            : {tab}{firmware_update_id}\n"
+        )
+
+        # ----- Stream Profiles ----- #
+        stream_profiles = ""
+        for stream_name, params in self.supported_configs.items():
+            n_space_after_stream = len(stream_name) + len(tab) - len("stream")
+            # default format
+            format = str(self._default_stream_formats[
+                self.stream_name2type_idx[stream_name][0]
+            ])[7:].upper()
+
+            stream_profiles += (
+                f"Stream Profiles supported by {stream_name=}\n"
+                f"{tab}stream{' '*n_space_after_stream}resolution"
+                "      fps       format\n"
+            )
+            if isinstance(params[0], tuple):  # video streams, params: [(w, h, fps),]
+                stream_profiles += '\n'.join([
+                    f"{tab}{stream_name}{tab} {width}x{height}"
+                    f"{' '*(len('resolution')-2-len(str(width))-len(str(height)))}"
+                    f"     @ {fps}Hz{' '*(7-len(str(fps)))}{format}"
+                    for (width, height, fps) in params
+                ])
+            else:  # motion streams, params: [fps,]
+                raise NotImplementedError(f"Not implemented for {stream_name=}")
+            stream_profiles += "\n\n"
+
+        # ----- Intrinsic Parameters ----- #
+        intrinsics = "Intrinsic Parameters:\n"
+        for stream_name, intr_dict in self.all_intrinsics.items():
+            # default format
+            format = str(self._default_stream_formats[
+                self.stream_name2type_idx[stream_name][0]
+            ])[7:].upper()
+
+            for stream_cfg, intr in intr_dict.items():
+                intrinsics += (
+                    f' Intrinsic of "{stream_name}" / {stream_cfg} / {{{format}}}\n'
+                )
+
+                if isinstance(intr, rs.intrinsics):  # video streams, rs.intrinsics
+                    dist_model_str = str(intr.model)[11:].replace('_', ' ').title()
+                    fovx = np.rad2deg(2 * np.arctan2(intr.width / 2, intr.fx))
+                    fovy = np.rad2deg(2 * np.arctan2(intr.height / 2, intr.fy))
+                    fovd = np.rad2deg(2 * np.arctan2(
+                        np.sqrt(intr.width**2+intr.height**2), intr.fx+intr.fy
+                    ))
+                    intr_mat_str = np.array2string(self.rs_intr2np(intr), precision=20,
+                                                   suppress_small=True, separator=', ',
+                                                   prefix='    np.array(')
+                    intrinsics += (
+                        f"  Width:        {intr.width}\n"
+                        f"  Height:       {intr.height}\n"
+                        f"  PPX:          {intr.ppx}\n"
+                        f"  PPY:          {intr.ppy}\n"
+                        f"  Fx:           {intr.fx}\n"
+                        f"  Fy:           {intr.fy}\n"
+                        f"  Distortion:   {dist_model_str}\n"
+                        f"  Coeffs:       {intr.coeffs}\n"
+                        f"  FOV (deg):    {fovx:.4f} x {fovy:.4f} ({fovd:.4f})\n"
+                        f"  Intrinsic mat:\n    np.array({intr_mat_str})\n\n"
+                    )
+                else:  # motion streams, rs.motion_device_intrinsic
+                    raise NotImplementedError(f"Not implemented for {stream_name=}")
+
+        # ----- Extrinsic Parameters ----- #
+        extrinsics = "Extrinsic Parameters:\n"
+        for extr_name, extr_mat in self.all_extrinsics.items():
+            sensor1, sensor2 = extr_name.split("=>")
+            sensor1_lower = sensor1.replace(' ', '').lower()
+            sensor2_lower = sensor2.replace(' ', '').lower()
+            extr_mat_str = np.array2string(extr_mat, max_line_width=200, precision=20,
+                                           suppress_small=True, separator=', ',
+                                           prefix='    np.array(')
+
+            extrinsics += (
+                f' Extrinsic from "{sensor1}"    To     "{sensor2}" '
+                f'(T_{sensor2_lower}_{sensor1_lower}):\n'
+                f'    np.array({extr_mat_str})\n\n'
+            )
+
+        print(device_info)
+        print(stream_profiles)
+        print(intrinsics)
+        print(extrinsics)
 
     def __del__(self):
         self.stop()
