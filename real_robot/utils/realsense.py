@@ -617,11 +617,15 @@ class RSDevice:
 
                 if isinstance(intr, rs.intrinsics):  # video streams, rs.intrinsics
                     dist_model_str = str(intr.model)[11:].replace('_', ' ').title()
-                    fovx = np.rad2deg(2 * np.arctan2(intr.width / 2, intr.fx))
-                    fovy = np.rad2deg(2 * np.arctan2(intr.height / 2, intr.fy))
+                    fovx = np.rad2deg(np.arctan2(intr.ppx+0.5, intr.fx) +
+                                      np.arctan2(intr.width - (intr.ppx+0.5), intr.fx))
+                    fovy = np.rad2deg(np.arctan2(intr.ppy+0.5, intr.fy) +
+                                      np.arctan2(intr.height - (intr.ppy+0.5), intr.fy))
+                    alpha = intr.fy / intr.fx
                     fovd = np.rad2deg(2 * np.arctan2(
-                        np.sqrt(intr.width**2+intr.height**2), intr.fx+intr.fy
+                        np.sqrt(intr.width**2+(intr.height/alpha)**2) / 2, intr.fx
                     ))
+
                     intr_mat_str = np.array2string(self.rs_intr2np(intr), precision=20,
                                                    suppress_small=True, separator=', ',
                                                    prefix='    np.array(')
