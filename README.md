@@ -16,6 +16,18 @@ python3 -m pip install -U git+https://github.com/KolinGuo/RealRobot.git
 Calibrated camera poses are stored in [real_robot/assets/hec_camera_poses/](real_robot/assets/hec_camera_poses) and
 loaded in [real_robot/sensors/camera.py](real_robot/sensors/camera.py).
 
+## Helpful Tools
+
+* Get detailed device information of connected RealSense device
+  (*e.g.*, supported stream configs, sensor intrinsics, extrinsics between sensors), do
+  ```bash
+  python3 -m real_robot.tools.enumerate_rs_devices > info.log
+  ```
+* Convert recorded ROS bag file and save rgb & depth images into .npz, do
+  ```bash
+  python3 -m real_robot.tools.convert_rosbag_to_frames <bag_path>
+  ```
+
 ## Notes
 
 To fix an unindexed rosbag recorded from `RSDevice`, do
