@@ -57,6 +57,7 @@ rosbag reindex <bag_path>
 * Enabled `CV2Visualizer` and `O3DGUIVisualizer` to run as separate processes (for visualization)
 * Added a default `FileHandler` to all Logger created through `real_robot.utils.logger.get_logger`
 * Allow enabling selected camera streams from `RSDevice` and `sensors.camera.Camera`
+* Added `sensors.simsense_depth.SimsenseDepth` class to generate depth image from stereo IR images
 
 ### API changes
 * `real_robot.agents.xarm`
