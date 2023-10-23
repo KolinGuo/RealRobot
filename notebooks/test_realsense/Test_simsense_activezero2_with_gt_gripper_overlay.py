@@ -4,12 +4,13 @@ import numpy as np
 import torch
 import sapien.core as sapien
 from sapien.core import Pose
+from matplotlib import pyplot as plt
 
 from real_robot.utils.visualization import Visualizer
 from real_robot.sensors.simsense_depth import SimsenseDepth
 from active_zero2.models.cgi_stereo.cgi_stereo import CGI_Stereo
 
-def create_gripper_scene(img_width, img_height, intrinsics, render_downsample_factor=1.0):
+def create_robot_scene(img_width, img_height, intrinsics, render_downsample_factor=1.0):
     engine = sapien.Engine()
     renderer = sapien.SapienRenderer()
     engine.set_renderer(renderer)
@@ -21,18 +22,18 @@ def create_gripper_scene(img_width, img_height, intrinsics, render_downsample_fa
     # Load URDF
     loader: sapien.URDFLoader = scene.create_urdf_loader()
     loader.fix_root_link = True
-    gripper_actor: sapien.Articulation = loader.load(
-        "/home/xuanlin/kolin_maniskill2/rl_benchmark/real_robot/real_robot/assets/descriptions/xarm_floating_pris_finger_d435.urdf"
+    robot_actor: sapien.Articulation = loader.load(
+        "/home/xuanlin/kolin_maniskill2/rl_benchmark/real_robot/real_robot/assets/descriptions/xarm7_d435.urdf" # xarm_floating_pris_finger_d435.urdf"
     )
-    print(gripper_actor.get_links())
-    print([x.name for x in gripper_actor.get_active_joints()])
-    rgb_cam_actor = [x for x in gripper_actor.get_links() if x.name == 'camera_color_frame'][0]
+    print(robot_actor.get_links())
+    print([x.name for x in robot_actor.get_active_joints()])
+    rgb_cam_actor = [x for x in robot_actor.get_links() if x.name == 'camera_color_frame'][0]
     
-    gripper_actor.set_root_pose(sapien.Pose([0, 0, 0], [1, 0, 0, 0]))
+    robot_actor.set_root_pose(sapien.Pose([0, 0, 3], [1, 0, 0, 0]))
 
     # Set initial joint positions
-    qpos = np.zeros(len(gripper_actor.get_active_joints()))
-    gripper_actor.set_qpos(qpos)
+    qpos = np.zeros(len(robot_actor.get_active_joints()))
+    robot_actor.set_qpos(qpos)
 
     render_width_scaling = img_width // render_downsample_factor / img_width
     render_height_scaling = img_height // render_downsample_factor / img_height
@@ -48,20 +49,20 @@ def create_gripper_scene(img_width, img_height, intrinsics, render_downsample_fa
     camera.set_principal_point(intrinsics[0,2] * render_width_scaling, intrinsics[1,2] * render_height_scaling)
     camera.set_parent(parent=rgb_cam_actor, keep_pose=False)
     
-    return scene, gripper_actor, camera
+    return scene, robot_actor, camera
 
-def obtain_gripper_gt_depth_img(scene, gripper_actor, camera, qpos, orig_width, orig_height):
+def obtain_gripper_gt_depth_img(scene, robot_actor, camera, qpos, orig_width, orig_height):
     import time
     tt = time.time()
-    gripper_actor.set_qpos(qpos)
-    scene.step()
+    robot_actor.set_qpos(qpos)
+    # scene.step() # Note: for sapien2, DO NOT call scene.step(); otherwise the qpos will be wrong.
     scene.update_render()
     camera.take_picture()
     depth_img = camera.get_float_texture('Position') # [H, W, 4]
     depth_img = -depth_img[..., 2] # note: valid depth pixels in depth_img are those whose depth value > 0
     if depth_img.shape[0] != orig_height or depth_img.shape[1] != orig_width:
         depth_img = cv2.resize(depth_img, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST)
-    print(time.time() - tt) # rendering first time is slow; second time will be very fast (1ms)
+    print(time.time() - tt) # rendering first time is slow and takes ~0.2s; second time will be very fast (2.5ms)
     return depth_img
 
 if __name__ == '__main__':
@@ -70,7 +71,7 @@ if __name__ == '__main__':
 
     # ----- ActiveZero++ ----- #
     # ckpt_path = '/home/xuanlin/activezero2_official/model.pth'
-    ckpt_path = '/home/xuanlin/activezero2_official/model_oct21_balanced.pth'
+    ckpt_path = '/home/xuanlin/activezero2_official/model_oct22_balanced.pth'
     img_resize = (424, 240) # [resize_W, resize_H]
     device = 'cuda:0'
     disp_conf_topk = 2
@@ -116,14 +117,17 @@ if __name__ == '__main__':
         max_disp=1024, median_filter_size=3, depth_dilation=True
     )
 
-    # gripper_scene, gripper_actor, gripper_camera = create_gripper_scene(
+    # robot_scene, robot_actor, gripper_camera = create_robot_scene(
     #     img_resize[0], img_resize[1], 
     #     k_irl * np.array([[img_resize[0] / ir_shape[1]], [img_resize[1] / ir_shape[0]], [1]])
     # )
     gt_gripper_render_downsample_factor = 2.0
-    gripper_scene, gripper_actor, gripper_camera = create_gripper_scene(rgb_shape[1], rgb_shape[0], k_rgb, gt_gripper_render_downsample_factor)
-    qpos = np.zeros(len(gripper_actor.get_active_joints()))
-    qpos[-2:] = gripper_actor.get_qlimits()[-2:,-1]
+    robot_scene, robot_actor, gripper_camera = create_robot_scene(rgb_shape[1], rgb_shape[0], k_rgb, gt_gripper_render_downsample_factor)
+    qpos = np.zeros(len(robot_actor.get_active_joints()))
+    gripper_qpos = 0.85 # robot_actor.get_qlimits()[-1:,-1]
+    # given a gripper position, set qpos[-6:] to be the same 
+    qpos[-6:] = gripper_qpos
+    print(qpos)
 
     obs_dict = {}
 
@@ -171,12 +175,20 @@ if __name__ == '__main__':
         depth = register_depth(depth, k_irl, k_rgb, T_rgb_irl, images["rgb"].shape[1::-1], depth_dilation=True)
         
         # Overlay gripper ground truth depth on the depth map obtained by activezero++
-        depth_gt_gripper = obtain_gripper_gt_depth_img(gripper_scene, gripper_actor, gripper_camera, qpos, *images["rgb"].shape[1::-1])
+        depth_gt_gripper = obtain_gripper_gt_depth_img(robot_scene, robot_actor, gripper_camera, qpos, *images["rgb"].shape[1::-1])
         gripper_overlay_mask = depth_gt_gripper > 0.0
         depth[gripper_overlay_mask] = depth_gt_gripper[gripper_overlay_mask]
-        # from matplotlib import pyplot as plt
-        # plt.imshow(depth)
-        # plt.show()
+        
+        green_img = np.zeros_like(images["rgb"])
+        green_img[..., 1] = 255
+        plt.subplot(1,2,1)
+        plt.imshow(depth)
+        plt.title(f"{image_path}")
+        plt.subplot(1,2,2)
+        tmp_img = images["rgb"].copy()
+        tmp_img[gripper_overlay_mask] = green_img[gripper_overlay_mask] * 0.2 + tmp_img[gripper_overlay_mask] * 0.8
+        plt.imshow(tmp_img)
+        plt.show()
         
         # ActiveZero++ results
         obs_dict[f"vis_activezero2|{tag}_hand_camera_color"] = images["rgb"]
