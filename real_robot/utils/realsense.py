@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Union, Optional
 
 import pyrealsense2 as rs
 import numpy as np
-from sapien.core import Pose
+from sapien import Pose
 
 from .camera import pose_CV_ROS
 from .multiprocessing import SharedObject, signal_process_ready
@@ -135,7 +135,7 @@ class RSDevice:
             * "rs_<device_uid>_infrared_2": Right IR image, [H, W] np.uint8 np.ndarray
             * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
             * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
-                                      forward(x), left(y) and up(z), sapien.core.Pose
+                                      forward(x), left(y) and up(z), sapien.Pose
         :param parent_pose_so_name: If not None, it's the SharedObject name of camera's
                                     parent link pose in world frame.
         :param local_pose: camera pose in world frame (ROS convention)

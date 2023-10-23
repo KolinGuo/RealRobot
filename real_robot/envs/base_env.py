@@ -360,7 +360,7 @@ class XArmBaseEnv(gym.Env):
         qpos = self.so_agent_qpos.fetch()  # [8,]
         qvel[:8] = self.so_agent_qvel.fetch()  # [8,]
         qf[:8] = self.so_agent_qf.fetch()      # [8,]
-        tcp_pose = self.so_agent_tcp_pose.fetch()  # in world frame, sapien.core.Pose
+        tcp_pose = self.so_agent_tcp_pose.fetch()  # in world frame, sapien.Pose
 
         # Convert qpos/qvel/qf align with pris_finger URDF
         gripper_qpos = clip_and_scale_action(

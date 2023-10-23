@@ -1,7 +1,7 @@
 from typing import Tuple, Optional
 import numpy as np
 import cv2
-from sapien.core import Pose
+from sapien import Pose
 
 # Convert between camera frame conventions
 #   OpenCV frame convention: right(x), down(y), forward(z)
@@ -12,21 +12,21 @@ T_CV_GL = np.array([[1, 0, 0, 0],
                     [0, -1, 0, 0],
                     [0, 0, -1, 0],
                     [0, 0, 0, 1]], dtype=np.float32)
-pose_CV_GL = Pose.from_transformation_matrix(T_CV_GL)
+pose_CV_GL = Pose(T_CV_GL)
 pose_GL_CV = pose_CV_GL.inv()
 T_GL_CV = pose_GL_CV.to_transformation_matrix()
 T_CV_ROS = np.array([[0, -1, 0, 0],
                      [0, 0, -1, 0],
                      [1, 0, 0, 0],
                      [0, 0, 0, 1]], dtype=np.float32)
-pose_CV_ROS = Pose.from_transformation_matrix(T_CV_ROS)
+pose_CV_ROS = Pose(T_CV_ROS)
 pose_ROS_CV = pose_CV_ROS.inv()
 T_ROS_CV = pose_ROS_CV.to_transformation_matrix()
 T_GL_ROS = np.array([[0, -1, 0, 0],
                      [0, 0, 1, 0],
                      [-1, 0, 0, 0],
                      [0, 0, 0, 1]], dtype=np.float32)
-pose_GL_ROS = Pose.from_transformation_matrix(T_GL_ROS)
+pose_GL_ROS = Pose(T_GL_ROS)
 pose_ROS_GL = pose_GL_ROS.inv()
 T_ROS_GL = pose_ROS_GL.to_transformation_matrix()
 

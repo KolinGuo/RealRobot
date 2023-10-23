@@ -321,7 +321,7 @@ class O3DGUIVisualizer:
               * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
               * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
               * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
-                                        forward(x), left(y) and up(z), sapien.core.Pose
+                                        forward(x), left(y) and up(z), sapien.Pose
             * xArm7 state feeds have prefix "xarm7_<robot_uid>_"
               * "xarm7_<robot_uid>_urdf_path": xArm7 URDF path, str
               * "xarm7_<robot_uid>_qpos": xArm7 joint angles, [8,] np.float32 np.ndarray
@@ -346,7 +346,7 @@ class O3DGUIVisualizer:
                       or pts color, [N, 3] np.uint8 np.ndarray
           * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
           * "_intr": camera intrinsic matrix, [3, 3] np.floating np.ndarray
-          * "_pose": object / camera pose, sapien.core.Pose
+          * "_pose": object / camera pose, sapien.Pose
           * "_xyzimg": xyz image, [H, W, 3] np.floating np.ndarray
           * "_pts": points, [N, 3] np.floating np.ndarray
           * "_urdf_path": robot URDF path, str

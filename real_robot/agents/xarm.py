@@ -8,7 +8,7 @@ from typing import List
 import numpy as np
 from gym import spaces
 import pyrealsense2 as rs
-from sapien.core import Pose
+from sapien import Pose
 from transforms3d.euler import euler2quat, quat2euler
 from transforms3d.quaternions import axangle2quat
 from urchin import URDF
@@ -64,7 +64,7 @@ class XArm7:
             * "xarm7_real_qpos": xArm7 joint angles, [8,] np.float32 np.ndarray
             * "xarm7_real_qvel": xArm7 joint velocities, [8,] np.float32 np.ndarray
             * "xarm7_real_qf": xArm7 joint torques, [8,] np.float32 np.ndarray
-            * "xarm7_real_tcp_pose": tcp pose in world frame (unit: m), sapien.core.Pose
+            * "xarm7_real_tcp_pose": tcp pose in world frame (unit: m), sapien.Pose
         """
         self.logger = get_logger("XArm7")
         self.ip = ip
@@ -411,7 +411,7 @@ class XArm7:
         T = np.eye(4)
         T[:3, :3] = np.stack([ortho, closing, approaching], axis=1)
         T[:3, 3] = center
-        return Pose.from_transformation_matrix(T)
+        return Pose(T)
 
     # ---------------------------------------------------------------------- #
     # Get robot information

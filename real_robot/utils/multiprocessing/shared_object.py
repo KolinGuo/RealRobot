@@ -42,7 +42,7 @@ from multiprocessing.shared_memory import SharedMemory
 from typing import Callable, Any, Optional, Union
 
 import numpy as np
-from sapien.core import Pose
+from sapien import Pose
 
 from ..logger import get_logger
 
@@ -108,7 +108,7 @@ class SharedObject:
       For NoneType, data area is ignored
       For bool, 1 byte data
       For int / float, 8 bytes data
-      For sapien.core.Pose, 7*4 = 28 bytes data ([xyz, xyzw], float32)
+      For sapien.Pose, 7*4 = 28 bytes data ([xyz, xyzw], float32)
       For str / bytes, (N + 1) bytes data, N is str / bytes length, 1 is for termination
       For np.ndarray,
       - 1 byte: array dtype index, stored as 'B'
@@ -128,7 +128,7 @@ class SharedObject:
             return init_size + 10
 
     _object_sizes = (
-        9, 10, 17, 17, 37,  # NoneType, bool, int, float, sapien.core.Pose
+        9, 10, 17, 17, 37,  # NoneType, bool, int, float, sapien.Pose
         _get_bytes_size.__func__,  # str
         _get_bytes_size.__func__,  # bytes
         lambda array, ndim: array.nbytes + ndim * 8 + 18,  # ndarray
@@ -171,9 +171,13 @@ class SharedObject:
 
     @staticmethod
     def _fetch_pose(buf, fn: Optional[Callable[[Pose], Any]], *args) -> Any:
-        """Fetch and construct a sapien.core.Pose (using __setstate__)"""
-        pose = Pose.__new__(Pose)
-        pose.__setstate__(struct.unpack_from("7f", buf, offset=9))
+        """Fetch and construct a sapien.Pose (using __setstate__)"""
+        # TODO: Need Pose.__setstate__()
+        # pose = Pose.__new__(Pose)
+        # pose.__setstate__(struct.unpack_from("7f", buf, offset=9))
+
+        pose_xyzwxyz = struct.unpack_from("7f", buf, offset=9)
+        pose = Pose(pose_xyzwxyz[:3], pose_xyzwxyz[3:])
         return pose if fn is None else fn(pose)
 
     @staticmethod
@@ -256,7 +260,10 @@ class SharedObject:
 
     @staticmethod
     def _assign_pose(buf, pose: Pose, *args):
-        struct.pack_into("7f", buf, 9, *pose.__getstate__())
+        # TODO: Need Pose.__getstate__()
+        # struct.pack_into("7f", buf, 9, *pose.__getstate__())
+
+        struct.pack_into("7f", buf, 9, *pose.p, *pose.q)
 
     @staticmethod
     def _assign_bytes(buf, enc_data: bytes, buf_nbytes: int, *args):
@@ -367,7 +374,7 @@ class SharedObject:
 
         # Get shared memory size in bytes
         np_metas = ()
-        if object_type_idx <= 4:  # NoneType, bool, int, float, sapien.core.Pose
+        if object_type_idx <= 4:  # NoneType, bool, int, float, sapien.Pose
             nbytes = self._object_sizes[object_type_idx]
         elif object_type_idx == 5:  # str
             data = data.encode(_encoding)  # encode strings into bytes

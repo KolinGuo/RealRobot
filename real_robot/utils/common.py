@@ -2,7 +2,7 @@ from collections import defaultdict, OrderedDict
 from typing import Dict, Sequence
 
 import numpy as np
-from sapien.core import Pose
+from sapien import Pose
 from gym import spaces
 
 from .logger import get_logger
