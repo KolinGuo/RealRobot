@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 import numpy as np
-from sapien.core import Pose
+from sapien import Pose
 
 from real_robot.sensors.camera import (
     CALIB_CAMERA_POSES, CameraConfig, Camera

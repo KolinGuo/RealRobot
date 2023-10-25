@@ -8,7 +8,7 @@ from time import perf_counter
 from typing import Union, Tuple
 
 import numpy as np
-from sapien.core import Pose
+from sapien import Pose
 from transforms3d.euler import euler2quat
 
 from real_robot.utils.multiprocessing import ctx, SharedObject
@@ -45,7 +45,7 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
     elif object_type_idx == 3:  # float
         return (random.uniform(-100, 100) if bool(random.randrange(2))
                 else random.uniform(-1e307, 1e308))
-    elif object_type_idx == 4:  # sapien.core.Pose
+    elif object_type_idx == 4:  # sapien.Pose
         return Pose(p=np.random.uniform(-10, 10, size=3),
                     q=euler2quat(*np.random.uniform([0, 0, 0],
                                                     [np.pi*2, np.pi, np.pi*2])))
@@ -78,7 +78,7 @@ def check_object_equal(obj1: SharedObject, obj2: SharedObject, data=None):
         assert obj1.fetch() == obj2.fetch()
         if data is not None:
             assert obj1.fetch() == data
-    elif obj1.object_type_idx == 4:  # sapien.core.Pose
+    elif obj1.object_type_idx == 4:  # sapien.Pose
         np.testing.assert_equal(obj1.fetch().__getstate__(), obj2.fetch().__getstate__())
         if data is not None:
             np.testing.assert_equal(obj1.fetch().__getstate__(), data.__getstate__())
@@ -257,20 +257,6 @@ class TestFetch:
             pose2 = create_random_object(SharedObject._object_types.index(Pose))
             np.testing.assert_equal(so.fetch(lambda x: pose2*x).__getstate__(),
                                     (pose2*pose).__getstate__())
-
-        for _ in range(500):
-            pose2 = create_random_object(SharedObject._object_types.index(Pose))
-            np.testing.assert_equal(
-                so.fetch(lambda x: x.transform(pose2)).__getstate__(),
-                pose.transform(pose2).__getstate__()
-            )
-
-        for _ in range(500):
-            pose2 = create_random_object(SharedObject._object_types.index(Pose))
-            np.testing.assert_equal(
-                so.fetch(lambda x: pose2.transform(x)).__getstate__(),
-                pose2.transform(pose).__getstate__()
-            )
 
         np.testing.assert_equal(so.fetch(lambda x: x.inv()).__getstate__(),
                                 pose.inv().__getstate__())

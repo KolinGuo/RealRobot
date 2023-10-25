@@ -2,7 +2,7 @@
 from time import perf_counter_ns
 
 import numpy as np
-from sapien.core import Pose
+from sapien import Pose
 import pyrealsense2 as rs
 
 from real_robot.sensors.camera import CameraConfig, Camera

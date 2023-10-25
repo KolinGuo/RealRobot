@@ -11,7 +11,7 @@ if __name__ == "__main__":
             'pyrealsense2', 'numpy', 'gym', 'transforms3d',
             'urchin',  # loading URDF
             'opencv-python', 'open3d', 'Pillow', 'scipy',  # for visualization
-            'sapien'  # for sapien.core.Pose and simsense
+            'sapien'  # for sapien.Pose and simsense
         ],
         package_dir={
             "real_robot": "real_robot",

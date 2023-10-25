@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Union, Tuple
 
 import numpy as np
-from sapien.core import Pose
+from sapien import Pose
 from transforms3d.euler import euler2quat
 import scipy
 from prettytable import PrettyTable
@@ -44,7 +44,7 @@ def create_random_object(
     elif object_type_idx == 3:  # float
         return (random.uniform(-100, 100) if bool(random.randrange(2))
                 else random.uniform(-1e307, 1e308))
-    elif object_type_idx == 4:  # sapien.core.Pose
+    elif object_type_idx == 4:  # sapien.Pose
         return Pose(p=np.random.uniform(-10, 10, size=3),
                     q=euler2quat(*np.random.uniform([0, 0, 0],
                                                     [np.pi*2, np.pi, np.pi*2])))
@@ -255,7 +255,7 @@ def child_benchmark_object_fetch_assign(object_type_idx: int, p_idx: int):
         fn = lambda x: type(x)
     elif object_type_idx in [1, 2, 3]:
         fn = lambda x: x + 1
-    elif object_type_idx == 4:  # sapien.core.Pose
+    elif object_type_idx == 4:  # sapien.Pose
         fn = None
     elif object_type_idx in [5, 6]:
         fn = lambda x: len(x)
