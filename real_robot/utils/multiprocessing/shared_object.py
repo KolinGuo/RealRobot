@@ -108,7 +108,7 @@ class SharedObject:
       For NoneType, data area is ignored
       For bool, 1 byte data
       For int / float, 8 bytes data
-      For sapien.Pose, 7*4 = 28 bytes data ([xyz, xyzw], float32)
+      For sapien.Pose, 7*4 = 28 bytes data ([xyz, wxyz], float32)
       For str / bytes, (N + 1) bytes data, N is str / bytes length, 1 is for termination
       For np.ndarray,
       - 1 byte: array dtype index, stored as 'B'
@@ -172,12 +172,8 @@ class SharedObject:
     @staticmethod
     def _fetch_pose(buf, fn: Optional[Callable[[Pose], Any]], *args) -> Any:
         """Fetch and construct a sapien.Pose (using __setstate__)"""
-        # TODO: Need Pose.__setstate__()
-        # pose = Pose.__new__(Pose)
-        # pose.__setstate__(struct.unpack_from("7f", buf, offset=9))
-
-        pose_xyzwxyz = struct.unpack_from("7f", buf, offset=9)
-        pose = Pose(pose_xyzwxyz[:3], pose_xyzwxyz[3:])
+        pose = Pose.__new__(Pose)
+        pose.__setstate__(struct.unpack_from("7f", buf, offset=9))
         return pose if fn is None else fn(pose)
 
     @staticmethod
@@ -260,10 +256,7 @@ class SharedObject:
 
     @staticmethod
     def _assign_pose(buf, pose: Pose, *args):
-        # TODO: Need Pose.__getstate__()
-        # struct.pack_into("7f", buf, 9, *pose.__getstate__())
-
-        struct.pack_into("7f", buf, 9, *pose.p, *pose.q)
+        struct.pack_into("7f", buf, 9, *pose.__getstate__())
 
     @staticmethod
     def _assign_bytes(buf, enc_data: bytes, buf_nbytes: int, *args):
