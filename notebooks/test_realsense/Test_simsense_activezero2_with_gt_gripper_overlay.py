@@ -2,6 +2,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+import time
 import sapien.core as sapien
 from sapien.core import Pose
 from matplotlib import pyplot as plt
@@ -48,6 +49,9 @@ def create_robot_scene(img_width, img_height, intrinsics, render_downsample_fact
     camera.set_focal_lengths(intrinsics[0,0] * render_width_scaling, intrinsics[1,1] * render_height_scaling)
     camera.set_principal_point(intrinsics[0,2] * render_width_scaling, intrinsics[1,2] * render_height_scaling)
     camera.set_parent(parent=rgb_cam_actor, keep_pose=False)
+    # cam_pose = np.eye(4)
+    # cam_pose[:3, 3] = [0.0,0.0,0.005]
+    # camera.set_local_pose(Pose.from_transformation_matrix(cam_pose))
     
     return scene, robot_actor, camera
 
@@ -71,14 +75,19 @@ if __name__ == '__main__':
 
     # ----- ActiveZero++ ----- #
     # ckpt_path = '/home/xuanlin/activezero2_official/model.pth'
-    ckpt_path = '/home/xuanlin/activezero2_official/model_oct22_balanced.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_oct23_balanced.pth' # model_oct24_balanced_reproj2.pth' # model.pth' # model_oct23_balanced.pth' # model.pth'
+    ckpt_path = '/home/xuanlin/activezero2_official/model_oct25_balanced_dtd.pth'
+    disparity_mode = "regular"
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_oct27_loglinear_disparity.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_oct27_loglinear_disparity_384_reweight.pth'
+    # disparity_mode = "log_linear" # ["log_linear", "regular"]
     img_resize = (424, 240) # [resize_W, resize_H]
     device = 'cuda:0'
     disp_conf_topk = 2
-    disp_conf_thres = 0.8 # 0.95
+    disp_conf_thres = 0.0 # 0.8 # 0.95
     MAX_DISP = 256
 
-    model = CGI_Stereo(maxdisp=MAX_DISP)
+    model = CGI_Stereo(maxdisp=MAX_DISP, disparity_mode=disparity_mode)
     model.load_state_dict(torch.load(ckpt_path)['model'])
     model = model.to(device)
 
@@ -148,24 +157,39 @@ if __name__ == '__main__':
 
         # ----- ActiveZero++ ----- #
         orig_h, orig_w = images["ir_l"].shape
-        with torch.no_grad():
-            pred_dict = model({'img_l': preprocess_image(images["ir_l"]),
-                            'img_r': preprocess_image(images["ir_r"])})
-            torch.cuda.synchronize()
-        for k in pred_dict:
-            pred_dict[k] = pred_dict[k].detach().cpu().numpy()
-
-        disparity = pred_dict['pred_orig'] # [1, H, W]
-        disparity = disparity.squeeze() # [H, W]
-        disparity_probs = pred_dict['cost_prob'].squeeze() # [1, disp//4, H, W]
-        top_disparity_prob_idx = np.argpartition(-disparity_probs, disp_conf_topk, axis=0)[:disp_conf_topk, :, :]
-        disparity_confidence = np.take_along_axis(disparity_probs, top_disparity_prob_idx, axis=0).sum(axis=0) # [H, W]
-        disparity_conf_mask = disparity_confidence > disp_conf_thres
-
-        # disparity => depth
         focal_length = k_irl[0, 0] * img_resize[0] / orig_w
         baseline = np.linalg.norm(T_irr_irl[:3, -1])
-        depth = focal_length * baseline / (disparity + 1e-5)
+        focal_length_arr = torch.tensor([focal_length], device=device).float()
+        baseline_arr = torch.tensor([baseline], device=device).float()
+        print("focal_length", focal_length, "baseline", baseline, "focal_length * baseline", focal_length * baseline)
+        tt = time.time()
+        with torch.no_grad():
+            pred_dict = model({
+                'img_l': preprocess_image(images["ir_l"]),
+                'img_r': preprocess_image(images["ir_r"]),
+                'focal_length': focal_length_arr,
+                'baseline': baseline_arr,
+            })
+            if disparity_mode == "log_linear":
+                pred_dict['pred_orig'] = model.to_raw_disparity(
+                    pred_dict['pred_orig'], focal_length_arr, baseline_arr
+                )
+                pred_dict['pred_div4'] = model.to_raw_disparity(
+                    pred_dict['pred_div4'], focal_length_arr, baseline_arr
+                )
+            # calculate disparity confidence mask; (doing this on gpu is significantly faster than on cpu)
+            disparity_confidence = pred_dict['cost_prob'].topk(disp_conf_topk, dim=1).values.sum(dim=1) # [1, H, W]
+            pred_dict['disparity_conf_mask'] = disparity_confidence > disp_conf_thres
+            torch.cuda.synchronize()
+        print("pred time", time.time() - tt)
+        for k in pred_dict:
+            pred_dict[k] = pred_dict[k].detach().cpu().numpy()
+        disparity = pred_dict['pred_orig'] # [1, H, W]
+        disparity = disparity.squeeze() # [H, W]
+        disparity_conf_mask = pred_dict['disparity_conf_mask'].squeeze() # [H, W]
+
+        # disparity => depth
+        depth = focal_length * baseline / (disparity + 1e-6)
         # filter out depth
         depth[~disparity_conf_mask] = 0.0
      
@@ -179,16 +203,16 @@ if __name__ == '__main__':
         gripper_overlay_mask = depth_gt_gripper > 0.0
         depth[gripper_overlay_mask] = depth_gt_gripper[gripper_overlay_mask]
         
-        green_img = np.zeros_like(images["rgb"])
-        green_img[..., 1] = 255
-        plt.subplot(1,2,1)
-        plt.imshow(depth)
-        plt.title(f"{image_path}")
-        plt.subplot(1,2,2)
-        tmp_img = images["rgb"].copy()
-        tmp_img[gripper_overlay_mask] = green_img[gripper_overlay_mask] * 0.2 + tmp_img[gripper_overlay_mask] * 0.8
-        plt.imshow(tmp_img)
-        plt.show()
+        # green_img = np.zeros_like(images["rgb"])
+        # green_img[..., 1] = 255
+        # plt.subplot(1,2,1)
+        # plt.imshow(depth)
+        # plt.title(f"{image_path}")
+        # plt.subplot(1,2,2)
+        # tmp_img = images["rgb"].copy()
+        # tmp_img[gripper_overlay_mask] = green_img[gripper_overlay_mask] * 0.2 + tmp_img[gripper_overlay_mask] * 0.8
+        # plt.imshow(tmp_img)
+        # plt.show()
         
         # ActiveZero++ results
         obs_dict[f"vis_activezero2|{tag}_hand_camera_color"] = images["rgb"]
