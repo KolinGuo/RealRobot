@@ -3,12 +3,12 @@ import cv2
 import numpy as np
 import torch
 import time
-import sapien.core as sapien
-from sapien.core import Pose
+import sapien
+from sapien import Pose
 from matplotlib import pyplot as plt
 
 from real_robot.utils.visualization import Visualizer
-from real_robot.sensors.simsense_depth import SimsenseDepth
+# from real_robot.sensors.simsense_depth import SimsenseDepth
 from active_zero2.models.cgi_stereo.cgi_stereo import CGI_Stereo
 
 def create_robot_scene(img_width, img_height, intrinsics, render_downsample_factor=1.0):
@@ -38,8 +38,10 @@ def create_robot_scene(img_width, img_height, intrinsics, render_downsample_fact
 
     render_width_scaling = img_width // render_downsample_factor / img_width
     render_height_scaling = img_height // render_downsample_factor / img_height
-    camera = scene.add_camera(
-        name="camera",
+    camera = scene.add_mounted_camera(
+        "camera",
+        rgb_cam_actor.entity,
+        pose=Pose(),
         width=int(img_width // render_downsample_factor),
         height=int(img_height // render_downsample_factor),
         fovy=np.deg2rad(78.0), # D435 fovy
@@ -48,10 +50,6 @@ def create_robot_scene(img_width, img_height, intrinsics, render_downsample_fact
     )
     camera.set_focal_lengths(intrinsics[0,0] * render_width_scaling, intrinsics[1,1] * render_height_scaling)
     camera.set_principal_point(intrinsics[0,2] * render_width_scaling, intrinsics[1,2] * render_height_scaling)
-    camera.set_parent(parent=rgb_cam_actor, keep_pose=False)
-    # cam_pose = np.eye(4)
-    # cam_pose[:3, 3] = [0.0,0.0,0.005]
-    # camera.set_local_pose(Pose.from_transformation_matrix(cam_pose))
     
     return scene, robot_actor, camera
 
@@ -62,7 +60,7 @@ def obtain_gripper_gt_depth_img(scene, robot_actor, camera, qpos, orig_width, or
     # scene.step() # Note: for sapien2, DO NOT call scene.step(); otherwise the qpos will be wrong.
     scene.update_render()
     camera.take_picture()
-    depth_img = camera.get_float_texture('Position') # [H, W, 4]
+    depth_img = camera.get_picture('Position') # [H, W, 4]
     depth_img = -depth_img[..., 2] # note: valid depth pixels in depth_img are those whose depth value > 0
     if depth_img.shape[0] != orig_height or depth_img.shape[1] != orig_width:
         depth_img = cv2.resize(depth_img, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST)
@@ -80,14 +78,16 @@ if __name__ == '__main__':
     disparity_mode = "regular"
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct27_loglinear_disparity.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct27_loglinear_disparity_384_reweight.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_oct28_loglinear_disp384_newdata.pth'
     # disparity_mode = "log_linear" # ["log_linear", "regular"]
+    loglinear_disp_c = 0.01 if '256' in ckpt_path else -0.02
     img_resize = (424, 240) # [resize_W, resize_H]
     device = 'cuda:0'
     disp_conf_topk = 2
     disp_conf_thres = 0.0 # 0.8 # 0.95
-    MAX_DISP = 256
+    MAX_DISP = 384 if '384' in ckpt_path else 256
 
-    model = CGI_Stereo(maxdisp=MAX_DISP, disparity_mode=disparity_mode)
+    model = CGI_Stereo(maxdisp=MAX_DISP, disparity_mode=disparity_mode, loglinear_disp_c=loglinear_disp_c)
     model.load_state_dict(torch.load(ckpt_path)['model'])
     model = model.to(device)
 
@@ -120,11 +120,11 @@ if __name__ == '__main__':
                         [-9.67109110e-03, -2.94523709e-03,  9.99948919e-01, 1.56505470e-04],
                         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]])
 
-    depth_engine = SimsenseDepth(
-        ir_shape[::-1], k_l=k_irl, k_r=k_irr, l2r=T_irr_irl, k_rgb=k_rgb,
-        rgb_size=images["rgb"].shape[1::-1], l2rgb=T_rgb_irl,
-        max_disp=1024, median_filter_size=3, depth_dilation=True
-    )
+    # depth_engine = SimsenseDepth(
+    #     ir_shape[::-1], k_l=k_irl, k_r=k_irr, l2r=T_irr_irl, k_rgb=k_rgb,
+    #     rgb_size=images["rgb"].shape[1::-1], l2rgb=T_rgb_irl,
+    #     max_disp=1024, median_filter_size=3, depth_dilation=True
+    # )
 
     # robot_scene, robot_actor, gripper_camera = create_robot_scene(
     #     img_resize[0], img_resize[1], 
@@ -145,7 +145,7 @@ if __name__ == '__main__':
         params = np.load(image_path.parent / image_path.name.replace("images", "params"))
 
         tag = image_path.stem.replace("_images", "")
-        pose_world_camCV = Pose.from_transformation_matrix(params["cam2world_cv"])
+        pose_world_camCV = Pose(params["cam2world_cv"])
 
         # RS capture
         obs_dict[f"vis_rs|{tag}_hand_camera_color"] = images["rgb"]
@@ -230,13 +230,13 @@ if __name__ == '__main__':
         # obs_dict[f"vis_activezero2|{tag}_hand_camera_intr"] = resize_trans @ params["intrinsic_cv"]
         # obs_dict[f"vis_activezero2|{tag}_hand_camera_pose"] = pose_world_camCV
 
-        # ----- Simsense ----- #
-        depth_simsense = depth_engine.compute(images["ir_l"], images["ir_r"])
-        # SimSense results
-        obs_dict[f"vis_simsense|{tag}_hand_camera_color"] = images["rgb"]
-        obs_dict[f"vis_simsense|{tag}_hand_camera_depth"] = depth_simsense
-        obs_dict[f"vis_simsense|{tag}_hand_camera_intr"] = params["intrinsic_cv"]
-        obs_dict[f"vis_simsense|{tag}_hand_camera_pose"] = pose_world_camCV
+        # # ----- Simsense ----- #
+        # depth_simsense = depth_engine.compute(images["ir_l"], images["ir_r"])
+        # # SimSense results
+        # obs_dict[f"vis_simsense|{tag}_hand_camera_color"] = images["rgb"]
+        # obs_dict[f"vis_simsense|{tag}_hand_camera_depth"] = depth_simsense
+        # obs_dict[f"vis_simsense|{tag}_hand_camera_intr"] = params["intrinsic_cv"]
+        # obs_dict[f"vis_simsense|{tag}_hand_camera_pose"] = pose_world_camCV
 
     obs_dict = dict(sorted(obs_dict.items()))  # sort by key
 
