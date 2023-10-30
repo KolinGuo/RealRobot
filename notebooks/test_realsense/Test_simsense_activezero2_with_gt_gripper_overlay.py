@@ -74,20 +74,24 @@ if __name__ == '__main__':
     # ----- ActiveZero++ ----- #
     # ckpt_path = '/home/xuanlin/activezero2_official/model.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct23_balanced.pth' # model_oct24_balanced_reproj2.pth' # model.pth' # model_oct23_balanced.pth' # model.pth'
-    ckpt_path = '/home/xuanlin/activezero2_official/model_oct25_balanced_dtd.pth'
-    disparity_mode = "regular"
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_oct25_balanced_dtd.pth'
+    # disparity_mode = "regular"
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct27_loglinear_disparity.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct27_loglinear_disparity_384_reweight.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct28_loglinear_disp384_newdata.pth'
-    # disparity_mode = "log_linear" # ["log_linear", "regular"]
-    loglinear_disp_c = 0.01 if '256' in ckpt_path else -0.02
+    ckpt_path = '/home/xuanlin/activezero2_official/model_oct28_loglinear_disp384_normal_coeff1_newdata.pth'
+    disparity_mode = "log_linear" if 'loglinear' in ckpt_path else 'regular'
+    loglinear_disp_c = -0.02 if '384' in ckpt_path else 0.01
     img_resize = (424, 240) # [resize_W, resize_H]
     device = 'cuda:0'
-    disp_conf_topk = 2
+    disp_conf_topk = 2 if 'k4' not in ckpt_path else 4
     disp_conf_thres = 0.0 # 0.8 # 0.95
     MAX_DISP = 384 if '384' in ckpt_path else 256
+    ckpt_pred_normal = 'normal' in ckpt_path and not 'normalv2' in ckpt_path
+    # ckpt_pred_normal_v2 = 'normalv2' in ckpt_path
 
-    model = CGI_Stereo(maxdisp=MAX_DISP, disparity_mode=disparity_mode, loglinear_disp_c=loglinear_disp_c)
+    model = CGI_Stereo(maxdisp=MAX_DISP, disparity_mode=disparity_mode, loglinear_disp_c=loglinear_disp_c, 
+                       predict_normal=ckpt_pred_normal) # , predict_normal_v2=ckpt_pred_normal_v2)
     model.load_state_dict(torch.load(ckpt_path)['model'])
     model = model.to(device)
 
@@ -169,7 +173,7 @@ if __name__ == '__main__':
                 'img_r': preprocess_image(images["ir_r"]),
                 'focal_length': focal_length_arr,
                 'baseline': baseline_arr,
-            })
+            }, predict_normal=False)
             if disparity_mode == "log_linear":
                 pred_dict['pred_orig'] = model.to_raw_disparity(
                     pred_dict['pred_orig'], focal_length_arr, baseline_arr
