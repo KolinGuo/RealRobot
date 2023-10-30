@@ -34,7 +34,7 @@
         <mesh filename="xarm_description/meshes/xarm7/visual/link_base_textured.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="White"/>
+      <!-- <material name="White"/> -->
     </visual>
     <collision>
       <geometry>
@@ -54,7 +54,7 @@
         <mesh filename="xarm_description/meshes/xarm7/visual/link1_textured.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="White"/>
+      <!-- <material name="White"/> -->
     </visual>
     <collision>
       <geometry>
@@ -82,7 +82,7 @@
         <mesh filename="xarm_description/meshes/xarm7/visual/link2_textured.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="White"/>
+      <!-- <material name="White"/> -->
     </visual>
     <collision>
       <geometry>
@@ -110,7 +110,7 @@
         <mesh filename="xarm_description/meshes/xarm7/visual/link3_textured.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="White"/>
+      <!-- <material name="White"/> -->
     </visual>
     <collision>
       <geometry>
@@ -138,7 +138,7 @@
         <mesh filename="xarm_description/meshes/xarm7/visual/link4_textured.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="White"/>
+      <!-- <material name="White"/> -->
     </visual>
     <collision>
       <geometry>
@@ -166,7 +166,7 @@
         <mesh filename="xarm_description/meshes/xarm7/visual/link5_textured.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="White"/>
+      <!-- <material name="White"/> -->
     </visual>
     <collision>
       <geometry>
@@ -194,7 +194,7 @@
         <mesh filename="xarm_description/meshes/xarm7/visual/link6_textured.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="White"/>
+      <!-- <material name="White"/> -->
     </visual>
     <collision>
       <geometry>
@@ -222,7 +222,7 @@
         <mesh filename="xarm_description/meshes/xarm7/visual/link7_silver.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="Silver"/>
+      <!-- <material name="Silver"/> -->
     </visual>
     <collision>
       <geometry>
@@ -242,10 +242,10 @@
   <link name="link_eef">
     <visual>
       <geometry>
-        <mesh filename="xarm_description/meshes/camera/realsense/visual/d435_with_tilt_cam_stand.STL"/>
+        <mesh filename="xarm_description/meshes/camera/realsense/visual/d435_with_tilt_cam_stand.glb"/>
       </geometry>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
-      <material name="Silver"/>
+      <!-- <material name="Silver"/> -->
     </visual>
     <collision>
       <geometry>
@@ -337,7 +337,7 @@
         <mesh filename="xarm_description/meshes/gripper/xarm/base_link.STL"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="White"/>
+      <!-- <material name="White"/> -->
     </visual>
     <collision>
       <geometry>
@@ -357,7 +357,7 @@
         <mesh filename="xarm_description/meshes/gripper/xarm/left_outer_knuckle_black.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="Silver"/>
+      <!-- <material name="Silver"/> -->
     </visual>
     <collision>
       <geometry>
@@ -384,7 +384,7 @@
         <mesh filename="xarm_description/meshes/gripper/xarm/left_finger_black.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="Silver"/>
+      <!-- <material name="Silver"/> -->
     </visual>
     <collision>
       <geometry>
@@ -412,7 +412,7 @@
         <mesh filename="xarm_description/meshes/gripper/xarm/left_inner_knuckle_black.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="Silver"/>
+      <!-- <material name="Silver"/> -->
     </visual>
     <collision>
       <geometry>
@@ -440,7 +440,7 @@
         <mesh filename="xarm_description/meshes/gripper/xarm/right_outer_knuckle_black.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="Silver"/>
+      <!-- <material name="Silver"/> -->
     </visual>
     <collision>
       <geometry>
@@ -468,7 +468,7 @@
         <mesh filename="xarm_description/meshes/gripper/xarm/right_finger_black.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="Silver"/>
+      <!-- <material name="Silver"/> -->
     </visual>
     <collision>
       <geometry>
@@ -496,7 +496,7 @@
         <mesh filename="xarm_description/meshes/gripper/xarm/right_inner_knuckle_black.glb"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <material name="Silver"/>
+      <!-- <material name="Silver"/> -->
     </visual>
     <collision>
       <geometry>
