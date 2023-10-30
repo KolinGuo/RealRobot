@@ -11,6 +11,7 @@ import pyrealsense2 as rs
 from sapien import Pose
 from transforms3d.euler import euler2quat, quat2euler
 from transforms3d.quaternions import axangle2quat
+from scipy.spatial.transform import Rotation
 from urchin import URDF
 
 from xarm.wrapper import XArmAPI
@@ -179,23 +180,26 @@ class XArm7:
         #     tgt_tcp_pose = Pose(action[:3] * 1000.0,
         #                         euler2quat(*action[3:6], axes='sxyz'))
         elif self._control_mode == "pd_ee_pose_axangle":
-            axangle = action[3:6]
-            rot_angle = np.linalg.norm(axangle)
-            tgt_tcp_pose = Pose(p=action[:3] * 1000.0,  # m => mm
-                                q=axangle2quat(axangle / (rot_angle + 1e-9),
-                                               rot_angle))
+            tgt_tcp_pose = Pose(
+                p=action[:3] * 1000.0,  # m => mm
+                q=Rotation.from_rotvec(action[3:6]).as_quat()[[3, 0, 1, 2]]
+            )
         elif self._control_mode == "pd_ee_delta_pose_axangle":
             axangle = action[3:6]
-            rot_angle = np.linalg.norm(axangle)
-            delta_tcp_pose = Pose(p=action[:3] * translation_scale,  # in milimeters
-                                  q=axangle2quat(axangle / (rot_angle + 1e-9),
-                                                 rot_angle * axangle_scale))
+            if (theta := math.sqrt(axangle @ axangle)) < 1e-9:
+                q = [1, 0, 0, 0]
+            else:
+                q = axangle2quat(axangle / theta,
+                                 axangle_scale if theta > 1 else theta * axangle_scale,
+                                 is_normalized=True)
+            delta_tcp_pose = Pose(p=action[:3] * translation_scale, q=q)  # in milimeters
             tgt_tcp_pose = cur_tcp_pose * delta_tcp_pose
         elif self._control_mode == "pd_ee_pose_quat":
             tgt_tcp_pose = Pose(p=action[:3] * 1000.0, q=action[3:7])  # m => mm
         elif self._control_mode == "pd_ee_delta_pose_quat":
+            # TODO: Apply axangle_scale?
             delta_tcp_pose = Pose(p=action[:3] * translation_scale,  # in milimeters
-                                  q=action[3:7])  # in milimeters
+                                  q=action[3:7])
             tgt_tcp_pose = cur_tcp_pose * delta_tcp_pose
         else:
             raise NotImplementedError(f"{self._control_mode=} not implemented")
@@ -221,7 +225,7 @@ class XArm7:
                        action[-1] is gripper action (always has range [-1, 1])
         :param translation_scale: action [-1, 1] maps to [-100mm, 100mm],
                                   Used for delta control_mode only.
-        :param axangle_scale: axangle action norm (rotation angle) is multiplied by 0.1
+        :param axangle_scale: axangle action norm (rotation angle) is clipped by 0.1 rad
                               [-1, 0, 0] => rotate around [1, 0, 0] by -0.1 rad
                               Used for delta control_mode only.
         :param speed: move speed.
@@ -578,7 +582,7 @@ class XArm7:
             return spaces.Box(low=np.array([-np.inf]*6 + [-1]),
                               high=np.array([np.inf]*6 + [1]),
                               shape=(7,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_delta_pose_axangle":  # TODO: verify bounds
+        elif self._control_mode == "pd_ee_delta_pose_axangle":
             # [x, y, z, *rotvec, gripper], xyz in meters
             #   rotvec is in axis of rotation and its norm gives rotation angle
             return spaces.Box(low=-1, high=1, shape=(7,), dtype=np.float32)
