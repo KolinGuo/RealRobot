@@ -5,8 +5,8 @@ import numpy as np
 logger = get_logger("robot")
 get_logger(log_file=_log_dir / "3rd_party.log")  # root logger log file
 
-robot = XArm7(control_mode="pd_ee_pose_quat", motion_mode="cartesian_online")
-# robot = XArm7(control_mode="pd_ee_pose_quat", motion_mode="position")
+robot = XArm7(control_mode="ee_pose_quat", motion_mode="cartesian_online")
+# robot = XArm7(control_mode="ee_pose_quat", motion_mode="position")
 
 action_grasp = [0.33488411, -0.24891135, 0.04203321, 0.00724707, 0.04314691, 0.99346465, -0.10542212, 1.]
 action_close = [0.33400261, -0.24671784, 0.04204423, -0.00857807, -0.01663382, 0.99924785, -0.03396245, -1.]

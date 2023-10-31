@@ -33,7 +33,7 @@ class XArmBaseEnv(gym.Env):
         self, *args,
         obs_mode=None,
         image_obs_mode=None,
-        control_mode="pd_ee_delta_pos",
+        control_mode="ee_delta_pos",
         motion_mode="position",
         camera_cfgs: dict = {},
         render_camera_cfgs: dict = {},

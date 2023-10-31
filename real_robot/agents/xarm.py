@@ -29,9 +29,9 @@ class XArm7:
     xArm7 agent class
     Mimics mani_skill2.agents.base_agent.BaseAgent interface
     """
-    SUPPORTED_CONTROL_MODES = ("pd_ee_pos", "pd_ee_delta_pos",
-                               "pd_ee_pose_axangle", "pd_ee_delta_pose_axangle",
-                               "pd_ee_pose_quat", "pd_ee_delta_pose_quat")
+    SUPPORTED_CONTROL_MODES = ("ee_pos", "ee_delta_pos",
+                               "ee_pose_axangle", "ee_delta_pose_axangle",
+                               "ee_pose_quat", "ee_delta_pose_quat")
     SUPPORTED_MOTION_MODES = ("position", "servo",
                               "joint_teaching", "cartesian_teaching (invalid)",
                               "joint_vel", "cartesian_vel",
@@ -39,7 +39,7 @@ class XArm7:
 
     def __init__(self,
                  ip: str = "192.168.1.229",
-                 control_mode: str = "pd_ee_delta_pos",
+                 control_mode: str = "ee_delta_pos",
                  motion_mode: str = "position", *,
                  safety_boundary_mm: List[int] = [999, -999, 999, -999, 999, 0],
                  boundary_clip_mm: int = 10,
@@ -171,20 +171,20 @@ class XArm7:
         """
         cur_tcp_pose = self.get_tcp_pose(unit_in_mm=True)
 
-        if self._control_mode == "pd_ee_pos":
+        if self._control_mode == "ee_pos":
             tgt_tcp_pose = Pose(p=action[:3] * 1000.0, q=cur_tcp_pose.q)  # m => mm
-        elif self._control_mode == "pd_ee_delta_pos":
+        elif self._control_mode == "ee_delta_pos":
             delta_tcp_pos = action[:3] * translation_scale  # in milimeters
             tgt_tcp_pose = cur_tcp_pose * Pose(p=delta_tcp_pos)
-        # elif self._control_mode == "pd_ee_pose":
+        # elif self._control_mode == "ee_pose":
         #     tgt_tcp_pose = Pose(action[:3] * 1000.0,
         #                         euler2quat(*action[3:6], axes='sxyz'))
-        elif self._control_mode == "pd_ee_pose_axangle":
+        elif self._control_mode == "ee_pose_axangle":
             tgt_tcp_pose = Pose(
                 p=action[:3] * 1000.0,  # m => mm
                 q=Rotation.from_rotvec(action[3:6]).as_quat()[[3, 0, 1, 2]]
             )
-        elif self._control_mode == "pd_ee_delta_pose_axangle":
+        elif self._control_mode == "ee_delta_pose_axangle":
             axangle = action[3:6]
             if (theta := math.sqrt(axangle @ axangle)) < 1e-9:
                 q = [1, 0, 0, 0]
@@ -194,9 +194,9 @@ class XArm7:
                                  is_normalized=True)
             delta_tcp_pose = Pose(p=action[:3] * translation_scale, q=q)  # in milimeters
             tgt_tcp_pose = cur_tcp_pose * delta_tcp_pose
-        elif self._control_mode == "pd_ee_pose_quat":
+        elif self._control_mode == "ee_pose_quat":
             tgt_tcp_pose = Pose(p=action[:3] * 1000.0, q=action[3:7])  # m => mm
-        elif self._control_mode == "pd_ee_delta_pose_quat":
+        elif self._control_mode == "ee_delta_pose_quat":
             # TODO: Apply axangle_scale?
             delta_tcp_pose = Pose(p=action[:3] * translation_scale,  # in milimeters
                                   q=action[3:7])
@@ -567,31 +567,31 @@ class XArm7:
 
     @property
     def action_space(self):
-        if self._control_mode == "pd_ee_pos":
+        if self._control_mode == "ee_pos":
             return spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_delta_pos":
+        elif self._control_mode == "ee_delta_pos":
             return spaces.Box(low=-1, high=1, shape=(4,), dtype=np.float32)
-        # elif self._control_mode == "pd_ee_pose":
+        # elif self._control_mode == "ee_pose":
         #     # [x, y, z, r, p, y, gripper], xyz in meters, rpy in radian
         #     return spaces.Box(low=np.array([-np.inf]*3 + [-np.pi]*3 + [-1]),
         #                       high=np.array([np.inf]*3 + [np.pi]*3 + [1]),
         #                       shape=(7,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_pose_axangle":
+        elif self._control_mode == "ee_pose_axangle":
             # [x, y, z, *rotvec, gripper], xyz in meters
             #   rotvec is in axis of rotation and its norm gives rotation angle
             return spaces.Box(low=np.array([-np.inf]*6 + [-1]),
                               high=np.array([np.inf]*6 + [1]),
                               shape=(7,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_delta_pose_axangle":
+        elif self._control_mode == "ee_delta_pose_axangle":
             # [x, y, z, *rotvec, gripper], xyz in meters
             #   rotvec is in axis of rotation and its norm gives rotation angle
             return spaces.Box(low=-1, high=1, shape=(7,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_pose_quat":
+        elif self._control_mode == "ee_pose_quat":
             # [x, y, z, w, x, y, z, gripper], xyz in meters, wxyz is unit quaternion
             return spaces.Box(low=np.array([-np.inf]*3 + [-1] * 4 + [-1]),
                               high=np.array([np.inf]*3 + [1] * 4 + [1]),
                               shape=(8,), dtype=np.float32)
-        elif self._control_mode == "pd_ee_delta_pose_quat":
+        elif self._control_mode == "ee_delta_pose_quat":
             # [x, y, z, w, x, y, z, gripper], xyz in meters, wxyz is unit quaternion
             return spaces.Box(low=-1, high=1, shape=(8,), dtype=np.float32)
         else:
