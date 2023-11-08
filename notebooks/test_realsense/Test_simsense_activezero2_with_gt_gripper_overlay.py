@@ -79,7 +79,22 @@ if __name__ == '__main__':
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct27_loglinear_disparity.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct27_loglinear_disparity_384_reweight.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_oct28_loglinear_disp384_newdata.pth'
-    ckpt_path = '/home/xuanlin/activezero2_official/model_oct28_loglinear_disp384_normal_coeff1_newdata.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_oct28_loglinear_disp384_normal_coeff1_newdata.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov2_loglinear_disp384_sim.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov2_loglinear_disp384_normal_coeff1_sim2.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov2_loglinear_disp384_normal_coeff1_real.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov2_loglinear_disp384_real.pth' # 16500, best so far, pay attention to interp mode INTER_CUBIC
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov4_loglinear_disp384_real_2.pth' # 9000
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj15_fixed.pth' # 
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj2_fixed_areainterp.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj15_fixed_areainterp_filter.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj3_fixed_areainterp_start9k.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_sim_areainterp.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_36k_areainterp.pth'
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_36k_real_start9k_areainterp.pth' # 15000, 22500, 16500
+    ckpt_path = '/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_72k_real_start9k_areainterp.pth' # 27000，21000, 25500
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_72k_areainterp.pth' # 22500, 30000
+    # ckpt_path = '/home/xuanlin/activezero2_official/tmp_loglinear_disp384.pth'
     disparity_mode = "log_linear" if 'loglinear' in ckpt_path else 'regular'
     loglinear_disp_c = -0.02 if '384' in ckpt_path else 0.01
     img_resize = (424, 240) # [resize_W, resize_H]
@@ -87,16 +102,17 @@ if __name__ == '__main__':
     disp_conf_topk = 2 if 'k4' not in ckpt_path else 4
     disp_conf_thres = 0.0 # 0.8 # 0.95
     MAX_DISP = 384 if '384' in ckpt_path else 256
-    ckpt_pred_normal = 'normal' in ckpt_path and not 'normalv2' in ckpt_path
+    ckpt_pred_normal = False # 'normal' in ckpt_path and not 'normalv2' in ckpt_path
+    img_downsample_interp_mode = cv2.INTER_AREA if 'areainterp' in ckpt_path else cv2.INTER_CUBIC
     # ckpt_pred_normal_v2 = 'normalv2' in ckpt_path
 
     model = CGI_Stereo(maxdisp=MAX_DISP, disparity_mode=disparity_mode, loglinear_disp_c=loglinear_disp_c, 
                        predict_normal=ckpt_pred_normal) # , predict_normal_v2=ckpt_pred_normal_v2)
-    model.load_state_dict(torch.load(ckpt_path)['model'])
+    model.load_state_dict(torch.load(ckpt_path)['model'], strict=False)
     model = model.to(device)
 
     def preprocess_image(image: np.ndarray) -> torch.Tensor:
-        img_L = cv2.resize((image / 255.0).astype(np.float32), img_resize, interpolation=cv2.INTER_CUBIC)
+        img_L = cv2.resize((image / 255.0).astype(np.float32), img_resize, interpolation=img_downsample_interp_mode)
         return torch.from_numpy(img_L).to(device)[None, None, ...]  # [1, 1, *img_resize]
 
     # ----- Simsense ----- #
