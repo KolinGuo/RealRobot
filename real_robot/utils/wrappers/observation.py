@@ -2,9 +2,9 @@ from collections import OrderedDict
 from copy import deepcopy
 from typing import Sequence
 
-import gym
+import gymnasium as gym
 import numpy as np
-from gym import spaces
+from gymnasium import spaces
 
 from real_robot.utils.common import (
     flatten_dict_keys,

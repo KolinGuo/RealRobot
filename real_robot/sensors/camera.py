@@ -4,7 +4,7 @@ from typing import Dict, Union, Tuple, Any, Optional
 
 import numpy as np
 from sapien import Pose
-from gym import spaces
+from gymnasium import spaces
 
 from ..utils.camera import pose_CV_ROS, pose_ROS_CV
 from ..utils.realsense import RSDevice

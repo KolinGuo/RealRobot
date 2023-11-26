@@ -74,6 +74,7 @@ rosbag reindex <bag_path>
   * `RSDevice` now accepts `config` as parameter (`width`, `height`, `fps`) instead of `rs.config`
 
 ### Other changes
+* Switch from `gym` to `gymnasium`
 * Rename all `control_mode` by removing `pd_` prefix for clarity. No PD controller is used.
 * `real_robot.agents.xarm`
   * `XArm7` will not clear *"Safety Boundary Limit"* error automatically in `set_action()`

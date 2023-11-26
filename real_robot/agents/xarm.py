@@ -6,7 +6,7 @@ import math
 from typing import List
 
 import numpy as np
-from gym import spaces
+from gymnasium import spaces
 import pyrealsense2 as rs
 from sapien import Pose
 from transforms3d.euler import euler2quat, quat2euler

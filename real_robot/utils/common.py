@@ -3,7 +3,7 @@ from typing import Dict, Sequence
 
 import numpy as np
 from sapien import Pose
-from gym import spaces
+from gymnasium import spaces
 
 from .logger import get_logger
 

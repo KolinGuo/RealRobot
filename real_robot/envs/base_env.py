@@ -1,33 +1,46 @@
-import os
-from pathlib import Path
-from datetime import datetime
-from collections import OrderedDict
-from typing import Dict, List, Union, Sequence
+from __future__ import annotations
 
-import gym
+import os
+from collections import OrderedDict
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Sequence, SupportsFloat, Union
+
+import gymnasium as gym
 import numpy as np
 import pyrealsense2 as rs
-
 from mani_skill2.envs.sapien_env import BaseEnv as MS2BaseEnv
-from ..sensors.camera import (
-    CALIB_CAMERA_POSES, CameraConfig, Camera,
-    parse_camera_cfgs, update_camera_cfgs_from_dict
-)
+
 from ..agents import XArm7
-from ..utils.logger import get_logger
-from ..utils.common import (
-    convert_observation_to_space, vectorize_pose, flatten_state_dict,
-    clip_and_scale_action
+from ..sensors.camera import (
+    CALIB_CAMERA_POSES,
+    Camera,
+    CameraConfig,
+    parse_camera_cfgs,
+    update_camera_cfgs_from_dict,
 )
+from ..utils.common import (
+    clip_and_scale_action,
+    convert_observation_to_space,
+    flatten_state_dict,
+    vectorize_pose,
+)
+from ..utils.logger import get_logger
+from ..utils.multiprocessing import SharedObject, ctx, start_and_wait_for_process
 from ..utils.visualization import Visualizer
-from ..utils.multiprocessing import ctx, SharedObject, start_and_wait_for_process
 
 
-class XArmBaseEnv(gym.Env):
+class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
     """Superclass for XArm real robot environments."""
 
     SUPPORTED_OBS_MODES = ("state", "state_dict", "none", "image")
     SUPPORTED_IMAGE_OBS_MODES = ("hand_front", "front", "hand")
+
+    metadata: dict[str, Any] = {
+        "obs_modes": SUPPORTED_OBS_MODES,
+        "image_obs_modes": SUPPORTED_IMAGE_OBS_MODES,
+        "render_modes": [],
+    }
 
     def __init__(
         self, *args,
@@ -38,7 +51,7 @@ class XArmBaseEnv(gym.Env):
         camera_cfgs: dict = {},
         render_camera_cfgs: dict = {},
         xarm_ip="192.168.1.229",
-        safety_boundary_mm: List[int] = [550, 0, 50, -600, 280, 0],
+        safety_boundary_mm: list[int] = [550, 0, 50, -600, 280, 0],
         boundary_clip_mm: int = 10,
         with_hand_camera: bool = True,
         action_translation_scale=100.0,
@@ -272,7 +285,9 @@ class XArmBaseEnv(gym.Env):
     # ---------------------------------------------------------------------- #
     # Reset
     # ---------------------------------------------------------------------- #
-    def reset(self, seed=None):
+    def reset(
+        self, *, seed: int | None = None, **kwargs
+    ) -> tuple[np.ndarray | dict, dict[str, Any]]:
         self.set_episode_rng(seed)
         self._elapsed_steps = 0
 
@@ -283,11 +298,11 @@ class XArmBaseEnv(gym.Env):
         self.visualizer.reset()
 
         if self._is_ms2_env:
-            obs = super().reset(seed=self._episode_seed)
+            obs = super().reset(seed=self._episode_seed, **kwargs)
         else:
             obs = self.get_obs()
 
-        return obs
+        return obs, {}
 
     def set_episode_rng(self, seed):
         """Set the random generator for current episode."""
@@ -333,7 +348,7 @@ class XArmBaseEnv(gym.Env):
     def obs_mode(self):
         return self._obs_mode
 
-    def get_obs(self):
+    def get_obs(self) -> np.ndarray | dict:
         if self._is_ms2_env:
             return super().get_obs()
 
@@ -402,14 +417,14 @@ class XArmBaseEnv(gym.Env):
         for cam in self._cameras.values():
             cam.take_picture()
 
-    def get_images(self) -> Dict[str, Dict[str, np.ndarray]]:
+    def get_images(self) -> dict[str, dict[str, np.ndarray]]:
         """Get (raw) images from all cameras"""
         images = OrderedDict()
         for name, cam in self._cameras.items():
             images[name] = cam.get_images()
         return images
 
-    def get_camera_params(self) -> Dict[str, Dict[str, np.ndarray]]:
+    def get_camera_params(self) -> dict[str, dict[str, np.ndarray]]:
         """Get camera parameters from all cameras."""
         params = OrderedDict()
         for name, cam in self._cameras.items():
@@ -458,7 +473,9 @@ class XArmBaseEnv(gym.Env):
     # ---------------------------------------------------------------------- #
     # Step
     # ---------------------------------------------------------------------- #
-    def step(self, action: np.ndarray):
+    def step(
+        self, action: np.ndarray
+    ) -> tuple[np.ndarray | dict, SupportsFloat, bool, bool, dict[str, Any]]:
         if self._is_ms2_env:
             return super().step(action)
 
@@ -468,12 +485,19 @@ class XArmBaseEnv(gym.Env):
         obs = self.get_obs()
         info = self.get_info(obs=obs)
         reward = self.get_reward(obs=obs, action=action, info=info)
-        done = self.get_done(obs=obs, info=info)
+        terminated = False
 
-        return obs, reward, done, info
+        return obs, reward, terminated, False, info
 
-    def step_action(self, action, speed=None, mvacc=None, gripper_speed=None,
-                    skip_gripper=False, wait=True):
+    def step_action(
+        self,
+        action: np.ndarray,
+        speed=None,
+        mvacc=None,
+        gripper_speed=None,
+        skip_gripper=False,
+        wait=True,
+    ) -> None:
         """
         :param action: action corresponding to self.control_mode, np.floating np.ndarray
                        action[-1] is gripper action (always has range [-1, 1])
@@ -493,11 +517,16 @@ class XArmBaseEnv(gym.Env):
         :param wait: whether to wait for the arm to complete, default is False.
                      Has no effect in "joint_online" and "cartesian_online" motion mode
         """
-        self.agent.set_action(action,
-                              translation_scale=self.action_translation_scale,
-                              axangle_scale=self.action_axangle_scale,
-                              speed=speed, mvacc=mvacc, gripper_speed=gripper_speed,
-                              skip_gripper=skip_gripper, wait=wait)
+        self.agent.set_action(
+            action,
+            translation_scale=self.action_translation_scale,
+            axangle_scale=self.action_axangle_scale,
+            speed=speed,
+            mvacc=mvacc,
+            gripper_speed=gripper_speed,
+            skip_gripper=skip_gripper,
+            wait=wait,
+        )
 
     def evaluate(self, **kwargs) -> dict:
         """Evaluate whether the task succeeds. Used for training in real world"""
@@ -531,7 +560,7 @@ class XArmBaseEnv(gym.Env):
     # ---------------------------------------------------------------------- #
     # Visualization
     # ---------------------------------------------------------------------- #
-    def render(self, obs_dict: Dict[str, Union[SharedObject._object_types]] = {}):
+    def render(self, obs_dict: dict[str, Union[SharedObject._object_types]] = {}):
         """Render observations by updating previously rendered obs with obs_dict.
         Previous obs will be cached until reset.
 
