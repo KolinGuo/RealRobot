@@ -10,8 +10,8 @@ if __name__ == "__main__":
         install_requires=[
             'pyrealsense2', 'numpy', 'gymnasium', 'transforms3d',
             'urchin',  # loading URDF
-            'opencv-python', 'open3d', 'Pillow', 'scipy',  # for visualization
-            'sapien'  # for sapien.Pose and simsense
+            'opencv-python', 'open3d>=0.17.0', 'Pillow', 'scipy',  # for visualization
+            'sapien~=3.0.0.dev'  # for sapien.Pose and simsense
         ],
         package_dir={
             "real_robot": "real_robot",
