@@ -6,6 +6,8 @@ if __name__ == "__main__":
         name='real_robot',
         version='0.1.0rc0',
         description="Real Robot xArm7",
+        long_description=open("README.md").read(),
+        long_description_content_type="text/markdown",
         python_requires=">=3.8",
         install_requires=[
             'pyrealsense2', 'numpy', 'gymnasium', 'transforms3d',
