@@ -1,4 +1,6 @@
-from typing import Dict, List, Union, Any, Optional
+from __future__ import annotations
+
+from typing import Any, Union
 import time
 
 import numpy as np
@@ -85,7 +87,7 @@ class Visualizer:
             self.show_obs(obs_dict)
             self.render()
 
-    def _show_obs_async(self, obs_dict: Dict[str, Union[SharedObject._object_types]]):
+    def _show_obs_async(self, obs_dict: dict[str, Union[SharedObject._object_types]]):
         """Render observations
         :param obs_dict: dict, {so_data_name: obs_data}
                          See CV2Visualizer.__init__.__doc__ and
@@ -98,10 +100,12 @@ class Visualizer:
             else:
                 self.so_data_dict[so_data_name].assign(data)
 
-    def _show_obs_sync(self, *, camera_names: Optional[List[str]] = None,
-                       **obs_dict: Dict[str, Union[np.ndarray,
-                                                   List[np.ndarray],
-                                                   o3d.geometry.Geometry]]):
+    def _show_obs_sync(
+        self,
+        *,
+        camera_names: list[str] | None = None,
+        **obs_dict: dict[str, np.ndarray | list[np.ndarray] | o3d.geometry.Geometry],
+    ):
         """Render observations
         :param camera_names: camera names if obs_data are from multiple cameras
                              The order should match with order of obs_data
@@ -157,7 +161,7 @@ class Visualizer:
         self.cv2vis.show_images([img for _, img in sorted(images.items())])
         self.o3dvis.add_geometries(o3d_geometries)
 
-    def show_obs(self, obs_dict: Dict[str, Any]) -> None:
+    def show_obs(self, obs_dict: dict[str, Any]) -> None:
         """Render observations
 
         :param obs_dict: dict, {so_data_name: obs_data}

@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from copy import deepcopy
 from functools import partial
-from typing import Dict, Type
+from typing import Type
 
 import gymnasium as gym
 from gymnasium.envs.registration import EnvSpec as GymEnvSpec
@@ -45,12 +47,12 @@ class EnvSpec:
         )
 
 
-REGISTERED_ENVS: Dict[str, EnvSpec] = {}
+REGISTERED_ENVS: dict[str, EnvSpec] = {}
 
 
 def register(
     name: str, cls: Type[XArmBaseEnv],
-    max_episode_steps=None, default_kwargs: dict = None
+    max_episode_steps: int | None = None, default_kwargs: dict | None = None
 ):
     """Register a real_robot environment."""
     if name in REGISTERED_ENVS:

@@ -1,11 +1,13 @@
 """Unittests for real_robot.utils.multiprocessing.shared_object"""
+from __future__ import annotations
+
 import os
 import uuid
 import random
 import string
 import tempfile
 from time import perf_counter
-from typing import Union, Tuple
+from typing import Union
 
 import numpy as np
 from sapien import Pose
@@ -19,7 +21,7 @@ _logger = get_logger("Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(me
 NDARRAY_NBYTES_LIMIT = 20 * 1024**2  # 20 MiB
 
 
-def create_random_ndarray(dtype: Union[SharedObject._np_dtypes], shape: Tuple[int]):
+def create_random_ndarray(dtype: Union[SharedObject._np_dtypes], shape: tuple[int, ...]):
     if np.issubdtype(dtype, np.bool_):
         data = np.random.randint(2, size=shape, dtype=dtype)
     elif np.issubdtype(dtype, np.integer):

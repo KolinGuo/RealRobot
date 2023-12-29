@@ -36,10 +36,13 @@ Usage Notes:
     >>> so.fetch()[..., 0]           # Slice only
     >>> so.fetch(lambda x: x[..., 0].copy()) + 1  # Slice and apply operation
 """
+from __future__ import annotations
+
 import struct
 import time
+from collections.abc import Callable
 from multiprocessing.shared_memory import SharedMemory
-from typing import Callable, Any, Optional, Union
+from typing import Any, Union
 
 import numpy as np
 from sapien import Pose
@@ -149,45 +152,45 @@ class SharedObject:
         data_shape = struct.unpack_from("Q" * data_ndim, buf, offset=18)
         return np_dtype_idx, data_ndim, data_shape
 
-    _fetch_fn_type = Optional[Callable[[Union[_object_types]], Any]]
+    _fetch_fn_type = Callable[[Union[_object_types]], Any] | None
 
     @staticmethod
-    def _fetch_None(buf, fn: Optional[Callable[[None.__class__], Any]], *args) -> Any:
+    def _fetch_None(buf, fn: Callable[[None.__class__], Any] | None, *args) -> Any:
         return None if fn is None else fn(None)
 
     @staticmethod
-    def _fetch_bool(buf, fn: Optional[Callable[[bool], Any]], *args) -> Any:
+    def _fetch_bool(buf, fn: Callable[[bool], Any] | None, *args) -> Any:
         return bool(buf[9]) if fn is None else fn(bool(buf[9]))
 
     @staticmethod
-    def _fetch_int(buf, fn: Optional[Callable[[int], Any]], *args) -> Any:
+    def _fetch_int(buf, fn: Callable[[int], Any] | None, *args) -> Any:
         v = struct.unpack_from('q', buf, offset=9)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_float(buf, fn: Optional[Callable[[float], Any]], *args) -> Any:
+    def _fetch_float(buf, fn: Callable[[float], Any] | None, *args) -> Any:
         v = struct.unpack_from('d', buf, offset=9)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_pose(buf, fn: Optional[Callable[[Pose], Any]], *args) -> Any:
+    def _fetch_pose(buf, fn: Callable[[Pose], Any] | None, *args) -> Any:
         """Fetch and construct a sapien.Pose (using __setstate__)"""
         pose = Pose.__new__(Pose)
         pose.__setstate__(struct.unpack_from("7f", buf, offset=9))
         return pose if fn is None else fn(pose)
 
     @staticmethod
-    def _fetch_str(buf, fn: Optional[Callable[[str], Any]], *args) -> Any:
+    def _fetch_str(buf, fn: Callable[[str], Any] | None, *args) -> Any:
         v = buf[9:].tobytes().rstrip(b'\x00')[:-1].decode(_encoding)
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_bytes(buf, fn: Optional[Callable[[bytes], Any]], *args) -> Any:
+    def _fetch_bytes(buf, fn: Callable[[bytes], Any] | None, *args) -> Any:
         v = buf[9:].tobytes().rstrip(b'\x00')[:-1]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_ndarray(buf, fn: Optional[Callable[[np.ndarray], Any]],
+    def _fetch_ndarray(buf, fn: Callable[[np.ndarray], Any] | None,
                        data_buf_ro: np.ndarray) -> Any:
         """Always return a copy of the underlying buffer
         Examples (ordered from fastest to slowest, benchmarked with 480x848x3 np.uint8):

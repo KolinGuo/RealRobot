@@ -1,9 +1,10 @@
 """xArm7 Agent Interface
 Check user manual at https://www.ufactory.cc/download/
 """
+from __future__ import annotations
+
 from collections import OrderedDict
 import math
-from typing import List
 
 import numpy as np
 from gymnasium import spaces
@@ -41,7 +42,7 @@ class XArm7:
                  ip: str = "192.168.1.229",
                  control_mode: str = "ee_delta_pos",
                  motion_mode: str = "position", *,
-                 safety_boundary_mm: List[int] = [999, -999, 999, -999, 999, 0],
+                 safety_boundary_mm: list[int] = [999, -999, 999, -999, 999, 0],
                  boundary_clip_mm: int = 10,
                  with_hand_camera: bool = True,
                  run_as_process: bool = False):

@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import os
 import math
 import time
 import functools
 from collections import defaultdict
-from typing import List, Tuple
 
 import numpy as np
 import cv2
@@ -83,7 +84,7 @@ class CV2Visualizer:
             raise NotImplementedError(f"Unknown image type: {image.shape=} {dtype=}")
 
     @staticmethod
-    def get_image_layout(n_image: int) -> Tuple[int, int]:
+    def get_image_layout(n_image: int) -> tuple[int, int]:
         """Get layout of Images (n_rows, n_cols) where n_rows >= n_cols"""
         s = math.isqrt(n_image)
         s_squared = s*s
@@ -117,7 +118,7 @@ class CV2Visualizer:
             )
             return new_image
 
-    def show_images(self, images: List[np.ndarray]):
+    def show_images(self, images: list[np.ndarray]):
         """Show the list of images, support non-equal size (cv2.rerize to max size)
         :param images: List of np.ndarray images. Supports depth or RGB color images.
                        If depth image, dtype can be np.uint16 or np.floating
@@ -172,7 +173,7 @@ class CV2Visualizer:
             np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
         ))
 
-        def get_so_data_names(all_so_names: List[str]) -> List[str]:
+        def get_so_data_names(all_so_names: list[str]) -> list[str]:
             """Get so_data_names acceptable by CV2Visualizer"""
             return [
                 p for p in all_so_names

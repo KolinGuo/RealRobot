@@ -1,7 +1,8 @@
 """Get depth image from stereo IR images using simsense"""
+from __future__ import annotations
+
 import numpy as np
 import cv2
-from typing import Tuple, Optional
 
 from sapien.pysapien.simsense import DepthSensorEngine
 
@@ -9,13 +10,13 @@ from sapien.pysapien.simsense import DepthSensorEngine
 class SimsenseDepth:
     def __init__(
         self,
-        ir_size: Tuple[int],
+        ir_size: tuple[int, int],
         k_l: np.ndarray,
         k_r: np.ndarray,
         l2r: np.ndarray,
-        k_rgb: Optional[np.ndarray] = None,
-        rgb_size: Optional[Tuple[int]] = None,
-        l2rgb: Optional[np.ndarray] = None,
+        k_rgb: np.ndarray | None = None,
+        rgb_size: tuple[int, int] | None = None,
+        l2rgb: np.ndarray | None = None,
         min_depth: float = 0.0,
         max_depth: float = 10.0,
         ir_noise_seed: int = 0,
@@ -288,9 +289,9 @@ class SimsenseDepth:
 
     @staticmethod
     def _get_registration_mat(
-        ir_size: Tuple[int], k_ir: np.ndarray,
+        ir_size: tuple[int, int], k_ir: np.ndarray,
         k_rgb: np.ndarray, ir2rgb: np.ndarray
-    ) -> Tuple[np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         R = ir2rgb[:3, :3]
         t = ir2rgb[:3, 3:]
 

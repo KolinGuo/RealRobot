@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from copy import deepcopy
-from typing import Union, List
+from typing import Union
 
 import numpy as np
 import open3d as o3d
@@ -53,7 +55,7 @@ def transform_geometry(geometry: ANY_O3D_GEOMETRY, T: np.ndarray) -> ANY_O3D_GEO
     return out_geometry
 
 
-O3D_GEOMETRY_LIST = Union[tuple(List[t] for t in O3D_GEOMETRIES)]
+O3D_GEOMETRY_LIST = Union[tuple(list[t] for t in O3D_GEOMETRIES)]
 def merge_geometries(geometries: O3D_GEOMETRY_LIST) -> ANY_O3D_GEOMETRY:
     """Merge a list of o3d geometries, must be of same type"""
     geometry_types = set([type(geometry) for geometry in geometries])

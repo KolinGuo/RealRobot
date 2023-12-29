@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from collections import defaultdict, OrderedDict
-from typing import Dict, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 from sapien import Pose
@@ -11,7 +13,7 @@ from .logger import get_logger
 # -------------------------------------------------------------------------- #
 # Basic
 # -------------------------------------------------------------------------- #
-def merge_dicts(ds: Sequence[Dict], asarray=False):
+def merge_dicts(ds: Sequence[dict], asarray=False):
     """Merge multiple dicts with the same keys to a single one."""
     # NOTE(jigu): To be compatible with generator, we only iterate once.
     ret = defaultdict(list)

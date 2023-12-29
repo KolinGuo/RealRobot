@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import glob
 import time
@@ -5,7 +7,6 @@ import platform
 from pathlib import Path
 from functools import partial
 from dataclasses import dataclass, field
-from typing import List, Union, Dict, Optional
 
 import numpy as np
 from urchin import URDF
@@ -23,9 +24,9 @@ from ..logger import get_logger
 
 isMacOS = (platform.system() == "Darwin")
 
-_o3d_geometry_type = Union[o3d.geometry.Geometry3D,
-                           o3d.t.geometry.Geometry,
-                           rendering.TriangleMeshModel]
+_o3d_geometry_type = (
+    o3d.geometry.Geometry3D | o3d.t.geometry.Geometry | rendering.TriangleMeshModel
+)
 
 
 class O3DGeometryDefaultDict(dict):
@@ -247,7 +248,7 @@ class GeometryNode:
     name: str
     id: int = -1
     parent: 'GeometryNode' = None
-    children: List['GeometryNode'] = field(default_factory=list)
+    children: list['GeometryNode'] = field(default_factory=list)
     cell: gui.Widget = None
     # Material settings values
     mat_changed: bool = False
@@ -1384,7 +1385,7 @@ class O3DGUIVisualizer:
         )
         return True
 
-    def add_geometries(self, geometry_dict: Dict[str, _o3d_geometry_type],
+    def add_geometries(self, geometry_dict: dict[str, _o3d_geometry_type],
                        show: bool = None):
         """Add multiple geometries (allow for computing update fps)
         :param geometry_dict: dictionary with format {name: Open3D geometry}
@@ -1400,7 +1401,7 @@ class O3DGUIVisualizer:
         self._fps_label.text = f"FPS: {fps:6.2f}"
 
     def _create_geometry_node(
-        self, name: str, parent_node: Optional[GeometryNode] = None
+        self, name: str, parent_node: GeometryNode | None = None
     ) -> GeometryNode:
         """Create a GeometryNode and update GUI"""
         child_node = GeometryNode(name, parent=parent_node)

@@ -1,9 +1,10 @@
 """Interface for pyrealsense2 API"""
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, List, Tuple, Union, Optional
 
 import pyrealsense2 as rs
 import numpy as np
@@ -29,8 +30,8 @@ def check_rs_product_support(name: str) -> None:
 
 
 def get_connected_rs_devices(
-    device_sn: Optional[Union[str, List[str]]] = None
-) -> Union[List[str], rs.device, List[rs.device]]:
+    device_sn: str | list[str] | None = None
+) -> list[str] | rs.device | list[rs.device]:
     """Returns list of connected RealSense devices
     :param device_sn: list of serial numbers of devices to get.
                       If not None, only return those devices in matching order.
@@ -86,17 +87,18 @@ class RSDevice:
 
     def __init__(
         self,
-        device_sn: Optional[str] = None,
-        uid: Optional[str] = None,
-        config: Union[Tuple[int], Dict[str, Union[int, Tuple[int]]]] = (848, 480, 30),
+        device_sn: str | None = None,
+        uid: str | None = None,
+        config: tuple[int, int, int]
+        | dict[str, int | tuple[int, int, int]] = (848, 480, 30),
         *,
         preset: str = "Default",
         color_option_kwargs={},
         depth_option_kwargs={},
-        json_file: Optional[Union[str, Path]] = None,
-        record_bag_path: Optional[Union[str, Path]] = None,
+        json_file: str | Path | None = None,
+        record_bag_path: str | Path | None = None,
         run_as_process: bool = False,
-        parent_pose_so_name: Optional[str] = None,
+        parent_pose_so_name: str | None = None,
         local_pose: Pose = pose_CV_ROS
     ):
         """
@@ -263,7 +265,7 @@ class RSDevice:
         self.all_extrinsics = all_extrinsics
 
     def _create_rs_config(
-        self, config: Union[Tuple[int], Dict[str, Union[int, Tuple[int]]]]
+        self, config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]]
     ) -> rs.config:
         """Create rs.config for rs.pipeline"""
         rs_config = rs.config()
@@ -376,7 +378,7 @@ class RSDevice:
                 raise TypeError(f"Unknown stream {profile=}")
         return True
 
-    def wait_for_frames(self) -> Dict[str, np.ndarray]:
+    def wait_for_frames(self) -> dict[str, np.ndarray]:
         """Wait until a new set of frames becomes available.
         Each enabled stream in the pipeline is time-synchronized.
         :return ret_frames: dictionary {stream_name: np.ndarray}. Supported examples:
@@ -482,7 +484,7 @@ class RSDevice:
         for so_data in so_data_dict.values():
             so_data.unlink()
 
-    def get_intrinsic_matrix(self) -> Union[np.ndarray, Dict[str, np.ndarray]]:
+    def get_intrinsic_matrix(self) -> np.ndarray | dict[str, np.ndarray]:
         """Returns a 3x3 camera intrinsics matrix, available after self.start()"""
         if "Color" in self.intrinsic_matrices:
             # with rs.align, camera intrinsics is color sensor intrinsics
@@ -500,7 +502,7 @@ class RSDevice:
         return self.pipeline is not None
 
     @property
-    def supported_depth_presets(self) -> List[str]:
+    def supported_depth_presets(self) -> list[str]:
         presets = []
         max_val = int(self.depth_sensor.get_option_range(rs.option.visual_preset).max)
         for i in range(max_val+1):
@@ -511,7 +513,7 @@ class RSDevice:
         return presets
 
     @property
-    def supported_color_options(self) -> Dict[int, rs.option_range]:
+    def supported_color_options(self) -> dict[int, rs.option_range]:
         options = {}
         for option in self.color_sensor.get_supported_options():
             try:
@@ -521,7 +523,7 @@ class RSDevice:
         return options
 
     @property
-    def supported_depth_options(self) -> Dict[int, rs.option_range]:
+    def supported_depth_options(self) -> dict[int, rs.option_range]:
         options = {}
         for option in self.depth_sensor.get_supported_options():
             try:
@@ -694,8 +696,8 @@ class RealSenseAPI:
 
         self.enable_all_devices()
 
-    def _load_connected_devices(self, device_sn: Optional[List[str]] = None,
-                                **kwargs) -> List[RSDevice]:
+    def _load_connected_devices(self, device_sn: list[str] | None = None,
+                                **kwargs) -> list[RSDevice]:
         """Return list of RSDevice
         :param device_sn: list of serial numbers of devices to load.
                           If not None, only load those devices in exact order.
@@ -715,7 +717,7 @@ class RealSenseAPI:
             device.start()
             self._enabled_devices.append(device)
 
-    def capture(self) -> Union[Dict[str, np.ndarray], List[Dict[str, np.ndarray]]]:
+    def capture(self) -> dict[str, np.ndarray] | list[dict[str, np.ndarray]]:
         """Capture data from all _enabled_devices.
 
         :return frame_dicts: list of frame_dict, {stream_name: np.ndarray}.

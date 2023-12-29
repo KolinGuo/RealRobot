@@ -1,4 +1,5 @@
-from typing import Tuple, Optional
+from __future__ import annotations
+
 import numpy as np
 import cv2
 from sapien import Pose
@@ -100,7 +101,7 @@ def transform_points_batch(pts: np.ndarray, H: np.ndarray) -> np.ndarray:
             + H[..., [3], :3]).reshape(out_pts_shape)
 
 
-def resize_obs_image(rgb_image, depth_image, intr_params: Tuple, new_size,
+def resize_obs_image(rgb_image, depth_image, intr_params: tuple, new_size,
                      interpolation=cv2.INTER_NEAREST_EXACT):
     """Resize rgb/depth images into shape=(width, height)
     :param rgb_image: [H, W, 3] np.uint8 np.ndarray
@@ -128,8 +129,8 @@ def register_depth(
     k_depth: np.ndarray,
     k_color: np.ndarray,
     T_color_depth: np.ndarray,
-    color_im_size: Tuple[int],
-    dist_color: Optional[np.ndarray] = None,
+    color_im_size: tuple[int, int],
+    dist_color: np.ndarray | None = None,
     depth_dilation: bool = False
 ) -> np.ndarray:
     """Register depth to color frame (a.k.a., align_depth_to_color)

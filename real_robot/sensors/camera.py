@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from pathlib import Path
 from collections import OrderedDict
-from typing import Dict, Union, Tuple, Any, Optional
+from typing import Any
 
 import numpy as np
 from sapien import Pose
@@ -23,15 +25,16 @@ class CameraConfig:
     def __init__(
         self,
         uid: str,
-        device_sn: Optional[str] = None,
+        device_sn: str | None = None,
         pose: Pose = pose_CV_ROS,
-        config: Union[Tuple[int], Dict[str, Union[int, Tuple[int]]]] = (848, 480, 30),
+        config: tuple[int, int, int]
+        | dict[str, int | tuple[int, int, int]] = (848, 480, 30),
         *,
         preset: str = "Default",
         color_option_kwargs={},
         depth_option_kwargs={},
-        json_file: Optional[Union[str, Path]] = None,
-        parent_pose_so_name: Optional[str] = None,
+        json_file: str | Path | None = None,
+        parent_pose_so_name: str | None = None,
     ):
         """Camera configuration.
 
@@ -86,8 +89,8 @@ def parse_camera_cfgs(camera_cfgs):
         raise TypeError(type(camera_cfgs))
 
 
-def update_camera_cfgs_from_dict(camera_cfgs: Dict[str, CameraConfig],
-                                 cfg_dict: Dict[str, Union[Any, Dict[str, Any]]]):
+def update_camera_cfgs_from_dict(camera_cfgs: dict[str, CameraConfig],
+                                 cfg_dict: dict[str, Any | dict[str, Any]]):
     # First, apply global configuration
     for k, v in cfg_dict.items():
         if k in camera_cfgs:  # camera_name, camera-specific config
@@ -119,7 +122,7 @@ class Camera:
     }
 
     def __init__(self, camera_cfg: CameraConfig, *,
-                 record_bag_path: Optional[Union[str, Path]] = None):
+                 record_bag_path: str | Path | None = None):
         """
         :param record_bag_path: path to save bag recording if not None.
                                 Must end with ".bag" if it's a file
@@ -194,7 +197,7 @@ class Camera:
                 self._camera_buffer[obs_key] = so_data.fetch()
         self._camera_pose = self.so_pose.fetch()
 
-    def get_images(self, take_picture=False) -> Dict[str, np.ndarray]:
+    def get_images(self, take_picture=False) -> dict[str, np.ndarray]:
         """Get (raw) images from the camera. Takes ~300 us for 848x480 @ 60fps
         :return rgb: color image, [H, W, 3] np.uint8 array
         :return depth: depth image, [H, W, 1] np.float32 array

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 import random
 import string
@@ -5,7 +7,7 @@ import multiprocessing as mp
 from time import sleep, perf_counter_ns
 from collections import defaultdict
 from pathlib import Path
-from typing import Union, Tuple
+from typing import Union
 
 import numpy as np
 from sapien import Pose
@@ -16,7 +18,7 @@ from prettytable import PrettyTable
 from real_robot.utils.multiprocessing import SharedObject
 
 
-def create_random_ndarray(dtype: Union[SharedObject._np_dtypes], shape: Tuple[int]):
+def create_random_ndarray(dtype: Union[SharedObject._np_dtypes], shape: tuple[int, ...]):
     if np.issubdtype(dtype, np.bool_):
         data = np.random.randint(2, size=shape, dtype=dtype)
     elif np.issubdtype(dtype, np.integer):
@@ -59,7 +61,7 @@ def create_random_object(
 
 
 def benchmark_object_create(object_type_idx: int, n_iters=100, bytes_len=50,
-                            dtype=np.uint8, shape=(480, 848, 3)) -> Tuple[float, float]:
+                            dtype=np.uint8, shape=(480, 848, 3)) -> tuple[float, float]:
     times_ns = []
     for _ in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
@@ -83,7 +85,7 @@ def benchmark_object_create(object_type_idx: int, n_iters=100, bytes_len=50,
 
 
 def benchmark_object_fetch(object_type_idx: int, n_iters=100, bytes_len=50,
-                           dtype=np.uint8, shape=(480, 848, 3)) -> Tuple[float, float]:
+                           dtype=np.uint8, shape=(480, 848, 3)) -> tuple[float, float]:
     times_ns = []
     for _ in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
@@ -109,7 +111,7 @@ def benchmark_object_fetch(object_type_idx: int, n_iters=100, bytes_len=50,
 
 
 def benchmark_object_assign(object_type_idx: int, n_iters=100, bytes_len=50,
-                            dtype=np.uint8, shape=(480, 848, 3)) -> Tuple[float, float]:
+                            dtype=np.uint8, shape=(480, 848, 3)) -> tuple[float, float]:
     times_ns = []
     for _ in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
@@ -138,7 +140,7 @@ def benchmark_object_assign(object_type_idx: int, n_iters=100, bytes_len=50,
 
 def benchmark_object_create_ref(
     object_type_idx: int, n_iters=100, bytes_len=50, dtype=np.uint8, shape=(480, 848, 3)
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     times_ns = []
     for _ in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
@@ -166,7 +168,7 @@ def benchmark_object_create_ref(
 
 def benchmark_object_modified(
     object_type_idx: int, n_iters=100, bytes_len=50, dtype=np.uint8, shape=(480, 848, 3)
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     times_ns = []
     for _ in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
@@ -193,7 +195,7 @@ def benchmark_object_modified(
 
 def benchmark_object_triggered(
     object_type_idx: int, n_iters=100, bytes_len=50, dtype=np.uint8, shape=(480, 848, 3)
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     times_ns = []
     for _ in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
@@ -220,7 +222,7 @@ def benchmark_object_triggered(
 
 def benchmark_object_trigger(
     object_type_idx: int, n_iters=100, bytes_len=50, dtype=np.uint8, shape=(480, 848, 3)
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     times_ns = []
     for _ in range(n_iters):
         data = create_random_object(object_type_idx, bytes_len=bytes_len,
@@ -272,7 +274,7 @@ def child_benchmark_object_fetch_assign(object_type_idx: int, p_idx: int):
 
 def benchmark_object_2_proc_fetch_assign(
     object_type_idx: int, n_iters=100, bytes_len=50, dtype=np.uint8, shape=(480, 848, 3)
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     data = create_random_object(object_type_idx, bytes_len=bytes_len,
                                 dtype=dtype, shape=shape)
     so_data = SharedObject("data", data=data)
@@ -319,7 +321,7 @@ def benchmark_object_2_proc_fetch_assign(
 
 def benchmark_object_5_proc_fetch_assign(
     object_type_idx: int, n_iters=100, bytes_len=50, dtype=np.uint8, shape=(480, 848, 3)
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     data = create_random_object(object_type_idx, bytes_len=bytes_len,
                                 dtype=dtype, shape=shape)
     so_data = SharedObject("data", data=data)

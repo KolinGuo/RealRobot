@@ -1,6 +1,6 @@
 from collections import OrderedDict
+from collections.abc import Sequence
 from copy import deepcopy
-from typing import Sequence
 
 import gymnasium as gym
 import numpy as np
