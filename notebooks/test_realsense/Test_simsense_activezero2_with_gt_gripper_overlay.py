@@ -1,15 +1,18 @@
+import time
 from pathlib import Path
+
 import cv2
 import numpy as np
-import torch
-import time
 import sapien
-from sapien import Pose
-from matplotlib import pyplot as plt
+import torch
 
-from real_robot.utils.visualization import Visualizer
 # from real_robot.sensors.simsense_depth import SimsenseDepth
 from active_zero2.models.cgi_stereo.cgi_stereo import CGI_Stereo
+from matplotlib import pyplot as plt
+from sapien import Pose
+
+from real_robot.utils.visualization import Visualizer
+
 
 def create_robot_scene(img_width, img_height, intrinsics, render_downsample_factor=1.0):
     engine = sapien.Engine()
@@ -24,12 +27,14 @@ def create_robot_scene(img_width, img_height, intrinsics, render_downsample_fact
     loader: sapien.URDFLoader = scene.create_urdf_loader()
     loader.fix_root_link = True
     robot_actor: sapien.Articulation = loader.load(
-        "/home/xuanlin/kolin_maniskill2/rl_benchmark/real_robot/real_robot/assets/descriptions/xarm7_d435.urdf" # xarm_floating_pris_finger_d435.urdf"
+        "/home/xuanlin/kolin_maniskill2/rl_benchmark/real_robot/real_robot/assets/descriptions/xarm7_d435.urdf"  # xarm_floating_pris_finger_d435.urdf"
     )
     print(robot_actor.get_links())
     print([x.name for x in robot_actor.get_active_joints()])
-    rgb_cam_actor = [x for x in robot_actor.get_links() if x.name == 'camera_color_frame'][0]
-    
+    rgb_cam_actor = [
+        x for x in robot_actor.get_links() if x.name == "camera_color_frame"
+    ][0]
+
     robot_actor.set_root_pose(sapien.Pose([0, 0, 3], [1, 0, 0, 0]))
 
     # Set initial joint positions
@@ -44,32 +49,51 @@ def create_robot_scene(img_width, img_height, intrinsics, render_downsample_fact
         pose=Pose(),
         width=int(img_width // render_downsample_factor),
         height=int(img_height // render_downsample_factor),
-        fovy=np.deg2rad(78.0), # D435 fovy
+        fovy=np.deg2rad(78.0),  # D435 fovy
         near=0.01,
         far=10.0,
     )
-    camera.set_focal_lengths(intrinsics[0,0] * render_width_scaling, intrinsics[1,1] * render_height_scaling)
-    camera.set_principal_point(intrinsics[0,2] * render_width_scaling, intrinsics[1,2] * render_height_scaling)
-    
+    camera.set_focal_lengths(
+        intrinsics[0, 0] * render_width_scaling,
+        intrinsics[1, 1] * render_height_scaling,
+    )
+    camera.set_principal_point(
+        intrinsics[0, 2] * render_width_scaling,
+        intrinsics[1, 2] * render_height_scaling,
+    )
+
     return scene, robot_actor, camera
 
-def obtain_gripper_gt_depth_img(scene, robot_actor, camera, qpos, orig_width, orig_height):
+
+def obtain_gripper_gt_depth_img(
+    scene, robot_actor, camera, qpos, orig_width, orig_height
+):
     import time
+
     tt = time.time()
     robot_actor.set_qpos(qpos)
     # scene.step() # Note: for sapien2, DO NOT call scene.step(); otherwise the qpos will be wrong.
     scene.update_render()
     camera.take_picture()
-    depth_img = camera.get_picture('Position') # [H, W, 4]
-    depth_img = -depth_img[..., 2] # note: valid depth pixels in depth_img are those whose depth value > 0
+    depth_img = camera.get_picture("Position")  # [H, W, 4]
+    depth_img = -depth_img[
+        ..., 2
+    ]  # note: valid depth pixels in depth_img are those whose depth value > 0
     if depth_img.shape[0] != orig_height or depth_img.shape[1] != orig_width:
-        depth_img = cv2.resize(depth_img, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST)
-    print(time.time() - tt) # rendering first time is slow and takes ~0.2s; second time will be very fast (2.5ms)
+        depth_img = cv2.resize(
+            depth_img, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST
+        )
+    print(
+        time.time() - tt
+    )  # rendering first time is slow and takes ~0.2s; second time will be very fast (2.5ms)
     return depth_img
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     data_dir = Path("/home/xuanlin/Downloads/capture").resolve()
-    image_paths = [p for p in data_dir.glob("*_images.npz") if "unaligned" not in p.name]  # all aligned images
+    image_paths = [
+        p for p in data_dir.glob("*_images.npz") if "unaligned" not in p.name
+    ]  # all aligned images
 
     # ----- ActiveZero++ ----- #
     # ckpt_path = '/home/xuanlin/activezero2_official/model.pth'
@@ -85,35 +109,47 @@ if __name__ == '__main__':
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov2_loglinear_disp384_normal_coeff1_real.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov2_loglinear_disp384_real.pth' # 16500, best so far, pay attention to interp mode INTER_CUBIC
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov4_loglinear_disp384_real_2.pth' # 9000
-    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj15_fixed.pth' # 
+    # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj15_fixed.pth' #
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj2_fixed_areainterp.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj15_fixed_areainterp_filter.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_real_reproj3_fixed_areainterp_start9k.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov5_loglinear_disp384_sim_areainterp.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_36k_areainterp.pth'
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_36k_real_start9k_areainterp.pth' # 15000, 22500, 16500
-    ckpt_path = '/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_72k_real_start9k_areainterp.pth' # 27000，21000, 25500
+    ckpt_path = "/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_72k_real_start9k_areainterp.pth"  # 27000，21000, 25500
     # ckpt_path = '/home/xuanlin/activezero2_official/model_nov6_loglinear_disp384_sim_72k_areainterp.pth' # 22500, 30000
     # ckpt_path = '/home/xuanlin/activezero2_official/tmp_loglinear_disp384.pth'
-    disparity_mode = "log_linear" if 'loglinear' in ckpt_path else 'regular'
-    loglinear_disp_c = -0.02 if '384' in ckpt_path else 0.01
-    img_resize = (424, 240) # [resize_W, resize_H]
-    device = 'cuda:0'
-    disp_conf_topk = 2 if 'k4' not in ckpt_path else 4
-    disp_conf_thres = 0.0 # 0.8 # 0.95
-    MAX_DISP = 384 if '384' in ckpt_path else 256
-    ckpt_pred_normal = False # 'normal' in ckpt_path and not 'normalv2' in ckpt_path
-    img_downsample_interp_mode = cv2.INTER_AREA if 'areainterp' in ckpt_path else cv2.INTER_CUBIC
+    disparity_mode = "log_linear" if "loglinear" in ckpt_path else "regular"
+    loglinear_disp_c = -0.02 if "384" in ckpt_path else 0.01
+    img_resize = (424, 240)  # [resize_W, resize_H]
+    device = "cuda:0"
+    disp_conf_topk = 2 if "k4" not in ckpt_path else 4
+    disp_conf_thres = 0.0  # 0.8 # 0.95
+    MAX_DISP = 384 if "384" in ckpt_path else 256
+    ckpt_pred_normal = False  # 'normal' in ckpt_path and not 'normalv2' in ckpt_path
+    img_downsample_interp_mode = (
+        cv2.INTER_AREA if "areainterp" in ckpt_path else cv2.INTER_CUBIC
+    )
     # ckpt_pred_normal_v2 = 'normalv2' in ckpt_path
 
-    model = CGI_Stereo(maxdisp=MAX_DISP, disparity_mode=disparity_mode, loglinear_disp_c=loglinear_disp_c, 
-                       predict_normal=ckpt_pred_normal) # , predict_normal_v2=ckpt_pred_normal_v2)
-    model.load_state_dict(torch.load(ckpt_path)['model'], strict=False)
+    model = CGI_Stereo(
+        maxdisp=MAX_DISP,
+        disparity_mode=disparity_mode,
+        loglinear_disp_c=loglinear_disp_c,
+        predict_normal=ckpt_pred_normal,
+    )  # , predict_normal_v2=ckpt_pred_normal_v2)
+    model.load_state_dict(torch.load(ckpt_path)["model"], strict=False)
     model = model.to(device)
 
     def preprocess_image(image: np.ndarray) -> torch.Tensor:
-        img_L = cv2.resize((image / 255.0).astype(np.float32), img_resize, interpolation=img_downsample_interp_mode)
-        return torch.from_numpy(img_L).to(device)[None, None, ...]  # [1, 1, *img_resize]
+        img_L = cv2.resize(
+            (image / 255.0).astype(np.float32),
+            img_resize,
+            interpolation=img_downsample_interp_mode,
+        )
+        return torch.from_numpy(img_L).to(device)[
+            None, None, ...
+        ]  # [1, 1, *img_resize]
 
     # ----- Simsense ----- #
     image_path = image_paths[0]
@@ -122,23 +158,37 @@ if __name__ == '__main__':
 
     ir_shape = images["ir_l"].shape
     rgb_shape = images["rgb"].shape
-    assert images["ir_r"].shape == ir_shape, f'Mismatched IR shape: left={ir_shape}, right={images["ir_r"].shape}'
+    assert (
+        images["ir_r"].shape == ir_shape
+    ), f'Mismatched IR shape: left={ir_shape}, right={images["ir_r"].shape}'
     k_rgb = params["intrinsic_cv"]
 
-    k_irl = k_irr = np.array([[430.13980103,   0.        , 425.1628418 ],
-                            [  0.        , 430.13980103, 235.27651978],
-                            [  0.        ,   0.        ,   1.        ]])
+    k_irl = k_irr = np.array(
+        [
+            [430.13980103, 0.0, 425.1628418],
+            [0.0, 430.13980103, 235.27651978],
+            [0.0, 0.0, 1.0],
+        ]
+    )
 
     # rsdevice.all_extrinsics["Infrared 1=>Infrared 2"]
-    T_irr_irl = np.array([[ 1.       ,  0.       ,  0.       , -0.0501572],
-                        [ 0.       ,  1.       ,  0.       ,  0.       ],
-                        [ 0.       ,  0.       ,  1.       ,  0.       ],
-                        [ 0.       ,  0.       ,  0.       ,  1.       ]])
+    T_irr_irl = np.array(
+        [
+            [1.0, 0.0, 0.0, -0.0501572],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
     # rsdevice.all_extrinsics["Infrared 1=>Color"]
-    T_rgb_irl = np.array([[ 9.99862015e-01,  1.34780351e-02,  9.70994867e-03, 1.48976548e-02],
-                        [-1.35059441e-02,  9.99904811e-01,  2.81448336e-03, 1.15314942e-05],
-                        [-9.67109110e-03, -2.94523709e-03,  9.99948919e-01, 1.56505470e-04],
-                        [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]])
+    T_rgb_irl = np.array(
+        [
+            [9.99862015e-01, 1.34780351e-02, 9.70994867e-03, 1.48976548e-02],
+            [-1.35059441e-02, 9.99904811e-01, 2.81448336e-03, 1.15314942e-05],
+            [-9.67109110e-03, -2.94523709e-03, 9.99948919e-01, 1.56505470e-04],
+            [0.00000000e00, 0.00000000e00, 0.00000000e00, 1.00000000e00],
+        ]
+    )
 
     # depth_engine = SimsenseDepth(
     #     ir_shape[::-1], k_l=k_irl, k_r=k_irr, l2r=T_irr_irl, k_rgb=k_rgb,
@@ -147,14 +197,16 @@ if __name__ == '__main__':
     # )
 
     # robot_scene, robot_actor, gripper_camera = create_robot_scene(
-    #     img_resize[0], img_resize[1], 
+    #     img_resize[0], img_resize[1],
     #     k_irl * np.array([[img_resize[0] / ir_shape[1]], [img_resize[1] / ir_shape[0]], [1]])
     # )
     gt_gripper_render_downsample_factor = 2.0
-    robot_scene, robot_actor, gripper_camera = create_robot_scene(rgb_shape[1], rgb_shape[0], k_rgb, gt_gripper_render_downsample_factor)
+    robot_scene, robot_actor, gripper_camera = create_robot_scene(
+        rgb_shape[1], rgb_shape[0], k_rgb, gt_gripper_render_downsample_factor
+    )
     qpos = np.zeros(len(robot_actor.get_active_joints()))
-    gripper_qpos = 0.85 # robot_actor.get_qlimits()[-1:,-1]
-    # given a gripper position, set qpos[-6:] to be the same 
+    gripper_qpos = 0.85  # robot_actor.get_qlimits()[-1:,-1]
+    # given a gripper position, set qpos[-6:] to be the same
     qpos[-6:] = gripper_qpos
     print(qpos)
 
@@ -162,7 +214,9 @@ if __name__ == '__main__':
 
     for image_path in image_paths:
         images = np.load(image_path)
-        params = np.load(image_path.parent / image_path.name.replace("images", "params"))
+        params = np.load(
+            image_path.parent / image_path.name.replace("images", "params")
+        )
 
         tag = image_path.stem.replace("_images", "")
         pose_world_camCV = Pose(params["cam2world_cv"])
@@ -181,48 +235,72 @@ if __name__ == '__main__':
         baseline = np.linalg.norm(T_irr_irl[:3, -1])
         focal_length_arr = torch.tensor([focal_length], device=device).float()
         baseline_arr = torch.tensor([baseline], device=device).float()
-        print("focal_length", focal_length, "baseline", baseline, "focal_length * baseline", focal_length * baseline)
+        print(
+            "focal_length",
+            focal_length,
+            "baseline",
+            baseline,
+            "focal_length * baseline",
+            focal_length * baseline,
+        )
         tt = time.time()
         with torch.no_grad():
-            pred_dict = model({
-                'img_l': preprocess_image(images["ir_l"]),
-                'img_r': preprocess_image(images["ir_r"]),
-                'focal_length': focal_length_arr,
-                'baseline': baseline_arr,
-            }, predict_normal=False)
+            pred_dict = model(
+                {
+                    "img_l": preprocess_image(images["ir_l"]),
+                    "img_r": preprocess_image(images["ir_r"]),
+                    "focal_length": focal_length_arr,
+                    "baseline": baseline_arr,
+                },
+                predict_normal=False,
+            )
             if disparity_mode == "log_linear":
-                pred_dict['pred_orig'] = model.to_raw_disparity(
-                    pred_dict['pred_orig'], focal_length_arr, baseline_arr
+                pred_dict["pred_orig"] = model.to_raw_disparity(
+                    pred_dict["pred_orig"], focal_length_arr, baseline_arr
                 )
-                pred_dict['pred_div4'] = model.to_raw_disparity(
-                    pred_dict['pred_div4'], focal_length_arr, baseline_arr
+                pred_dict["pred_div4"] = model.to_raw_disparity(
+                    pred_dict["pred_div4"], focal_length_arr, baseline_arr
                 )
             # calculate disparity confidence mask; (doing this on gpu is significantly faster than on cpu)
-            disparity_confidence = pred_dict['cost_prob'].topk(disp_conf_topk, dim=1).values.sum(dim=1) # [1, H, W]
-            pred_dict['disparity_conf_mask'] = disparity_confidence > disp_conf_thres
+            disparity_confidence = (
+                pred_dict["cost_prob"].topk(disp_conf_topk, dim=1).values.sum(dim=1)
+            )  # [1, H, W]
+            pred_dict["disparity_conf_mask"] = disparity_confidence > disp_conf_thres
             torch.cuda.synchronize()
         print("pred time", time.time() - tt)
         for k in pred_dict:
             pred_dict[k] = pred_dict[k].detach().cpu().numpy()
-        disparity = pred_dict['pred_orig'] # [1, H, W]
-        disparity = disparity.squeeze() # [H, W]
-        disparity_conf_mask = pred_dict['disparity_conf_mask'].squeeze() # [H, W]
+        disparity = pred_dict["pred_orig"]  # [1, H, W]
+        disparity = disparity.squeeze()  # [H, W]
+        disparity_conf_mask = pred_dict["disparity_conf_mask"].squeeze()  # [H, W]
 
         # disparity => depth
         depth = focal_length * baseline / (disparity + 1e-6)
         # filter out depth
         depth[~disparity_conf_mask] = 0.0
-     
+
         # Upsample predicted depth image
-        depth = cv2.resize(depth, images["ir_l"].shape[::-1], interpolation=cv2.INTER_NEAREST_EXACT)
+        depth = cv2.resize(
+            depth, images["ir_l"].shape[::-1], interpolation=cv2.INTER_NEAREST_EXACT
+        )
         from real_robot.utils.camera import register_depth
-        depth = register_depth(depth, k_irl, k_rgb, T_rgb_irl, images["rgb"].shape[1::-1], depth_dilation=True)
-        
+
+        depth = register_depth(
+            depth,
+            k_irl,
+            k_rgb,
+            T_rgb_irl,
+            images["rgb"].shape[1::-1],
+            depth_dilation=True,
+        )
+
         # Overlay gripper ground truth depth on the depth map obtained by activezero++
-        depth_gt_gripper = obtain_gripper_gt_depth_img(robot_scene, robot_actor, gripper_camera, qpos, *images["rgb"].shape[1::-1])
+        depth_gt_gripper = obtain_gripper_gt_depth_img(
+            robot_scene, robot_actor, gripper_camera, qpos, *images["rgb"].shape[1::-1]
+        )
         gripper_overlay_mask = depth_gt_gripper > 0.0
         depth[gripper_overlay_mask] = depth_gt_gripper[gripper_overlay_mask]
-        
+
         # green_img = np.zeros_like(images["rgb"])
         # green_img[..., 1] = 255
         # plt.subplot(1,2,1)
@@ -233,7 +311,7 @@ if __name__ == '__main__':
         # tmp_img[gripper_overlay_mask] = green_img[gripper_overlay_mask] * 0.2 + tmp_img[gripper_overlay_mask] * 0.8
         # plt.imshow(tmp_img)
         # plt.show()
-        
+
         # ActiveZero++ results
         obs_dict[f"vis_activezero2|{tag}_hand_camera_color"] = images["rgb"]
         obs_dict[f"vis_activezero2|{tag}_hand_camera_depth"] = depth
@@ -266,3 +344,4 @@ if __name__ == '__main__':
         visualizer.render()
 
     list(obs_dict.keys())
+
