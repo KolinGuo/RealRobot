@@ -23,7 +23,7 @@ class CameraConfig:
     def __init__(
         self,
         uid: str,
-        device_sn: str,
+        device_sn: Optional[str] = None,
         pose: Pose = pose_CV_ROS,
         config: Union[Tuple[int], Dict[str, Union[int, Tuple[int]]]] = (848, 480, 30),
         *,
@@ -36,7 +36,8 @@ class CameraConfig:
         """Camera configuration.
 
         :param uid: unique id of the camera
-        :param device_sn: unique serial number of the camera
+        :param device_sn: unique serial number of the camera.
+                          If None, use the only RSDevice connected.
         :param pose: camera pose in world frame, following ROS frame conventions.
                      Format is forward(x), left(y) and up(z)
                      If parent_pose_so_name is not None, this is pose relative to

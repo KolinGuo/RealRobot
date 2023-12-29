@@ -86,8 +86,8 @@ class RSDevice:
 
     def __init__(
         self,
-        device_sn: str,
-        uid: str = None,
+        device_sn: Optional[str] = None,
+        uid: Optional[str] = None,
         config: Union[Tuple[int], Dict[str, Union[int, Tuple[int]]]] = (848, 480, 30),
         *,
         preset: str = "Default",
@@ -100,7 +100,8 @@ class RSDevice:
         local_pose: Pose = pose_CV_ROS
     ):
         """
-        :param device_sn: realsense device serial number
+        :param device_sn: realsense device serial number.
+                          If None, use the only RSDevice connected.
         :param uid: unique camera id, e.g. "hand_camera", "front_camera"
         :param config: camera stream config, can be a tuple of (width, height, fps)
                        or a dict with format {stream_type: (param1, param2, ...)}.
@@ -144,6 +145,11 @@ class RSDevice:
         """
         self.logger = get_logger("RSDevice")
 
+        if device_sn is None:
+            device_sns = get_connected_rs_devices()
+            assert len(device_sns) == 1, \
+                f"Only 1 RSDevice should be connected, got S/Ns {device_sns}"
+            device_sn = device_sns[0]
         self.device = get_connected_rs_devices(device_sn)
         self.name = self.device.get_info(rs.camera_info.name)
         self.serial_number = device_sn
