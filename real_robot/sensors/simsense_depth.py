@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 from typing import Tuple, Optional
 
-from sapien.core.pysapien.simsense import DepthSensorEngine
+from sapien.pysapien.simsense import DepthSensorEngine
 
 
 class SimsenseDepth:
@@ -13,7 +13,7 @@ class SimsenseDepth:
         k_l: np.ndarray,
         k_r: np.ndarray,
         l2r: np.ndarray,
-        k_rgb: np.ndarray,
+        k_rgb: Optional[np.ndarray] = None,
         rgb_size: Optional[Tuple[int]] = None,
         l2rgb: Optional[np.ndarray] = None,
         min_depth: float = 0.0,
@@ -92,7 +92,7 @@ class SimsenseDepth:
         """
         img_w, img_h = ir_size
         registration = False
-        if rgb_size is not None or l2rgb is not None:
+        if k_rgb is not None or rgb_size is not None or l2rgb is not None:
             registration = True
 
         # Instance check
@@ -100,9 +100,9 @@ class SimsenseDepth:
                 or img_h < 32 or img_w < 32):
             raise TypeError("Image height and width must be integer no less than 32")
 
-        if registration and (rgb_size is None or l2rgb is None):
+        if registration and (k_rgb is None or rgb_size is None or l2rgb is None):
             raise TypeError("Depth registration is on but missing "
-                            "one or two RGB camera's parameters")
+                            "some RGB camera's parameters")
 
         if speckle_shape > 0 and (speckle_scale <= 0 or gaussian_sigma <= 0):
             raise TypeError("Infrared noise simulation is on. Speckle_scale and "
@@ -156,12 +156,6 @@ class SimsenseDepth:
         map_lx, map_ly = map_l
         map_rx, map_ry = map_r
 
-        rgb_fx = k_rgb[0][0]
-        rgb_fy = k_rgb[1][1]
-        rgb_skew = k_rgb[0][1]
-        rgb_cx = k_rgb[0][2]
-        rgb_cy = k_rgb[1][2]
-
         if registration:
             # Get registration matrix
             a1, a2, a3, b = self._get_registration_mat(ir_size, k_l, k_rgb, l2rgb)
@@ -173,18 +167,31 @@ class SimsenseDepth:
                 uniqueness_ratio, lr_max_diff, median_filter_size,
                 map_lx, map_ly, map_rx, map_ry,
                 a1, a2, a3, b[0], b[1], b[2], depth_dilation,
-                rgb_fx, rgb_fy, rgb_skew, rgb_cx, rgb_cy
+                k_rgb[0][0], k_rgb[1][1], k_rgb[0][1], k_rgb[0][2], k_rgb[1][2]
             )
         else:
+            a1, a2, a3, b = self._get_registration_mat(ir_size, k_l, k_l, np.eye(4))
             self.engine = DepthSensorEngine(
-                img_h, img_w, f_len, b_len,
+                img_h, img_w, img_h, img_w, f_len, b_len,
                 min_depth, max_depth, ir_noise_seed, speckle_shape, speckle_scale,
                 gaussian_mu, gaussian_sigma, rectified, census_width, census_height,
                 max_disp, block_width, block_height, p1_penalty, p2_penalty,
                 uniqueness_ratio, lr_max_diff, median_filter_size,
                 map_lx, map_ly, map_rx, map_ry,
-                rgb_fx, rgb_fy, rgb_skew, rgb_cx, rgb_cy
+                a1, a2, a3, b[0], b[1], b[2], depth_dilation,
+                k_l[0][0], k_l[1][1], k_l[0][1], k_l[0][2], k_l[1][2]
             )
+
+            # NOTE: Constructor for no-registration is not exposed
+            # self.engine = DepthSensorEngine(
+            #     img_h, img_w, f_len, b_len,
+            #     min_depth, max_depth, ir_noise_seed, speckle_shape, speckle_scale,
+            #     gaussian_mu, gaussian_sigma, rectified, census_width, census_height,
+            #     max_disp, block_width, block_height, p1_penalty, p2_penalty,
+            #     uniqueness_ratio, lr_max_diff, median_filter_size,
+            #     map_lx, map_ly, map_rx, map_ry,
+            #     k_l[0][0], k_l[1][1], k_l[0][1], k_l[0][2], k_l[1][2]
+            # )
 
     def compute(self, img_l: np.ndarray, img_r: np.ndarray) -> np.ndarray:
         """
