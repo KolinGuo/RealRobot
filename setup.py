@@ -1,10 +1,10 @@
 from setuptools import setup
+from pathlib import Path
 
 
 if __name__ == "__main__":
     setup(
         name='real_robot',
-        version='0.1.0rc1',
         description="Real Robot",
         long_description=open("README.md").read(),
         long_description_content_type="text/markdown",
@@ -49,4 +49,13 @@ if __name__ == "__main__":
         },
         package_data={"real_robot": ["assets/**"]},
         exclude_package_data={"": ["*.convex.stl"]},
+        zip_safe=False,
+        setuptools_git_versioning={
+            "enabled": True,
+            "version_file": Path(__file__).parent / "VERSION",
+            "count_commits_from_version_file": True,
+            "dev_template": "{tag}.dev{timestamp:%Y%m%d}+git.{sha}",
+            "dirty_template": "{tag}.dev{timestamp:%Y%m%d}+git.{sha}.dirty",
+        },
+        setup_requires=["setuptools-git-versioning<2"],
     )
