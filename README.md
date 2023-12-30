@@ -18,6 +18,10 @@ loaded in [real_robot/sensors/camera.py](real_robot/sensors/camera.py).
 
 ## Helpful Tools
 
+* Capture Color/Depth/IR images from RS camera, do
+  ```bash
+  python3 -m real_robot.tools.rs_capture
+  ```
 * Get detailed device information of connected RealSense device
   (*e.g.*, supported stream configs, sensor intrinsics, extrinsics between sensors), do
   ```bash
