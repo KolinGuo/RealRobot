@@ -4,7 +4,7 @@ from setuptools import setup
 if __name__ == "__main__":
     setup(
         name='real_robot',
-        version='0.1.0rc0',
+        version='0.1.0rc1',
         description="Real Robot",
         long_description=open("README.md").read(),
         long_description_content_type="text/markdown",
