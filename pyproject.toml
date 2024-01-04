@@ -1,10 +1,63 @@
+[build-system]
+requires = ["setuptools>=62.3.0", "setuptools-git-versioning<2"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "real_robot"
+dynamic = ["version"]
+dependencies = [
+  "pyrealsense2",
+  "numpy",
+  "gymnasium",
+  "transforms3d",
+  "urchin",  # loading URDF
+  "pynput",  # monitor keyboard event
+  "opencv-python",
+  "opencv-contrib-python",
+  "open3d>=0.17.0",  # for visualization
+  "Pillow",
+  "scipy",
+  "sapien~=3.0.0.dev",  # for sapien.Pose and simsense
+]
 requires-python = ">=3.8"
+authors = [
+  {name = "Kolin Guo", email = "ruguo@ucsd.edu"},
+]
+description = "Real Robot"
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["robotics", "sensor", "visualization", "control"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Operating System :: POSIX :: Linux",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Other Audience",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Natural Language :: English",
+  "Framework :: Robot Framework :: Library",
+  "Framework :: Robot Framework :: Tool",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Education",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Utilities",
+]
 
-[build-system]
-requires = ["setuptools>=62.3.0"]
-build-backend = "setuptools.build_meta"
+[project.urls]
+Repository = "https://github.com/KolinGuo/RealRobot"
+
+[tool.setuptools-git-versioning]
+enabled = true
+version_file = "VERSION"
+count_commits_from_version_file = true
+dev_template = "{tag}.dev{timestamp:%Y%m%d}+git.{sha}"
+dirty_template = "{tag}.dev{timestamp:%Y%m%d}+git.{sha}.dirty"
 
 [tool.black]
 line-length = 88
