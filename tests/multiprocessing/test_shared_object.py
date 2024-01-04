@@ -1,11 +1,12 @@
 """Unittests for real_robot.utils.multiprocessing.shared_object"""
+
 from __future__ import annotations
 
 import os
-import uuid
 import random
 import string
 import tempfile
+import uuid
 from time import perf_counter
 from typing import Union
 
@@ -13,21 +14,25 @@ import numpy as np
 from sapien import Pose
 from transforms3d.euler import euler2quat
 
-from real_robot.utils.multiprocessing import ctx, SharedObject
 from real_robot.utils.logger import get_logger
+from real_robot.utils.multiprocessing import SharedObject, ctx
 
 os.environ["REAL_ROBOT_LOG_DIR"] = tempfile.TemporaryDirectory().name
-_logger = get_logger("Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s")
+_logger = get_logger(
+    "Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
+)
 NDARRAY_NBYTES_LIMIT = 20 * 1024**2  # 20 MiB
 
 
-def create_random_ndarray(dtype: Union[SharedObject._np_dtypes], shape: tuple[int, ...]):
+def create_random_ndarray(
+    dtype: Union[SharedObject._np_dtypes], shape: tuple[int, ...]
+):
     if np.issubdtype(dtype, np.bool_):
         data = np.random.randint(2, size=shape, dtype=dtype)
     elif np.issubdtype(dtype, np.integer):
         info = np.iinfo(dtype)
         min, max = info.min, info.max
-        data = np.random.randint(min, max+1, size=shape, dtype=dtype)
+        data = np.random.randint(min, max + 1, size=shape, dtype=dtype)
     elif np.issubdtype(dtype, np.inexact):
         info = np.finfo(np.float32)  # cannot sample uniform for float128
         min, max = info.min, info.max
@@ -45,15 +50,19 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
     elif object_type_idx == 2:  # int
         return random.randint(-9223372036854775808, 9223372036854775807)
     elif object_type_idx == 3:  # float
-        return (random.uniform(-100, 100) if bool(random.randrange(2))
-                else random.uniform(-1e307, 1e308))
+        return (
+            random.uniform(-100, 100)
+            if bool(random.randrange(2))
+            else random.uniform(-1e307, 1e308)
+        )
     elif object_type_idx == 4:  # sapien.Pose
-        return Pose(p=np.random.uniform(-10, 10, size=3),
-                    q=euler2quat(*np.random.uniform([0, 0, 0],
-                                                    [np.pi*2, np.pi, np.pi*2])))
+        return Pose(
+            p=np.random.uniform(-10, 10, size=3),
+            q=euler2quat(*np.random.uniform([0, 0, 0], [np.pi * 2, np.pi, np.pi * 2])),
+        )
     elif object_type_idx == 5:  # str
         str_len = random.randrange(51)
-        return ''.join(random.choices(string.printable, k=str_len))
+        return "".join(random.choices(string.printable, k=str_len))
     elif object_type_idx == 6:  # bytes
         bytes_len = random.randrange(51)
         return random.randbytes(bytes_len)
@@ -81,7 +90,9 @@ def check_object_equal(obj1: SharedObject, obj2: SharedObject, data=None):
         if data is not None:
             assert obj1.fetch() == data
     elif obj1.object_type_idx == 4:  # sapien.Pose
-        np.testing.assert_equal(obj1.fetch().__getstate__(), obj2.fetch().__getstate__())
+        np.testing.assert_equal(
+            obj1.fetch().__getstate__(), obj2.fetch().__getstate__()
+        )
         if data is not None:
             np.testing.assert_equal(obj1.fetch().__getstate__(), data.__getstate__())
     elif obj1.object_type_idx == 7:  # np.ndarray
@@ -143,7 +154,7 @@ class TestCreate:
 
         for _ in range(500):
             str_len = random.randrange(100)
-            data = ''.join(random.choices(string.printable, k=str_len))
+            data = "".join(random.choices(string.printable, k=str_len))
             so = SharedObject(uuid.uuid4().hex, data=data)
             assert so.fetch() == data
             assert not so.modified
@@ -210,15 +221,15 @@ class TestFetch:
     def test_bool(self):
         so = SharedObject(uuid.uuid4().hex, data=False)
         v = random.uniform(-100, 100)
-        assert so.fetch(lambda x: x+v) == v
-        assert so.fetch(lambda x: x*v) == 0.0
+        assert so.fetch(lambda x: x + v) == v
+        assert so.fetch(lambda x: x * v) == 0.0
         assert so.fetch(lambda x: not x) is True
         assert so.fetch() is False
 
         so = SharedObject(uuid.uuid4().hex, data=True)
         v = random.uniform(-100, 100)
-        assert so.fetch(lambda x: x+v) == v+1
-        assert so.fetch(lambda x: x*v) == v
+        assert so.fetch(lambda x: x + v) == v + 1
+        assert so.fetch(lambda x: x * v) == v
         assert so.fetch(lambda x: not x) is False
         assert so.fetch() is True
 
@@ -227,11 +238,11 @@ class TestFetch:
         so = SharedObject(uuid.uuid4().hex, data=data)
 
         v = random.randint(-100, 100)
-        assert so.fetch(lambda x: x+v) == data+v
-        assert so.fetch(lambda x: x*v) == data*v
+        assert so.fetch(lambda x: x + v) == data + v
+        assert so.fetch(lambda x: x * v) == data * v
         v = random.uniform(-100, 100)
-        assert so.fetch(lambda x: x+v) == data+v
-        assert so.fetch(lambda x: x*v) == data*v
+        assert so.fetch(lambda x: x + v) == data + v
+        assert so.fetch(lambda x: x * v) == data * v
         assert so.fetch() == data
 
     def test_float(self):
@@ -239,11 +250,11 @@ class TestFetch:
         so = SharedObject(uuid.uuid4().hex, data=data)
 
         v = random.randint(-100, 100)
-        assert so.fetch(lambda x: x+v) == data+v
-        assert so.fetch(lambda x: x*v) == data*v
+        assert so.fetch(lambda x: x + v) == data + v
+        assert so.fetch(lambda x: x * v) == data * v
         v = random.uniform(-100, 100)
-        assert so.fetch(lambda x: x+v) == data+v
-        assert so.fetch(lambda x: x*v) == data*v
+        assert so.fetch(lambda x: x + v) == data + v
+        assert so.fetch(lambda x: x * v) == data * v
         assert so.fetch() == data
 
     def test_pose(self):
@@ -252,19 +263,26 @@ class TestFetch:
 
         for _ in range(500):
             pose2 = create_random_object(SharedObject._object_types.index(Pose))
-            np.testing.assert_equal(so.fetch(lambda x: x*pose2).__getstate__(),
-                                    (pose*pose2).__getstate__())
+            np.testing.assert_equal(
+                so.fetch(lambda x: x * pose2).__getstate__(),
+                (pose * pose2).__getstate__(),
+            )
 
         for _ in range(500):
             pose2 = create_random_object(SharedObject._object_types.index(Pose))
-            np.testing.assert_equal(so.fetch(lambda x: pose2*x).__getstate__(),
-                                    (pose2*pose).__getstate__())
+            np.testing.assert_equal(
+                so.fetch(lambda x: pose2 * x).__getstate__(),
+                (pose2 * pose).__getstate__(),
+            )
 
-        np.testing.assert_equal(so.fetch(lambda x: x.inv()).__getstate__(),
-                                pose.inv().__getstate__())
+        np.testing.assert_equal(
+            so.fetch(lambda x: x.inv()).__getstate__(), pose.inv().__getstate__()
+        )
 
-        np.testing.assert_equal(so.fetch(lambda x: x.to_transformation_matrix()),
-                                pose.to_transformation_matrix())
+        np.testing.assert_equal(
+            so.fetch(lambda x: x.to_transformation_matrix()),
+            pose.to_transformation_matrix(),
+        )
 
     def test_pose_fn_modify_inplace(self):
         pose = create_random_object(SharedObject._object_types.index(Pose))
@@ -276,8 +294,10 @@ class TestFetch:
             return x
 
         so.fetch(inplace_modify)  # no change to buffer
-        np.testing.assert_equal(so.fetch(inplace_modify).__getstate__(),
-                                Pose(p=[1, 2, 3], q=pose.q).__getstate__())
+        np.testing.assert_equal(
+            so.fetch(inplace_modify).__getstate__(),
+            Pose(p=[1, 2, 3], q=pose.q).__getstate__(),
+        )
         np.testing.assert_equal(so.fetch().__getstate__(), pose.__getstate__())
 
     def test_str(self):
@@ -287,7 +307,7 @@ class TestFetch:
         assert so.fetch() == data
 
         str_len = random.randrange(100)
-        data = ''.join(random.choices(string.printable, k=str_len))
+        data = "".join(random.choices(string.printable, k=str_len))
         so = SharedObject(uuid.uuid4().hex, data=data)
 
         assert so.fetch(lambda x: len(x)) == len(data)
@@ -361,8 +381,8 @@ class TestFetch:
 
         # power
         v = random.randint(2, 5)
-        data_fetched = so.fetch(lambda x: x ** v)
-        np.testing.assert_equal(data_fetched, data ** v)
+        data_fetched = so.fetch(lambda x: x**v)
+        np.testing.assert_equal(data_fetched, data**v)
         assert data_fetched.flags.owndata
         assert data_fetched.flags.writeable
         data_fetched.fill(123)
@@ -450,6 +470,7 @@ class TestFetch:
         def inplace_add(x):
             x[..., 0] += 1
             return x
+
         try:
             _ = so.fetch(inplace_add)
         except ValueError as e:
@@ -548,7 +569,7 @@ class TestAssign:
 
         for _ in range(500):
             str_len = random.randrange(100)
-            data = ''.join(random.choices(string.printable, k=str_len))
+            data = "".join(random.choices(string.printable, k=str_len))
             so.assign(data)
             assert not so.modified
             assert so.fetch() == data
@@ -560,13 +581,13 @@ class TestAssign:
         assert not so.modified
 
         str_len = 50
-        data = ''.join(random.choices(string.printable, k=str_len))
+        data = "".join(random.choices(string.printable, k=str_len))
         so.assign(data)
         assert so.fetch() == data
         assert not so.modified
 
         str_len = 51
-        data = ''.join(random.choices(string.printable, k=str_len))
+        data = "".join(random.choices(string.printable, k=str_len))
         try:
             so.assign(data)
         except BufferError as e:
@@ -576,7 +597,7 @@ class TestAssign:
 
         for _ in range(10):
             str_len = random.randrange(51, 100)
-            data = ''.join(random.choices(string.printable, k=str_len))
+            data = "".join(random.choices(string.printable, k=str_len))
             try:
                 so.assign(data)
             except BufferError as e:
@@ -725,7 +746,7 @@ class TestAssign:
 
             # Changed shape
             for i in range(5):
-                new_shape = shape[:-1] + (shape[-1] + i+1,)
+                new_shape = shape[:-1] + (shape[-1] + i + 1,)
                 data = create_random_ndarray(dtype, new_shape)
                 try:
                     so.assign(data)
@@ -1066,8 +1087,10 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [ctx.Process(target=self.child_test_race_condition_with_extra_bool,
-                             args=()) for _ in range(n_iters)]
+        procs = [
+            ctx.Process(target=self.child_test_race_condition_with_extra_bool, args=())
+            for _ in range(n_iters)
+        ]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))
@@ -1106,15 +1129,17 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [ctx.Process(target=self.child_test_race_condition_with_extra_bool,
-                             args=()) for _ in range(n_iters*5)]
+        procs = [
+            ctx.Process(target=self.child_test_race_condition_with_extra_bool, args=())
+            for _ in range(n_iters * 5)
+        ]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))
             so_joined.assign(False)
             so_data_updated.assign(False)
 
-            [proc.start() for proc in procs[5*i:5*(i+1)]]
+            [proc.start() for proc in procs[5 * i : 5 * (i + 1)]]
             for _ in range(5):
                 data += 1
                 so_data.assign(data)
@@ -1126,7 +1151,7 @@ class TestMultiProcess:
                 results.append(result)
 
             so_joined.assign(True)
-            [proc.join() for proc in procs[5*i:5*(i+1)]]
+            [proc.join() for proc in procs[5 * i : 5 * (i + 1)]]
         _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
 
         print(results, flush=True)
@@ -1164,8 +1189,10 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [ctx.Process(target=self.child_test_race_condition_with_modified,
-                             args=()) for _ in range(n_iters)]
+        procs = [
+            ctx.Process(target=self.child_test_race_condition_with_modified, args=())
+            for _ in range(n_iters)
+        ]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))
@@ -1200,14 +1227,16 @@ class TestMultiProcess:
 
         results = []
         n_iters = 10
-        procs = [ctx.Process(target=self.child_test_race_condition_with_modified,
-                             args=()) for _ in range(n_iters*5)]
+        procs = [
+            ctx.Process(target=self.child_test_race_condition_with_modified, args=())
+            for _ in range(n_iters * 5)
+        ]
         start_time = perf_counter()
         for i in range(n_iters):
             data = np.ones((10000, 10000))
             so_joined.assign(False)
 
-            [proc.start() for proc in procs[5*i:5*(i+1)]]
+            [proc.start() for proc in procs[5 * i : 5 * (i + 1)]]
             for _ in range(5):
                 data += 1
                 so_data.assign(data)
@@ -1218,7 +1247,7 @@ class TestMultiProcess:
                 results.append(result)
 
             so_joined.assign(True)
-            [proc.join() for proc in procs[5*i:5*(i+1)]]
+            [proc.join() for proc in procs[5 * i : 5 * (i + 1)]]
         _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
 
         print(results, flush=True)
@@ -1229,7 +1258,7 @@ class TestMultiProcess:
         so_joined.unlink()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     t = TestMultiProcess()
     t.test_2_proc_race_condition_with_extra_bool()
     t.test_2_proc_race_condition_with_modified()

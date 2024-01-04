@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import numpy as np
 import cv2
+import numpy as np
 from sapien import Pose
 
 # Convert between camera frame conventions
@@ -9,24 +9,21 @@ from sapien import Pose
 #   OpenGL frame convention: right(x), up(y), backwards(z)
 #   ROS/Sapien frame convention: forward(x), left(y) and up(z)
 # For ROS frame conventions, see https://www.ros.org/reps/rep-0103.html#axis-orientation
-T_CV_GL = np.array([[1, 0, 0, 0],
-                    [0, -1, 0, 0],
-                    [0, 0, -1, 0],
-                    [0, 0, 0, 1]], dtype=np.float32)
+T_CV_GL = np.array(
+    [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]], dtype=np.float32
+)
 pose_CV_GL = Pose(T_CV_GL)
 pose_GL_CV = pose_CV_GL.inv()
 T_GL_CV = pose_GL_CV.to_transformation_matrix()
-T_CV_ROS = np.array([[0, -1, 0, 0],
-                     [0, 0, -1, 0],
-                     [1, 0, 0, 0],
-                     [0, 0, 0, 1]], dtype=np.float32)
+T_CV_ROS = np.array(
+    [[0, -1, 0, 0], [0, 0, -1, 0], [1, 0, 0, 0], [0, 0, 0, 1]], dtype=np.float32
+)
 pose_CV_ROS = Pose(T_CV_ROS)
 pose_ROS_CV = pose_CV_ROS.inv()
 T_ROS_CV = pose_ROS_CV.to_transformation_matrix()
-T_GL_ROS = np.array([[0, -1, 0, 0],
-                     [0, 0, 1, 0],
-                     [-1, 0, 0, 0],
-                     [0, 0, 0, 1]], dtype=np.float32)
+T_GL_ROS = np.array(
+    [[0, -1, 0, 0], [0, 0, 1, 0], [-1, 0, 0, 0], [0, 0, 0, 1]], dtype=np.float32
+)
 pose_GL_ROS = Pose(T_GL_ROS)
 pose_ROS_GL = pose_GL_ROS.inv()
 T_ROS_GL = pose_ROS_GL.to_transformation_matrix()
@@ -45,8 +42,9 @@ def depth2xyz(depth_image, intrinsics, depth_scale=1000.0) -> np.ndarray:
         cx, cy = intrinsics[0, 2], intrinsics[1, 2]
 
     if depth_image.ndim == 3:
-        assert depth_image.shape[-1] == 1, \
-            f"Wrong number of channels: {depth_image.shape}"
+        assert (
+            depth_image.shape[-1] == 1
+        ), f"Wrong number of channels: {depth_image.shape}"
         depth_image = depth_image[..., 0]
 
     height, width = depth_image.shape[:2]
@@ -72,19 +70,19 @@ def transform_points(pts: np.ndarray, H: np.ndarray) -> np.ndarray:
 def transform_points_batch(pts: np.ndarray, H: np.ndarray) -> np.ndarray:
     """Transform points by Bx4x4 transformation matrix H
 
-        [3,], [4, 4] => [3,]
-        [P, 3], [4, 4] => [P, 3]
-        [H, W, 3], [4, 4] => [H, W, 3]
-        [N, H, W, 3], [4, 4] => [N, H, W, 3]
-        [P, 3], [B, 4, 4] => [B, P, 3]
-        [B, P, 3], [B, 4, 4] => [B, P, 3]
-        [H, W, 3], [B, 4, 4] => [B, H, W, 3]  # (H != B)
-        [B, H, W, 3], [B, 4, 4] => [B, H, W, 3]
-        [N, H, W, 3], [B, 4, 4] => [B, N, H, W, 3]  # (N != B)
-        [B, N, H, W, 3], [B, 4, 4] => [B, N, H, W, 3]
-        [B, N, 3], [B, N, 4, 4] => [B, N, 3]
-        [B, N, P, 3], [B, N, 4, 4] => [B, N, P, 3]
-        [B, N, H, W, 3], [B, N, 4, 4] => [B, N, H, W, 3]
+    [3,], [4, 4] => [3,]
+    [P, 3], [4, 4] => [P, 3]
+    [H, W, 3], [4, 4] => [H, W, 3]
+    [N, H, W, 3], [4, 4] => [N, H, W, 3]
+    [P, 3], [B, 4, 4] => [B, P, 3]
+    [B, P, 3], [B, 4, 4] => [B, P, 3]
+    [H, W, 3], [B, 4, 4] => [B, H, W, 3]  # (H != B)
+    [B, H, W, 3], [B, 4, 4] => [B, H, W, 3]
+    [N, H, W, 3], [B, 4, 4] => [B, N, H, W, 3]  # (N != B)
+    [B, N, H, W, 3], [B, 4, 4] => [B, N, H, W, 3]
+    [B, N, 3], [B, N, 4, 4] => [B, N, 3]
+    [B, N, P, 3], [B, N, 4, 4] => [B, N, P, 3]
+    [B, N, H, W, 3], [B, N, 4, 4] => [B, N, H, W, 3]
     """
     assert H.shape[-2:] == (4, 4), H.shape
     assert pts.shape[-1] == 3, pts.shape
@@ -92,17 +90,23 @@ def transform_points_batch(pts: np.ndarray, H: np.ndarray) -> np.ndarray:
     batch_shape = H.shape[:-2]
     pts_shape = batch_shape + (-1, 3)
     out_pts_shape = pts.shape
-    if batch_shape != pts.shape[:len(batch_shape)] or pts.ndim < H.ndim < 4:
+    if batch_shape != pts.shape[: len(batch_shape)] or pts.ndim < H.ndim < 4:
         pts_shape = (-1, 3)
         out_pts_shape = batch_shape + out_pts_shape
 
     H = H.swapaxes(-1, -2)
-    return (pts.reshape(pts_shape) @ H[..., :3, :3]
-            + H[..., [3], :3]).reshape(out_pts_shape)
+    return (pts.reshape(pts_shape) @ H[..., :3, :3] + H[..., [3], :3]).reshape(
+        out_pts_shape
+    )
 
 
-def resize_obs_image(rgb_image, depth_image, intr_params: tuple, new_size,
-                     interpolation=cv2.INTER_NEAREST_EXACT):
+def resize_obs_image(
+    rgb_image,
+    depth_image,
+    intr_params: tuple,
+    new_size,
+    interpolation=cv2.INTER_NEAREST_EXACT,
+):
     """Resize rgb/depth images into shape=(width, height)
     :param rgb_image: [H, W, 3] np.uint8 np.ndarray
     :param depth_image: [H, W] np.uint16 np.ndarray
@@ -131,7 +135,7 @@ def register_depth(
     T_color_depth: np.ndarray,
     color_im_size: tuple[int, int],
     dist_color: np.ndarray | None = None,
-    depth_dilation: bool = False
+    depth_dilation: bool = False,
 ) -> np.ndarray:
     """Register depth to color frame (a.k.a., align_depth_to_color)
     This will align depth image to color frame (intrinsics, extrinsics, and resolution)
@@ -148,8 +152,13 @@ def register_depth(
     :return depth: aligned depth image, [H, W] np.uint16/np.floating np.ndarray
     """
     depth = cv2.rgbd.registerDepth(
-        k_depth, k_color, dist_color, T_color_depth, depth_unaligned,
-        color_im_size, depthDilation=depth_dilation
+        k_depth,
+        k_color,
+        dist_color,
+        T_color_depth,
+        depth_unaligned,
+        color_im_size,
+        depthDilation=depth_dilation,
     )
     depth[np.isnan(depth) | np.isinf(depth) | (depth < 0)] = 0.0
     return depth

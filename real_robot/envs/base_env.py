@@ -43,7 +43,8 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
     }
 
     def __init__(
-        self, *args,
+        self,
+        *args,
         obs_mode=None,
         image_obs_mode=None,
         control_mode="ee_delta_pos",
@@ -60,7 +61,7 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         vis_stream_robot=False,
         logdir=Path.home() / "real_robot_logs",
         record_camera=False,
-        **kwargs
+        **kwargs,
     ):
         """
         :param obs_mode: observation modes, see XArmBaseEnv.SUPPORTED_OBS_MODES
@@ -116,9 +117,7 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         if image_obs_mode is None:
             image_obs_mode = self.SUPPORTED_IMAGE_OBS_MODES[0]
         if image_obs_mode not in self.SUPPORTED_IMAGE_OBS_MODES:
-            raise NotImplementedError(
-                f"Unsupported image obs mode: {image_obs_mode}"
-            )
+            raise NotImplementedError(f"Unsupported image obs mode: {image_obs_mode}")
         self._image_obs_mode = image_obs_mode
 
         # Reward mode
@@ -127,9 +126,7 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
             self.SUPPORTED_REWARD_MODES = ("dense", "sparse")
         reward_mode = kwargs.get("reward_mode", self.SUPPORTED_REWARD_MODES[0])
         if reward_mode not in self.SUPPORTED_REWARD_MODES:
-            raise NotImplementedError(
-                f"Unsupported reward mode: {reward_mode}"
-            )
+            raise NotImplementedError(f"Unsupported reward mode: {reward_mode}")
         self._reward_mode = reward_mode
 
         # Setup log_dir
@@ -151,9 +148,11 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         self._configure_render_cameras(render_camera_cfgs)
         self._setup_cameras()  # load and start RSDevice cameras
 
-        self.visualizer = Visualizer(run_as_process=True,
-                                     stream_camera=vis_stream_camera,
-                                     stream_robot=vis_stream_robot)
+        self.visualizer = Visualizer(
+            run_as_process=True,
+            stream_camera=vis_stream_camera,
+            stream_robot=vis_stream_robot,
+        )
 
         # NOTE: `seed` is deprecated in the latest gym.
         # Use a fixed seed to initialize to enhance determinism
@@ -186,14 +185,15 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
     def _configure_agent(self):
         """Create real robot agent"""
         self.agent_proc = ctx.Process(
-            target=XArm7, name="XArm7_state_stream",
+            target=XArm7,
+            name="XArm7_state_stream",
             args=(self.xarm_ip, self._control_mode, self._motion_mode),
             kwargs=dict(
                 safety_boundary_mm=self.safety_boundary_mm,
                 boundary_clip_mm=self.boundary_clip_mm,
                 with_hand_camera=self.with_hand_camera,
                 run_as_process=True,
-            )
+            ),
         )
         start_and_wait_for_process(self.agent_proc, timeout=30)
 
@@ -212,7 +212,8 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
 
         self.agent = XArm7(
             self.xarm_ip,
-            control_mode=self._control_mode, motion_mode=self._motion_mode,
+            control_mode=self._control_mode,
+            motion_mode=self._motion_mode,
             safety_boundary_mm=self.safety_boundary_mm,
             boundary_clip_mm=self.boundary_clip_mm,
             with_hand_camera=self.with_hand_camera,
@@ -222,9 +223,11 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         """Register (non-agent) cameras for environment observation."""
         camera_configs = [
             CameraConfig(
-                "front_camera", "146322072630",
+                "front_camera",
+                "146322072630",
                 CALIB_CAMERA_POSES["front_camera"],
-                config=(848, 480, 30), preset="High Accuracy",
+                config=(848, 480, 30),
+                preset="High Accuracy",
                 # depth_option_kwargs={rs.option.exposure: 1500},
             ),
         ]
@@ -259,9 +262,7 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
 
     def _configure_render_cameras(self, camera_cfgs: dict):
         """Configure and create render cameras"""
-        self._render_camera_cfgs = parse_camera_cfgs(
-            self._register_render_cameras()
-        )
+        self._render_camera_cfgs = parse_camera_cfgs(self._register_render_cameras())
 
         update_camera_cfgs_from_dict(self._render_camera_cfgs, camera_cfgs)
 
@@ -271,7 +272,7 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         for uid, camera_cfg in self._camera_cfgs.items():
             self._cameras[uid] = Camera(
                 camera_cfg,
-                record_bag_path=self.logdir / "camera" if self.record_camera else None
+                record_bag_path=self.logdir / "camera" if self.record_camera else None,
             )
 
         # Cameras for rendering only
@@ -279,7 +280,7 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         for uid, camera_cfg in self._render_camera_cfgs.items():
             self._render_cameras[uid] = Camera(
                 camera_cfg,
-                record_bag_path=self.logdir / "camera" if self.record_camera else None
+                record_bag_path=self.logdir / "camera" if self.record_camera else None,
             )
 
     # ---------------------------------------------------------------------- #
@@ -374,18 +375,21 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         self.so_agent_sync.trigger()
         qpos = self.so_agent_qpos.fetch()  # [8,]
         qvel[:8] = self.so_agent_qvel.fetch()  # [8,]
-        qf[:8] = self.so_agent_qf.fetch()      # [8,]
+        qf[:8] = self.so_agent_qf.fetch()  # [8,]
         tcp_pose = self.so_agent_tcp_pose.fetch()  # in world frame, sapien.Pose
 
         # Convert qpos/qvel/qf align with pris_finger URDF
         gripper_qpos = clip_and_scale_action(
-            qpos[-1] * 1000.0, self.agent.joint_limits_ms2[-1, :],
-            self.agent.gripper_limits
+            qpos[-1] * 1000.0,
+            self.agent.joint_limits_ms2[-1, :],
+            self.agent.gripper_limits,
         )
 
         self.agent_state_buffer = (
             np.concatenate([qpos[:-1], [gripper_qpos, gripper_qpos]], dtype=np.float32),
-            qvel, qf, tcp_pose
+            qvel,
+            qf,
+            tcp_pose,
         )
 
     def _get_obs_agent(self):

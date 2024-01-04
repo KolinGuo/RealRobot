@@ -2,16 +2,15 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
+
 import numpy as np
 from sapien import Pose
 
-from real_robot.sensors.camera import (
-    CALIB_CAMERA_POSES, CameraConfig, Camera
-)
 from real_robot import ASSET_DIR
-from real_robot.utils.visualization import Visualizer
-from real_robot.utils.realsense import get_connected_rs_devices
+from real_robot.sensors.camera import CALIB_CAMERA_POSES, Camera, CameraConfig
 from real_robot.utils.camera import depth2xyz, transform_points
+from real_robot.utils.realsense import get_connected_rs_devices
+from real_robot.utils.visualization import Visualizer
 
 
 def demo_stream_obs():
@@ -31,7 +30,9 @@ def demo_stream_obs():
         "vis_saved_camera_mask": mask,
         "vis_saved_camera_pose": Pose.from_transformation_matrix(T_world_camCV),
         # Gripper Pose
-        "robot_gripper_urdf_path": f"{ASSET_DIR}/descriptions/xarm_floating_pris_finger_d435.urdf",
+        "robot_gripper_urdf_path": (
+            f"{ASSET_DIR}/descriptions/xarm_floating_pris_finger_d435.urdf"
+        ),
         "viso3d_CGN_grasps|obj1_gposes": pred_grasps_world,
         "viso3d_CGN_grasps|obj1_gscores": scores,
         "viso3d_CGN_grasps|obj1_gqvals": q_vals,
@@ -43,9 +44,9 @@ def demo_stream_obs():
 
 
 def demo_sync_obs():
-    visualizer = Visualizer(run_as_process=True,
-                            stream_camera=False,
-                            stream_robot=False)
+    visualizer = Visualizer(
+        run_as_process=True, stream_camera=False, stream_robot=False
+    )
     visualizer.reset()
 
     visualizer.show_obs({
@@ -61,7 +62,9 @@ def demo_sync_obs():
         "vis_saved_camera_mask": mask,
         "vis_saved_camera_pose": Pose.from_transformation_matrix(T_world_camCV),
         # Gripper Pose
-        "robot_gripper_urdf_path": f"{ASSET_DIR}/descriptions/xarm_floating_pris_finger_d435.urdf",
+        "robot_gripper_urdf_path": (
+            f"{ASSET_DIR}/descriptions/xarm_floating_pris_finger_d435.urdf"
+        ),
         "viso3d_CGN_grasps|obj1_gposes": pred_grasps_world,
         "viso3d_CGN_grasps|obj1_gscores": scores,
         "viso3d_CGN_grasps|obj1_gqvals": q_vals,
@@ -89,8 +92,9 @@ if __name__ == "__main__":
     mask = np.load(data_dir / "mask.npy")
     K = np.load(data_dir / "K.npy")
     T_world_camCV = np.load(data_dir / "T_world_cam.npy")
-    xyz_image = depth2xyz(depth_frame, K,
-                          1000.0 if depth_frame.dtype == np.uint16 else 1.0)
+    xyz_image = depth2xyz(
+        depth_frame, K, 1000.0 if depth_frame.dtype == np.uint16 else 1.0
+    )
     pts_camera = xyz_image.reshape(-1, 3)
 
     # Predicted grasp pose
@@ -99,11 +103,15 @@ if __name__ == "__main__":
     q_vals = np.load(data_dir / "pred_grasps_q_vals.npy")
 
     device_sn = get_connected_rs_devices()[0]
-    camera = Camera(CameraConfig(
-        "front_camera", device_sn,
-        CALIB_CAMERA_POSES["front_camera"],
-        (848, 480, 30), preset="High Accuracy",
-    ))
+    camera = Camera(
+        CameraConfig(
+            "front_camera",
+            device_sn,
+            CALIB_CAMERA_POSES["front_camera"],
+            (848, 480, 30),
+            preset="High Accuracy",
+        )
+    )
 
     # demo_stream_obs()
     demo_sync_obs()

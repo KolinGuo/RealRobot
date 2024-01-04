@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Union
 import time
+from typing import Any, Union
 
 import numpy as np
 import open3d as o3d
 
-from .cv2_visualizer import CV2Visualizer
-from .o3d_gui_visualizer import O3DGUIVisualizer
-from .utils import draw_mask, colorize_mask
-from ..multiprocessing import ctx, SharedObject, start_and_wait_for_process
 from ..lib3d import np2pcd
 from ..logger import get_logger
+from ..multiprocessing import SharedObject, ctx, start_and_wait_for_process
+from .cv2_visualizer import CV2Visualizer
+from .o3d_gui_visualizer import O3DGUIVisualizer
+from .utils import colorize_mask, draw_mask
+
 try:
     from pynput.keyboard import Key, KeyCode, Listener
 except ImportError as e:
@@ -22,14 +23,15 @@ pause_render = False
 
 
 def _on_key_press(key):
-    if key == KeyCode.from_char('p'):
+    if key == KeyCode.from_char("p"):
         global pause_render
         pause_render = True
 
 
 class Visualizer:
-    def __init__(self, *,
-                 run_as_process=False, stream_camera=False, stream_robot=False):
+    def __init__(
+        self, *, run_as_process=False, stream_camera=False, stream_robot=False
+    ):
         """Visualizer managing CV2Visualizer and O3DGUIVisualizer
         :param run_as_process: whether to run CV2Visualizer and O3DGUIVisualizer
                                as separate processes.
@@ -38,21 +40,25 @@ class Visualizer:
         """
         if run_as_process:
             self.cv2vis_proc = ctx.Process(
-                target=CV2Visualizer, name="CV2Visualizer", args=(),
+                target=CV2Visualizer,
+                name="CV2Visualizer",
+                args=(),
                 kwargs=dict(
                     run_as_process=True,
                     stream_camera=stream_camera,
-                )
+                ),
             )
             start_and_wait_for_process(self.cv2vis_proc, timeout=30)
 
             self.o3dvis_proc = ctx.Process(
-                target=O3DGUIVisualizer, name="O3DGUIVisualizer", args=(),
+                target=O3DGUIVisualizer,
+                name="O3DGUIVisualizer",
+                args=(),
                 kwargs=dict(
                     run_as_process=True,
                     stream_camera=stream_camera,
                     stream_robot=stream_robot,
-                )
+                ),
             )
             start_and_wait_for_process(self.o3dvis_proc, timeout=30)
 
@@ -135,7 +141,7 @@ class Visualizer:
                     images[name] = obs
                 elif "mask" in name:  # mask images
                     if len(color_images) > 0:
-                        images[name+"_overlay"] = draw_mask(color_images[i], obs)
+                        images[name + "_overlay"] = draw_mask(color_images[i], obs)
                     images[name] = colorize_mask(obs)
                 elif "xyz_image" in name:  # xyz_image
                     colors = None
@@ -145,14 +151,18 @@ class Visualizer:
                 elif "points" in name or "pts" in name:  # point clouds
                     o3d_geometries[name] = np2pcd(obs.reshape(-1, 3))
                 elif "bbox" in name:  # bounding boxes
-                    assert isinstance(obs,
-                                      (o3d.geometry.AxisAlignedBoundingBox,
-                                       o3d.geometry.OrientedBoundingBox)), \
-                        f"Not a bbox: {type(obs) = }"
+                    assert isinstance(
+                        obs,
+                        (
+                            o3d.geometry.AxisAlignedBoundingBox,
+                            o3d.geometry.OrientedBoundingBox,
+                        ),
+                    ), f"Not a bbox: {type(obs) = }"
                     o3d_geometries[name] = obs
                 elif "mesh" in name:  # TriangleMesh
-                    assert isinstance(obs, o3d.geometry.TriangleMesh), \
-                        f"Not a mesh: {type(obs) = }"
+                    assert isinstance(
+                        obs, o3d.geometry.TriangleMesh
+                    ), f"Not a mesh: {type(obs) = }"
                     o3d_geometries[name] = obs
                 else:
                     raise NotImplementedError(f"Unknown object {name = }")

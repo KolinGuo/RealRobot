@@ -1,18 +1,21 @@
+import logging
+import multiprocessing as mp
 import os
 import sys
-import logging
 from copy import deepcopy
-from pathlib import Path
 from datetime import datetime
-import multiprocessing as mp
-
+from pathlib import Path
 
 _registry = []
-_format = "[%(asctime)s] [%(name)s] [%(filename)s:%(lineno)d] [%(levelname)s] %(message)s"
-_log_dir = Path(os.getenv(
-    "REAL_ROBOT_LOG_DIR",
-    Path.home() / f"real_robot_logs/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-))
+_format = (
+    "[%(asctime)s] [%(name)s] [%(filename)s:%(lineno)d] [%(levelname)s] %(message)s"
+)
+_log_dir = Path(
+    os.getenv(
+        "REAL_ROBOT_LOG_DIR",
+        Path.home() / f"real_robot_logs/{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+    )
+)
 _current_pid = -1
 _default_file_handler = None
 
@@ -44,7 +47,7 @@ class ColorFormatter(logging.Formatter):
             "green": self.duplicate_style(self._style, self.green),
             "yellow": self.duplicate_style(self._style, self.yellow),
             "red": self.duplicate_style(self._style, self.red),
-            "bold_red": self.duplicate_style(self._style, self.bold_red)
+            "bold_red": self.duplicate_style(self._style, self.bold_red),
         }
 
     @staticmethod
@@ -61,9 +64,17 @@ class ColorFormatter(logging.Formatter):
         return self._color_styles[self.LEVEL_COLORS.get(record.levelno)].format(record)
 
 
-def get_logger(name=None, *, fmt=_format, datefmt=None,
-               with_stream=True, stdout=False, log_file=None,
-               log_level=logging.INFO, log_file_level=logging.NOTSET) -> logging.Logger:
+def get_logger(
+    name=None,
+    *,
+    fmt=_format,
+    datefmt=None,
+    with_stream=True,
+    stdout=False,
+    log_file=None,
+    log_level=logging.INFO,
+    log_file_level=logging.NOTSET,
+) -> logging.Logger:
     """Initialize a logger by name and add to registry.
     By default, it will add a FileHandler to
         _log_dir / "master.log" for main process
@@ -107,7 +118,11 @@ def get_logger(name=None, *, fmt=_format, datefmt=None,
     # e.g., logger "a" is initialized, then logger "a.b" will skip the initialization
     #   since it is a child of "a".
     for _logger in _registry:
-        if logger is _logger or name is not None and name.startswith(_logger.name+'.'):
+        if (
+            logger is _logger
+            or name is not None
+            and name.startswith(_logger.name + ".")
+        ):
             return logger
 
     logger.propagate = False  # allow propergate to root logger

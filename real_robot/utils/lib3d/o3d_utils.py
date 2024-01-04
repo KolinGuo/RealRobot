@@ -29,9 +29,14 @@ def np2pcd(points, colors=None, normals=None):
     return pc
 
 
-O3D_GEOMETRIES = (o3d.geometry.Geometry3D, o3d.t.geometry.Geometry,
-                  rendering.TriangleMeshModel)
+O3D_GEOMETRIES = (
+    o3d.geometry.Geometry3D,
+    o3d.t.geometry.Geometry,
+    rendering.TriangleMeshModel,
+)
 ANY_O3D_GEOMETRY = Union[O3D_GEOMETRIES]
+
+
 def transform_geometry(geometry: ANY_O3D_GEOMETRY, T: np.ndarray) -> ANY_O3D_GEOMETRY:
     """Apply transformation to o3d geometry, always returns a copy
 
@@ -43,7 +48,7 @@ def transform_geometry(geometry: ANY_O3D_GEOMETRY, T: np.ndarray) -> ANY_O3D_GEO
             rendering.TriangleMeshModel.MeshInfo(
                 deepcopy(mesh_info.mesh).transform(T),
                 mesh_info.mesh_name,
-                mesh_info.material_idx
+                mesh_info.material_idx,
             )
             for mesh_info in geometry.meshes
         ]
@@ -56,6 +61,8 @@ def transform_geometry(geometry: ANY_O3D_GEOMETRY, T: np.ndarray) -> ANY_O3D_GEO
 
 
 O3D_GEOMETRY_LIST = Union[tuple(list[t] for t in O3D_GEOMETRIES)]
+
+
 def merge_geometries(geometries: O3D_GEOMETRY_LIST) -> ANY_O3D_GEOMETRY:
     """Merge a list of o3d geometries, must be of same type"""
     geometry_types = set([type(geometry) for geometry in geometries])
@@ -68,8 +75,8 @@ def merge_geometries(geometries: O3D_GEOMETRY_LIST) -> ANY_O3D_GEOMETRY:
             merged_geometry.meshes += [
                 rendering.TriangleMeshModel.MeshInfo(
                     deepcopy(mesh_info.mesh),
-                    f"mesh_{i}_{mesh_info.mesh_name}".strip('_'),
-                    mesh_info.material_idx + num_materials
+                    f"mesh_{i}_{mesh_info.mesh_name}".strip("_"),
+                    mesh_info.material_idx + num_materials,
                 )
                 for mesh_info in geometry.meshes
             ]

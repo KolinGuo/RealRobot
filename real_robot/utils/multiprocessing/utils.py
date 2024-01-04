@@ -1,6 +1,6 @@
+import multiprocessing as mp
 import os
 import time
-import multiprocessing as mp
 
 from .shared_object import SharedObject
 

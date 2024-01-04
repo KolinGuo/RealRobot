@@ -17,10 +17,12 @@ class XArmGripper:
     def load_gripper_points(self):
         """Load gripper points"""
         # finger_pts are the 4 corners of the square finger contact pad
-        self.finger_l_pts = np.array([[0.01475, -0.026003, 0.022253],
-                                      [-0.01475, -0.026003, 0.022253],
-                                      [-0.01475, -0.026003, 0.059753],
-                                      [0.01475, -0.026003, 0.059753]])
+        self.finger_l_pts = np.array([
+            [0.01475, -0.026003, 0.022253],
+            [-0.01475, -0.026003, 0.022253],
+            [-0.01475, -0.026003, 0.059753],
+            [0.01475, -0.026003, 0.059753],
+        ])
         self.finger_r_pts = self.finger_l_pts * [1, -1, 1]  # invert y coords
         T_gripper_finger_l = np.eye(4)
         T_gripper_finger_l[:3, -1] = [0, 0.02682323, 0.11348719]
@@ -67,13 +69,13 @@ class XArmGripper:
         )
 
         if symmetric:
-            control_points = np.stack(
-                [finger_r_pts, finger_l_pts], axis=-2
-            ).reshape(-1, 4, 3)
+            control_points = np.stack([finger_r_pts, finger_l_pts], axis=-2).reshape(
+                -1, 4, 3
+            )
         else:
-            control_points = np.stack(
-                [finger_l_pts, finger_r_pts], axis=-2
-            ).reshape(-1, 4, 3)
+            control_points = np.stack([finger_l_pts, finger_r_pts], axis=-2).reshape(
+                -1, 4, 3
+            )
         control_points = np.concatenate(
             [np.zeros((len(q), 1, 3)), control_points], axis=-2
         )
@@ -81,8 +83,9 @@ class XArmGripper:
 
         return control_points
 
-    def get_control_points_lineset(self,
-                                   control_points: np.ndarray) -> o3d.geometry.LineSet:
+    def get_control_points_lineset(
+        self, control_points: np.ndarray
+    ) -> o3d.geometry.LineSet:
         """Contruct a LineSet for visualizing control_points
         :param control_points: [batch_size, 5, 3] np.floating np.ndarray
         """
@@ -90,9 +93,9 @@ class XArmGripper:
         batch_size = len(control_points)
 
         # Add mid point
-        control_points = np.concatenate([
-            control_points[:, 1:3].mean(1, keepdims=True), control_points
-        ], axis=-2)
+        control_points = np.concatenate(
+            [control_points[:, 1:3].mean(1, keepdims=True), control_points], axis=-2
+        )
 
         lines = np.array([[0, 1], [2, 3], [2, 4], [3, 5]])
         lines = np.tile(lines, (batch_size, 1, 1))
@@ -100,6 +103,6 @@ class XArmGripper:
 
         lineset = o3d.geometry.LineSet(
             o3d.utility.Vector3dVector(control_points.reshape(-1, 3)),
-            o3d.utility.Vector2iVector(lines.reshape(-1, 2))
+            o3d.utility.Vector2iVector(lines.reshape(-1, 2)),
         )
         return lineset

@@ -1,3 +1,20 @@
+[project]
+name = "real_robot"
+requires-python = ">=3.8"
+
 [build-system]
 requires = ["setuptools>=62.3.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 88
+required-version = "23.12.1"
+preview = true  # FIXME: This behavior is only in 24.* release: https://github.com/psf/black/pull/3992
+extend-exclude = "3rd_party/|pyrealsense2_examples/"
+
+[tool.isort]
+profile = "black"
+line_length = 88
+atomic = true
+skip_gitignore = true
+skip = ["3rd_party/", "pyrealsense2_examples/"]

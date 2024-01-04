@@ -1,23 +1,27 @@
 from __future__ import annotations
 
-from pathlib import Path
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any
 
 import numpy as np
-from sapien import Pose
 from gymnasium import spaces
+from sapien import Pose
 
 from ..utils.camera import pose_CV_ROS, pose_ROS_CV
+from ..utils.multiprocessing import SharedObject, ctx, start_and_wait_for_process
 from ..utils.realsense import RSDevice
-from ..utils.multiprocessing import ctx, SharedObject, start_and_wait_for_process
-
 
 CALIB_CAMERA_POSE_DIR = Path(__file__).resolve().parents[1] / "assets/hec_camera_poses"
 CALIB_CAMERA_POSES = {
-    "front_camera": Pose(np.load(
-        CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230918_CSE4144_front_jiacheng.npy"
-    )) * pose_CV_ROS
+    "front_camera": (
+        Pose(
+            np.load(
+                CALIB_CAMERA_POSE_DIR / "Tb_b2c_20230918_CSE4144_front_jiacheng.npy"
+            )
+        )
+        * pose_CV_ROS
+    )
 }
 
 
@@ -27,8 +31,11 @@ class CameraConfig:
         uid: str,
         device_sn: str | None = None,
         pose: Pose = pose_CV_ROS,
-        config: tuple[int, int, int]
-        | dict[str, int | tuple[int, int, int]] = (848, 480, 30),
+        config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]] = (
+            848,
+            480,
+            30,
+        ),
         *,
         preset: str = "Default",
         color_option_kwargs={},
@@ -89,8 +96,9 @@ def parse_camera_cfgs(camera_cfgs):
         raise TypeError(type(camera_cfgs))
 
 
-def update_camera_cfgs_from_dict(camera_cfgs: dict[str, CameraConfig],
-                                 cfg_dict: dict[str, Any | dict[str, Any]]):
+def update_camera_cfgs_from_dict(
+    camera_cfgs: dict[str, CameraConfig], cfg_dict: dict[str, Any | dict[str, Any]]
+):
     # First, apply global configuration
     for k, v in cfg_dict.items():
         if k in camera_cfgs:  # camera_name, camera-specific config
@@ -121,8 +129,9 @@ class Camera:
         "Infrared 2": "ir_r",
     }
 
-    def __init__(self, camera_cfg: CameraConfig, *,
-                 record_bag_path: str | Path | None = None):
+    def __init__(
+        self, camera_cfg: CameraConfig, *, record_bag_path: str | Path | None = None
+    ):
         """
         :param record_bag_path: path to save bag recording if not None.
                                 Must end with ".bag" if it's a file
@@ -140,7 +149,8 @@ class Camera:
         self.record_bag_path = record_bag_path
 
         self.device_proc = ctx.Process(
-            target=RSDevice, name=f"RSDevice_{self.uid}",
+            target=RSDevice,
+            name=f"RSDevice_{self.uid}",
             args=(self.device_sn, self.uid),
             kwargs=dict(
                 config=self.config,
@@ -152,7 +162,7 @@ class Camera:
                 run_as_process=True,
                 parent_pose_so_name=self.parent_pose_so_name,
                 local_pose=self.local_pose,
-            )
+            ),
         )
         start_and_wait_for_process(self.device_proc, timeout=30)
 
@@ -190,9 +200,9 @@ class Camera:
 
         for obs_key, so_data in self.so_data_dict.items():
             if obs_key == "depth":
-                self._camera_buffer["depth"] = so_data.fetch(
-                    lambda d: d[..., None].astype(np.float32)
-                ) / 1000.0
+                self._camera_buffer["depth"] = (
+                    so_data.fetch(lambda d: d[..., None].astype(np.float32)) / 1000.0
+                )
             else:
                 self._camera_buffer[obs_key] = so_data.fetch()
         self._camera_pose = self.so_pose.fetch()
@@ -256,14 +266,19 @@ class Camera:
                 if stream_name == "Color":
                     shape = (H, W, 3)
                 elif stream_name == "Depth":
-                    shape = (self.config["Color"][1::-1] + (1,)
-                             if "Color" in self.config else (H, W, 1))
+                    shape = (
+                        self.config["Color"][1::-1] + (1,)
+                        if "Color" in self.config
+                        else (H, W, 1)
+                    )
                 else:
                     shape = (H, W)
                 dtype = np.float32 if stream_name == "Depth" else np.uint8
                 obs_spaces[self._stream_name2obs_key[stream_name]] = spaces.Box(
-                    low=0, high=255 if dtype == np.uint8 else np.inf,
-                    shape=shape, dtype=dtype
+                    low=0,
+                    high=255 if dtype == np.uint8 else np.inf,
+                    shape=shape,
+                    dtype=dtype,
                 )
             else:
                 raise NotImplementedError(f"No support for {stream_name=} yet")
@@ -274,5 +289,7 @@ class Camera:
         self.device_proc.join()
 
     def __repr__(self):
-        return (f"<{self.__class__.__name__}: {self.uid} (S/N: {self.device_sn}) "
-                f"config={self.config}>")
+        return (
+            f"<{self.__class__.__name__}: {self.uid} (S/N: {self.device_sn}) "
+            f"config={self.config}>"
+        )

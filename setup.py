@@ -1,10 +1,10 @@
-from setuptools import setup
 from pathlib import Path
 
+from setuptools import setup
 
 if __name__ == "__main__":
     setup(
-        name='real_robot',
+        name="real_robot",
         description="Real Robot",
         long_description=open("README.md").read(),
         long_description_content_type="text/markdown",
@@ -36,16 +36,22 @@ if __name__ == "__main__":
         ],
         python_requires=">=3.8",
         install_requires=[
-            'pyrealsense2', 'numpy', 'gymnasium', 'transforms3d',
-            'urchin',  # loading URDF
-            'pynput',  # monitor keyboard event
-            'opencv-python', 'opencv-contrib-python',
-            'open3d>=0.17.0', 'Pillow', 'scipy',  # for visualization
-            'sapien~=3.0.0.dev'  # for sapien.Pose and simsense
+            "pyrealsense2",
+            "numpy",
+            "gymnasium",
+            "transforms3d",
+            "urchin",  # loading URDF
+            "pynput",  # monitor keyboard event
+            "opencv-python",
+            "opencv-contrib-python",
+            "open3d>=0.17.0",  # for visualization
+            "Pillow",
+            "scipy",
+            "sapien~=3.0.0.dev",  # for sapien.Pose and simsense
         ],
         package_dir={
             "real_robot": "real_robot",
-            "xarm": "3rd_party/xArm-Python-SDK/xarm"
+            "xarm": "3rd_party/xArm-Python-SDK/xarm",
         },
         package_data={"real_robot": ["assets/**"]},
         exclude_package_data={"": ["*.convex.stl"]},

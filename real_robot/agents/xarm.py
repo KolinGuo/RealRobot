@@ -1,25 +1,26 @@
 """xArm7 Agent Interface
 Check user manual at https://www.ufactory.cc/download/
 """
+
 from __future__ import annotations
 
-from collections import OrderedDict
 import math
+from collections import OrderedDict
 
 import numpy as np
-from gymnasium import spaces
 import pyrealsense2 as rs
+from gymnasium import spaces
 from sapien import Pose
+from scipy.spatial.transform import Rotation
 from transforms3d.euler import euler2quat, quat2euler
 from transforms3d.quaternions import axangle2quat
-from scipy.spatial.transform import Rotation
 from urchin import URDF
-
 from xarm.wrapper import XArmAPI
+
 from .. import ASSET_DIR
-from ..utils.logger import get_logger
-from ..utils.common import clip_and_scale_action, vectorize_pose
 from ..sensors.camera import CameraConfig
+from ..utils.common import clip_and_scale_action, vectorize_pose
+from ..utils.logger import get_logger
 from ..utils.multiprocessing import SharedObject, signal_process_ready
 
 # TODO: remove return code from all functions, add return code checks
@@ -30,22 +31,37 @@ class XArm7:
     xArm7 agent class
     Mimics mani_skill2.agents.base_agent.BaseAgent interface
     """
-    SUPPORTED_CONTROL_MODES = ("ee_pos", "ee_delta_pos",
-                               "ee_pose_axangle", "ee_delta_pose_axangle",
-                               "ee_pose_quat", "ee_delta_pose_quat")
-    SUPPORTED_MOTION_MODES = ("position", "servo",
-                              "joint_teaching", "cartesian_teaching (invalid)",
-                              "joint_vel", "cartesian_vel",
-                              "joint_online", "cartesian_online")
 
-    def __init__(self,
-                 ip: str = "192.168.1.229",
-                 control_mode: str = "ee_delta_pos",
-                 motion_mode: str = "position", *,
-                 safety_boundary_mm: list[int] = [999, -999, 999, -999, 999, 0],
-                 boundary_clip_mm: int = 10,
-                 with_hand_camera: bool = True,
-                 run_as_process: bool = False):
+    SUPPORTED_CONTROL_MODES = (
+        "ee_pos",
+        "ee_delta_pos",
+        "ee_pose_axangle",
+        "ee_delta_pose_axangle",
+        "ee_pose_quat",
+        "ee_delta_pose_quat",
+    )
+    SUPPORTED_MOTION_MODES = (
+        "position",
+        "servo",
+        "joint_teaching",
+        "cartesian_teaching (invalid)",
+        "joint_vel",
+        "cartesian_vel",
+        "joint_online",
+        "cartesian_online",
+    )
+
+    def __init__(
+        self,
+        ip: str = "192.168.1.229",
+        control_mode: str = "ee_delta_pos",
+        motion_mode: str = "position",
+        *,
+        safety_boundary_mm: list[int] = [999, -999, 999, -999, 999, 0],
+        boundary_clip_mm: int = 10,
+        with_hand_camera: bool = True,
+        run_as_process: bool = False,
+    ):
         """
         :param ip: xArm7 ip address, see controller box
         :param control_mode: xArm control mode (determines set_action type)
@@ -83,16 +99,25 @@ class XArm7:
         # TODO: When gear joint is properly implemented, this is not needed
         self.joint_limits_ms2 = URDF.load(
             f"{ASSET_DIR}/descriptions/xarm7_pris_finger_d435.urdf",
-            lazy_load_meshes=True
+            lazy_load_meshes=True,
         ).joint_limits.astype(np.float32)
         # set joint_limits to correspond to [-10, 850]
         self.joint_limits_ms2[-2:, 0] = self.joint_limits_ms2[-2:, 1] / 850 * -10
         self.gripper_limits = np.asarray([-10, 850], dtype=np.float32)
 
         self.init_qpos = np.asarray(
-            [0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2,
-             0.0453556139430441, 0.0453556139430441],
-            dtype=np.float32
+            [
+                0,
+                0,
+                0,
+                np.pi / 3,
+                0,
+                np.pi / 3,
+                -np.pi / 2,
+                0.0453556139430441,
+                0.0453556139430441,
+            ],
+            dtype=np.float32,
         )
         self.pose = Pose()  # base pose in world frame
         self.safety_boundary = np.asarray(safety_boundary_mm)
@@ -124,8 +149,11 @@ class XArm7:
             self.arm.clean_error()
 
         self.arm.motion_enable(enable=True)
-        self.arm.set_mode(self.SUPPORTED_MOTION_MODES.index(self._motion_mode)
-                          if mode is None else mode)
+        self.arm.set_mode(
+            self.SUPPORTED_MOTION_MODES.index(self._motion_mode)
+            if mode is None
+            else mode
+        )
         self.arm.set_state(state=0)
 
     def reset(self, wait=True):
@@ -158,8 +186,9 @@ class XArm7:
     # ---------------------------------------------------------------------- #
     # Control robot
     # ---------------------------------------------------------------------- #
-    def _preprocess_action(self, action: np.ndarray,
-                           translation_scale: float, axangle_scale: float):
+    def _preprocess_action(
+        self, action: np.ndarray, translation_scale: float, axangle_scale: float
+    ):
         """Preprocess action:
             * Keep current TCP orientation when action only has position
             * apply translation_scale and axangle_scale for delta control_mode
@@ -183,33 +212,42 @@ class XArm7:
         elif self._control_mode == "ee_pose_axangle":
             tgt_tcp_pose = Pose(
                 p=action[:3] * 1000.0,  # m => mm
-                q=Rotation.from_rotvec(action[3:6]).as_quat()[[3, 0, 1, 2]]
+                q=Rotation.from_rotvec(action[3:6]).as_quat()[[3, 0, 1, 2]],
             )
         elif self._control_mode == "ee_delta_pose_axangle":
             axangle = action[3:6]
             if (theta := math.sqrt(axangle @ axangle)) < 1e-9:
                 q = [1, 0, 0, 0]
             else:
-                q = axangle2quat(axangle / theta,
-                                 axangle_scale if theta > 1 else theta * axangle_scale,
-                                 is_normalized=True)
-            delta_tcp_pose = Pose(p=action[:3] * translation_scale, q=q)  # in milimeters
+                q = axangle2quat(
+                    axangle / theta,
+                    axangle_scale if theta > 1 else theta * axangle_scale,
+                    is_normalized=True,
+                )
+            delta_tcp_pose = Pose(
+                p=action[:3] * translation_scale, q=q
+            )  # in milimeters
             tgt_tcp_pose = cur_tcp_pose * delta_tcp_pose
         elif self._control_mode == "ee_pose_quat":
             tgt_tcp_pose = Pose(p=action[:3] * 1000.0, q=action[3:7])  # m => mm
         elif self._control_mode == "ee_delta_pose_quat":
             # TODO: Apply axangle_scale?
-            delta_tcp_pose = Pose(p=action[:3] * translation_scale,  # in milimeters
-                                  q=action[3:7])
+            delta_tcp_pose = Pose(
+                p=action[:3] * translation_scale, q=action[3:7]  # in milimeters
+            )
             tgt_tcp_pose = cur_tcp_pose * delta_tcp_pose
         else:
             raise NotImplementedError(f"{self._control_mode=} not implemented")
 
         # Clip tgt_tcp_pose.p to safety_boundary_clip
         if self.boundary_clip is not None:
-            tgt_tcp_pose.set_p(np.clip(tgt_tcp_pose.p,
-                                       self.safety_boundary_clip[1::2],
-                                       self.safety_boundary_clip[0::2]))
+            tgt_tcp_pose.set_p(
+                np.clip(
+                    tgt_tcp_pose.p,
+                    self.safety_boundary_clip[1::2],
+                    self.safety_boundary_clip[0::2],
+                )
+            )
 
         # [-1, 1] => [-10, 850]
         gripper_pos = clip_and_scale_action(action[-1], self.gripper_limits)
@@ -217,10 +255,17 @@ class XArm7:
         self.logger.info(f"Setting {tgt_tcp_pose = }, {gripper_pos = }")
         return tgt_tcp_pose, gripper_pos
 
-    def set_action(self, action: np.ndarray,
-                   translation_scale=100.0, axangle_scale=0.1,
-                   speed=None, mvacc=None, gripper_speed=None,
-                   skip_gripper=False, wait=False):
+    def set_action(
+        self,
+        action: np.ndarray,
+        translation_scale=100.0,
+        axangle_scale=0.1,
+        speed=None,
+        mvacc=None,
+        gripper_speed=None,
+        skip_gripper=False,
+        wait=False,
+    ):
         """
         :param action: action corresponding to self.control_mode, np.floating np.ndarray
                        action[-1] is gripper action (always has range [-1, 1])
@@ -271,16 +316,21 @@ class XArm7:
             # NOTE: when wait=False, the second set_position() call will be blocked
             # until previous motion is completed.
             ret_arm = self.arm.set_position(
-                *tgt_tcp_pose.p, *quat2euler(tgt_tcp_pose.q, axes='sxyz'),
-                speed=speed, mvacc=mvacc,
-                relative=False, is_radian=True, wait=wait
+                *tgt_tcp_pose.p,
+                *quat2euler(tgt_tcp_pose.q, axes="sxyz"),
+                speed=speed,
+                mvacc=mvacc,
+                relative=False,
+                is_radian=True,
+                wait=wait,
             )
             return ret_arm, ret_gripper
         elif self._motion_mode == "servo":
             raise NotImplementedError("Do not use servo mode! Need fine waypoints")
             ret_arm = self.arm.set_servo_cartesian(
-                np.hstack([tgt_tcp_pose.p, quat2euler(tgt_tcp_pose.q, axes='sxyz')]),
-                is_radian=True, is_tool_coord=False
+                np.hstack([tgt_tcp_pose.p, quat2euler(tgt_tcp_pose.q, axes="sxyz")]),
+                is_radian=True,
+                is_tool_coord=False,
             )
             return ret_arm, ret_gripper
         elif self._motion_mode == "joint_teaching":
@@ -289,12 +339,14 @@ class XArm7:
             raise NotImplementedError("Unverified")
             # clip delta pos to prevent undesired rotation due to ik solutions
             cur_tcp_pose = self.get_tcp_pose(unit_in_mm=True)
-            tgt_tcp_pose.set_p(np.clip(tgt_tcp_pose.p,
-                                       cur_tcp_pose.p - 30, cur_tcp_pose.p + 30))
+            tgt_tcp_pose.set_p(
+                np.clip(tgt_tcp_pose.p, cur_tcp_pose.p - 30, cur_tcp_pose.p + 30)
+            )
 
             _, tgt_qpos = self.arm.get_inverse_kinematics(
-                np.hstack([tgt_tcp_pose.p, quat2euler(tgt_tcp_pose.q, axes='sxyz')]),
-                input_is_radian=True, return_is_radian=True
+                np.hstack([tgt_tcp_pose.p, quat2euler(tgt_tcp_pose.q, axes="sxyz")]),
+                input_is_radian=True,
+                return_is_radian=True,
             )
             _, (cur_qpos, _, _) = self.arm.get_joint_states(is_radian=True)
             delta_qpos = np.asarray(tgt_qpos) - np.asarray(cur_qpos)
@@ -319,26 +371,42 @@ class XArm7:
             return ret_arm, ret_gripper
         elif self._motion_mode == "joint_online":
             _, tgt_qpos = self.arm.get_inverse_kinematics(
-                np.hstack([tgt_tcp_pose.p, quat2euler(tgt_tcp_pose.q, axes='sxyz')]),
-                input_is_radian=True, return_is_radian=True
+                np.hstack([tgt_tcp_pose.p, quat2euler(tgt_tcp_pose.q, axes="sxyz")]),
+                input_is_radian=True,
+                return_is_radian=True,
             )
             ret_arm = self.arm.set_servo_angle(
-                angle=tgt_qpos, speed=speed, mvacc=mvacc,
-                relative=False, is_radian=True, wait=wait
+                angle=tgt_qpos,
+                speed=speed,
+                mvacc=mvacc,
+                relative=False,
+                is_radian=True,
+                wait=wait,
             )
             return ret_arm, ret_gripper
         elif self._motion_mode == "cartesian_online":
             ret_arm = self.arm.set_position(
-                *tgt_tcp_pose.p, *quat2euler(tgt_tcp_pose.q, axes='sxyz'),
-                speed=speed, mvacc=mvacc,
-                relative=False, is_radian=True, wait=wait
+                *tgt_tcp_pose.p,
+                *quat2euler(tgt_tcp_pose.q, axes="sxyz"),
+                speed=speed,
+                mvacc=mvacc,
+                relative=False,
+                is_radian=True,
+                wait=wait,
             )
             return ret_arm, ret_gripper
         else:
             raise NotImplementedError()
 
-    def set_qpos(self, qpos, speed=None, mvacc=None,
-                 gripper_speed=None, skip_gripper=False, wait=False):
+    def set_qpos(
+        self,
+        qpos,
+        speed=None,
+        mvacc=None,
+        gripper_speed=None,
+        skip_gripper=False,
+        wait=False,
+    ):
         """Set xarm qpos using maniskill2 qpos
         :param qpos: joint qpos (angles for arm joints, gripper_qpos for gripper)
                      See self.joint_limits_ms2
@@ -367,13 +435,18 @@ class XArm7:
             )
 
         ret_arm = self.arm.set_servo_angle(
-            angle=arm_qpos, speed=speed, mvacc=mvacc,
-            relative=False, is_radian=True, wait=wait
+            angle=arm_qpos,
+            speed=speed,
+            mvacc=mvacc,
+            relative=False,
+            is_radian=True,
+            wait=wait,
         )
         return ret_arm, ret_gripper
 
-    def set_gripper_position(self, gripper_pos, unit_in_mm=False,
-                             speed=None, wait=False):
+    def set_gripper_position(
+        self, gripper_pos, unit_in_mm=False, speed=None, wait=False
+    ):
         """Set gripper opening width
         :param gripper_pos: gripper position (default unit is in meters)
         :param unit_in_mm: whether gripper_pos has unit mm or m
@@ -382,7 +455,9 @@ class XArm7:
         """
         ret_gripper = self.arm.set_gripper_position(
             gripper_pos * 10.0 if unit_in_mm else gripper_pos * 10000.0,
-            speed=speed, wait=wait, wait_motion=wait
+            speed=speed,
+            wait=wait,
+            wait_motion=wait,
         )
         return ret_gripper
 
@@ -391,8 +466,9 @@ class XArm7:
         :param speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
-        ret_gripper = self.arm.set_gripper_position(self.gripper_limits[0], speed=speed,
-                                                    wait=wait, wait_motion=wait)
+        ret_gripper = self.arm.set_gripper_position(
+            self.gripper_limits[0], speed=speed, wait=wait, wait_motion=wait
+        )
         return ret_gripper
 
     def open_gripper(self, speed=None, wait=False):
@@ -400,13 +476,15 @@ class XArm7:
         :param speed: gripper speed, range [1, 5000] r/min
         :param wait: whether to wait for the action to complete, default is False.
         """
-        ret_gripper = self.arm.set_gripper_position(self.gripper_limits[1], speed=speed,
-                                                    wait=wait, wait_motion=wait)
+        ret_gripper = self.arm.set_gripper_position(
+            self.gripper_limits[1], speed=speed, wait=wait, wait_motion=wait
+        )
         return ret_gripper
 
     @staticmethod
-    def build_grasp_pose(center, approaching=[0.0, 0.0, -1.0],
-                         closing=[1.0, 0.0, 0.0]) -> Pose:
+    def build_grasp_pose(
+        center, approaching=[0.0, 0.0, -1.0], closing=[1.0, 0.0, 0.0]
+    ) -> Pose:
         center = np.asarray(center)
         approaching, closing = np.asarray(approaching), np.asarray(closing)
         assert np.abs(1 - np.linalg.norm(approaching)) < 1e-3
@@ -462,7 +540,7 @@ class XArm7:
         xyzrpy = np.asarray(ret[1:], dtype=np.float32)
         pose_base_tcp = Pose(
             p=xyzrpy[:3] if unit_in_mm else xyzrpy[:3] / 1000,
-            q=euler2quat(*xyzrpy[3:], axes='sxyz')
+            q=euler2quat(*xyzrpy[3:], axes="sxyz"),
         )
         return self.pose * pose_base_tcp
 
@@ -518,8 +596,10 @@ class XArm7:
         so_sync = SharedObject("sync_xarm7_real")
         so_start = SharedObject("start_xarm7_real", data=False)
         # data
-        urdf_path = (f"{ASSET_DIR}/descriptions/"
-                     f"{'xarm7_d435.urdf' if self.with_hand_camera else 'xarm7.urdf'}")
+        urdf_path = (
+            f"{ASSET_DIR}/descriptions/"
+            f"{'xarm7_d435.urdf' if self.with_hand_camera else 'xarm7.urdf'}"
+        )
         so_urdf_path = SharedObject("xarm7_real_urdf_path", data=urdf_path)
         so_qpos = SharedObject("xarm7_real_qpos", data=np.zeros(8, dtype=np.float32))
         so_qvel = SharedObject("xarm7_real_qvel", data=np.zeros(8, dtype=np.float32))
@@ -534,10 +614,33 @@ class XArm7:
                 _, gripper_pos = self.arm.get_gripper_position()  # [-10, 850]
                 pose_world_tcp = self.get_tcp_pose()
 
-                so_qpos.assign(np.asarray(qpos + [gripper_pos / 1000.0,],
-                                          dtype=np.float32))
-                so_qvel.assign(np.asarray(qvel + [0.0,], dtype=np.float32))
-                so_qf.assign(np.asarray(qf + [0.0,], dtype=np.float32))
+                so_qpos.assign(
+                    np.asarray(
+                        qpos
+                        + [
+                            gripper_pos / 1000.0,
+                        ],
+                        dtype=np.float32,
+                    )
+                )
+                so_qvel.assign(
+                    np.asarray(
+                        qvel
+                        + [
+                            0.0,
+                        ],
+                        dtype=np.float32,
+                    )
+                )
+                so_qf.assign(
+                    np.asarray(
+                        qf
+                        + [
+                            0.0,
+                        ],
+                        dtype=np.float32,
+                    )
+                )
                 so_tcp_pose.assign(pose_world_tcp)
 
         self.logger.info(f"Process running {self!r} is joined")
@@ -580,18 +683,24 @@ class XArm7:
         elif self._control_mode == "ee_pose_axangle":
             # [x, y, z, *rotvec, gripper], xyz in meters
             #   rotvec is in axis of rotation and its norm gives rotation angle
-            return spaces.Box(low=np.array([-np.inf]*6 + [-1]),
-                              high=np.array([np.inf]*6 + [1]),
-                              shape=(7,), dtype=np.float32)
+            return spaces.Box(
+                low=np.array([-np.inf] * 6 + [-1]),
+                high=np.array([np.inf] * 6 + [1]),
+                shape=(7,),
+                dtype=np.float32,
+            )
         elif self._control_mode == "ee_delta_pose_axangle":
             # [x, y, z, *rotvec, gripper], xyz in meters
             #   rotvec is in axis of rotation and its norm gives rotation angle
             return spaces.Box(low=-1, high=1, shape=(7,), dtype=np.float32)
         elif self._control_mode == "ee_pose_quat":
             # [x, y, z, w, x, y, z, gripper], xyz in meters, wxyz is unit quaternion
-            return spaces.Box(low=np.array([-np.inf]*3 + [-1] * 4 + [-1]),
-                              high=np.array([np.inf]*3 + [1] * 4 + [1]),
-                              shape=(8,), dtype=np.float32)
+            return spaces.Box(
+                low=np.array([-np.inf] * 3 + [-1] * 4 + [-1]),
+                high=np.array([np.inf] * 3 + [1] * 4 + [1]),
+                shape=(8,),
+                dtype=np.float32,
+            )
         elif self._control_mode == "ee_delta_pose_quat":
             # [x, y, z, w, x, y, z, gripper], xyz in meters, wxyz is unit quaternion
             return spaces.Box(low=-1, high=1, shape=(8,), dtype=np.float32)
@@ -601,10 +710,14 @@ class XArm7:
     @property
     def cameras(self) -> CameraConfig:
         """CameraConfig of cameras attached to agent"""
-        pose_tcp_cam = Pose(p=[0, 0, 0.177]).inv() * Pose(
-            p=[-0.06042734, 0.0175, 0.02915237],
-            q=euler2quat(np.pi, -np.pi/2-np.pi/12, np.pi)
-        ) * Pose(p=[0, 0.015, 0])  # camera_color_frame
+        pose_tcp_cam = (
+            Pose(p=[0, 0, 0.177]).inv()
+            * Pose(
+                p=[-0.06042734, 0.0175, 0.02915237],
+                q=euler2quat(np.pi, -np.pi / 2 - np.pi / 12, np.pi),
+            )
+            * Pose(p=[0, 0.015, 0])
+        )  # camera_color_frame
         return CameraConfig(
             uid="hand_camera",
             device_sn="146322076186",
@@ -616,6 +729,8 @@ class XArm7:
         )
 
     def __repr__(self):
-        return (f'<{self.__class__.__name__}: ip={self.ip}, '
-                f'control_mode={self._control_mode}, motion_mode={self._motion_mode}, '
-                f'with_hand_camera={self.with_hand_camera}>')
+        return (
+            f"<{self.__class__.__name__}: ip={self.ip}, "
+            f"control_mode={self._control_mode}, motion_mode={self._motion_mode}, "
+            f"with_hand_camera={self.with_hand_camera}>"
+        )

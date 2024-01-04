@@ -27,9 +27,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save-dir", type=str, default="capture", help="Path to saving directory."
     )
-    parser.add_argument(
-        "--prefix", type=str, default="", help="Saving npz file prefix"
-    )
+    parser.add_argument("--prefix", type=str, default="", help="Saving npz file prefix")
     args = parser.parse_args()
 
     save_dir = Path(args.save_dir).resolve()
@@ -38,23 +36,27 @@ if __name__ == "__main__":
 
     camera = Camera(
         CameraConfig(
-            "camera", config={
+            "camera",
+            config={
                 "Color": (848, 480, 60),
                 "Depth": (848, 480, 60),
                 "Infrared 1": (848, 480, 60),
                 "Infrared 2": (848, 480, 60),
-            }, preset="Default",
-            depth_option_kwargs={rs.option.laser_power: 360}
+            },
+            preset="Default",
+            depth_option_kwargs={rs.option.laser_power: 360},
         ),
     )
 
     # start CV2Visualizer
     cv2vis_proc = ctx.Process(
-        target=CV2Visualizer, name="CV2Visualizer", args=(),
+        target=CV2Visualizer,
+        name="CV2Visualizer",
+        args=(),
         kwargs=dict(
             run_as_process=True,
             stream_camera=True,
-        )
+        ),
     )
     start_and_wait_for_process(cv2vis_proc, timeout=30)
     so_cv2vis_joined = SharedObject("join_viscv2")
@@ -69,8 +71,9 @@ if __name__ == "__main__":
             elif event.key == keyboard.Key.esc:
                 print("Ending capture")
                 break
-            elif (isinstance(event, events.Press)
-                  and event.key == keyboard.KeyCode.from_char('c')):
+            elif isinstance(
+                event, events.Press
+            ) and event.key == keyboard.KeyCode.from_char("c"):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 save_path = str(save_dir / f"{args.prefix}{timestamp}")
                 print(f"Captured and saved as {save_path}_[images|params].npz")

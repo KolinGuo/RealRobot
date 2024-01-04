@@ -1,9 +1,9 @@
 """Get depth image from stereo IR images using simsense"""
+
 from __future__ import annotations
 
-import numpy as np
 import cv2
-
+import numpy as np
 from sapien.pysapien.simsense import DepthSensorEngine
 
 
@@ -35,7 +35,7 @@ class SimsenseDepth:
         uniqueness_ratio: int = 15,
         lr_max_diff: int = 1,
         median_filter_size: int = 3,
-        depth_dilation: bool = False
+        depth_dilation: bool = False,
     ):
         """
         Initiate the SimsenseDepth class.
@@ -97,58 +97,100 @@ class SimsenseDepth:
             registration = True
 
         # Instance check
-        if (not isinstance(img_h, int) or not isinstance(img_w, int)
-                or img_h < 32 or img_w < 32):
+        if (
+            not isinstance(img_h, int)
+            or not isinstance(img_w, int)
+            or img_h < 32
+            or img_w < 32
+        ):
             raise TypeError("Image height and width must be integer no less than 32")
 
         if registration and (k_rgb is None or rgb_size is None or l2rgb is None):
-            raise TypeError("Depth registration is on but missing "
-                            "some RGB camera's parameters")
+            raise TypeError(
+                "Depth registration is on but missing some RGB camera's parameters"
+            )
 
         if speckle_shape > 0 and (speckle_scale <= 0 or gaussian_sigma <= 0):
-            raise TypeError("Infrared noise simulation is on. Speckle_scale and "
-                            "gaussian_sigma must both be positive")
+            raise TypeError(
+                "Infrared noise simulation is on. Speckle_scale and "
+                "gaussian_sigma must both be positive"
+            )
 
-        if (not isinstance(census_width, int) or not isinstance(census_height, int)
-                or census_width <= 0 or census_height <= 0
-                or census_width % 2 == 0 or census_height % 2 == 0
-                or census_width * census_height > 65):
-            raise TypeError("census_width and census_height must be positive odd "
-                            "integers and their product should be no larger than 65")
+        if (
+            not isinstance(census_width, int)
+            or not isinstance(census_height, int)
+            or census_width <= 0
+            or census_height <= 0
+            or census_width % 2 == 0
+            or census_height % 2 == 0
+            or census_width * census_height > 65
+        ):
+            raise TypeError(
+                "census_width and census_height must be positive odd "
+                "integers and their product should be no larger than 65"
+            )
 
         if not isinstance(max_disp, int) or max_disp < 32 or max_disp > 1024:
             raise TypeError("max_disp must be integer within range [32, 1024]")
 
-        if (not isinstance(block_width, int) or not isinstance(block_height, int)
-                or block_width <= 0 or block_height <= 0
-                or block_width % 2 == 0 or block_height % 2 == 0
-                or block_width * block_height > 256):
-            raise TypeError("block_width and block_height must be positive odd "
-                            "integers and their product should be no larger than 256")
+        if (
+            not isinstance(block_width, int)
+            or not isinstance(block_height, int)
+            or block_width <= 0
+            or block_height <= 0
+            or block_width % 2 == 0
+            or block_height % 2 == 0
+            or block_width * block_height > 256
+        ):
+            raise TypeError(
+                "block_width and block_height must be positive odd "
+                "integers and their product should be no larger than 256"
+            )
 
-        if (not isinstance(p1_penalty, int) or not isinstance(p2_penalty, int)
-                or p1_penalty <= 0 or p2_penalty <= 0
-                or p1_penalty >= p2_penalty or p2_penalty >= 224):
-            raise TypeError("p1 must be positive integer less than p2 and p2 be "
-                            "positive integer less than 224")
+        if (
+            not isinstance(p1_penalty, int)
+            or not isinstance(p2_penalty, int)
+            or p1_penalty <= 0
+            or p2_penalty <= 0
+            or p1_penalty >= p2_penalty
+            or p2_penalty >= 224
+        ):
+            raise TypeError(
+                "p1 must be positive integer less than p2 and p2 be "
+                "positive integer less than 224"
+            )
 
-        if (not isinstance(uniqueness_ratio, int) or uniqueness_ratio < 0
-                or uniqueness_ratio > 255):
-            raise TypeError("uniqueness_ratio must be positive integer "
-                            "no larger than 255")
+        if (
+            not isinstance(uniqueness_ratio, int)
+            or uniqueness_ratio < 0
+            or uniqueness_ratio > 255
+        ):
+            raise TypeError(
+                "uniqueness_ratio must be positive integer no larger than 255"
+            )
 
         if not isinstance(lr_max_diff, int) or lr_max_diff < -1 or lr_max_diff > 255:
             raise TypeError("lr_max_diff must be integer within the range [0, 255]")
 
-        if (median_filter_size != 1 and median_filter_size != 3
-                and median_filter_size != 5 and median_filter_size != 7):
+        if (
+            median_filter_size != 1
+            and median_filter_size != 3
+            and median_filter_size != 5
+            and median_filter_size != 7
+        ):
             raise TypeError("Median filter size choices are 1, 3, 5, 7")
 
         # Get rectification map
         r1, r2, p1, p2, q, _, _ = cv2.stereoRectify(
-            cameraMatrix1=k_l, distCoeffs1=None, cameraMatrix2=k_r, distCoeffs2=None,
-            imageSize=ir_size, R=l2r[:3, :3], T=l2r[:3, 3:], alpha=1.0,
-            newImageSize=ir_size
+            cameraMatrix1=k_l,
+            distCoeffs1=None,
+            cameraMatrix2=k_r,
+            distCoeffs2=None,
+            imageSize=ir_size,
+            R=l2r[:3, :3],
+            T=l2r[:3, 3:],
+            alpha=1.0,
+            newImageSize=ir_size,
         )
         f_len = q[2][3]  # focal length of the left camera in meters
         b_len = 1.0 / q[3][2]  # baseline length in meters
@@ -161,26 +203,90 @@ class SimsenseDepth:
             # Get registration matrix
             a1, a2, a3, b = self._get_registration_mat(ir_size, k_l, k_rgb, l2rgb)
             self.engine = DepthSensorEngine(
-                img_h, img_w, rgb_size[1], rgb_size[0], f_len, b_len,
-                min_depth, max_depth, ir_noise_seed, speckle_shape, speckle_scale,
-                gaussian_mu, gaussian_sigma, rectified, census_width, census_height,
-                max_disp, block_width, block_height, p1_penalty, p2_penalty,
-                uniqueness_ratio, lr_max_diff, median_filter_size,
-                map_lx, map_ly, map_rx, map_ry,
-                a1, a2, a3, b[0], b[1], b[2], depth_dilation,
-                k_rgb[0][0], k_rgb[1][1], k_rgb[0][1], k_rgb[0][2], k_rgb[1][2]
+                img_h,
+                img_w,
+                rgb_size[1],
+                rgb_size[0],
+                f_len,
+                b_len,
+                min_depth,
+                max_depth,
+                ir_noise_seed,
+                speckle_shape,
+                speckle_scale,
+                gaussian_mu,
+                gaussian_sigma,
+                rectified,
+                census_width,
+                census_height,
+                max_disp,
+                block_width,
+                block_height,
+                p1_penalty,
+                p2_penalty,
+                uniqueness_ratio,
+                lr_max_diff,
+                median_filter_size,
+                map_lx,
+                map_ly,
+                map_rx,
+                map_ry,
+                a1,
+                a2,
+                a3,
+                b[0],
+                b[1],
+                b[2],
+                depth_dilation,
+                k_rgb[0][0],
+                k_rgb[1][1],
+                k_rgb[0][1],
+                k_rgb[0][2],
+                k_rgb[1][2],
             )
         else:
             a1, a2, a3, b = self._get_registration_mat(ir_size, k_l, k_l, np.eye(4))
             self.engine = DepthSensorEngine(
-                img_h, img_w, img_h, img_w, f_len, b_len,
-                min_depth, max_depth, ir_noise_seed, speckle_shape, speckle_scale,
-                gaussian_mu, gaussian_sigma, rectified, census_width, census_height,
-                max_disp, block_width, block_height, p1_penalty, p2_penalty,
-                uniqueness_ratio, lr_max_diff, median_filter_size,
-                map_lx, map_ly, map_rx, map_ry,
-                a1, a2, a3, b[0], b[1], b[2], depth_dilation,
-                k_l[0][0], k_l[1][1], k_l[0][1], k_l[0][2], k_l[1][2]
+                img_h,
+                img_w,
+                img_h,
+                img_w,
+                f_len,
+                b_len,
+                min_depth,
+                max_depth,
+                ir_noise_seed,
+                speckle_shape,
+                speckle_scale,
+                gaussian_mu,
+                gaussian_sigma,
+                rectified,
+                census_width,
+                census_height,
+                max_disp,
+                block_width,
+                block_height,
+                p1_penalty,
+                p2_penalty,
+                uniqueness_ratio,
+                lr_max_diff,
+                median_filter_size,
+                map_lx,
+                map_ly,
+                map_rx,
+                map_ry,
+                a1,
+                a2,
+                a3,
+                b[0],
+                b[1],
+                b[2],
+                depth_dilation,
+                k_l[0][0],
+                k_l[1][1],
+                k_l[0][1],
+                k_l[0][2],
+                k_l[1][2],
             )
 
             # NOTE: Constructor for no-registration is not exposed
@@ -207,8 +313,13 @@ class SimsenseDepth:
         self.engine.compute(img_l, img_r)
         return self.engine.get_ndarray()
 
-    def set_ir_noise_parameters(self, speckle_shape: float, speckle_scale: float,
-                                gaussian_mu: float, gaussian_sigma: float) -> None:
+    def set_ir_noise_parameters(
+        self,
+        speckle_shape: float,
+        speckle_scale: float,
+        gaussian_mu: float,
+        gaussian_sigma: float,
+    ) -> None:
         """
         :param speckle_shape: Shape parameter for simulating infrared speckle noise
                               (Gamma distribution). Set to 0 to disable noise simulation
@@ -220,10 +331,13 @@ class SimsenseDepth:
                                (Gaussian distribution).
         """
         if speckle_shape > 0 and (speckle_scale <= 0 or gaussian_sigma <= 0):
-            raise TypeError("Infrared noise simulation is on. speckle_scale "
-                            "and gaussian_sigma must both be positive")
-        self.engine.set_ir_noise_parameters(speckle_shape, speckle_scale,
-                                            gaussian_mu, gaussian_sigma)
+            raise TypeError(
+                "Infrared noise simulation is on. speckle_scale "
+                "and gaussian_sigma must both be positive"
+            )
+        self.engine.set_ir_noise_parameters(
+            speckle_shape, speckle_scale, gaussian_mu, gaussian_sigma
+        )
 
     def set_census_window_size(self, census_width: int, census_height: int) -> None:
         """
@@ -232,12 +346,19 @@ class SimsenseDepth:
         :param census_height: Height of the center-symmetric census transform window.
                               This must be an odd number.
         """
-        if (not isinstance(census_width, int) or not isinstance(census_height, int)
-                or census_width <= 0 or census_height <= 0
-                or census_width % 2 == 0 or census_height % 2 == 0
-                or census_width*census_height > 65):
-            raise TypeError("census_width and census_height must be positive odd "
-                            "integers and their product should be no larger than 65")
+        if (
+            not isinstance(census_width, int)
+            or not isinstance(census_height, int)
+            or census_width <= 0
+            or census_height <= 0
+            or census_width % 2 == 0
+            or census_height % 2 == 0
+            or census_width * census_height > 65
+        ):
+            raise TypeError(
+                "census_width and census_height must be positive odd "
+                "integers and their product should be no larger than 65"
+            )
         self.engine.set_census_window_size(census_width, census_height)
 
     def set_matching_block_size(self, block_width: int, block_height: int) -> None:
@@ -245,12 +366,19 @@ class SimsenseDepth:
         :param block_width: Width of the matched block. This must be an odd number.
         :param block_height: Height of the matched block. This must be an odd number.
         """
-        if (not isinstance(block_width, int) or not isinstance(block_height, int)
-                or block_width <= 0 or block_height <= 0
-                or block_width % 2 == 0 or block_height % 2 == 0
-                or block_width*block_height > 256):
-            raise TypeError("block_width and block_height must be positive odd "
-                            "integers and their product should be no larger than 256")
+        if (
+            not isinstance(block_width, int)
+            or not isinstance(block_height, int)
+            or block_width <= 0
+            or block_height <= 0
+            or block_width % 2 == 0
+            or block_height % 2 == 0
+            or block_width * block_height > 256
+        ):
+            raise TypeError(
+                "block_width and block_height must be positive odd "
+                "integers and their product should be no larger than 256"
+            )
         self.engine.set_matching_block_size(block_width, block_height)
 
     def set_penalties(self, p1_penalty: int, p2_penalty: int) -> None:
@@ -258,11 +386,18 @@ class SimsenseDepth:
         :param p1_penalty: P1 penalty for semi-global matching algorithm.
         :param p2_penalty: P2 penalty for semi-global matching algorithm.
         """
-        if (not isinstance(p1_penalty, int) or not isinstance(p2_penalty, int)
-                or p1_penalty <= 0 or p2_penalty <= 0
-                or p1_penalty >= p2_penalty or p2_penalty >= 224):
-            raise TypeError("p1 must be positive integer less than p2 and p2 be "
-                            "positive integer less than 224")
+        if (
+            not isinstance(p1_penalty, int)
+            or not isinstance(p2_penalty, int)
+            or p1_penalty <= 0
+            or p2_penalty <= 0
+            or p1_penalty >= p2_penalty
+            or p2_penalty >= 224
+        ):
+            raise TypeError(
+                "p1 must be positive integer less than p2 and p2 be "
+                "positive integer less than 224"
+            )
         self.engine.set_penalties(p1_penalty, p2_penalty)
 
     def set_uniqueness_ratio(self, uniqueness_ratio: int) -> None:
@@ -272,10 +407,14 @@ class SimsenseDepth:
                                  best match's adjacent pixels) cost to consider
                                  the found match valid.
         """
-        if (not isinstance(uniqueness_ratio, int)
-                or uniqueness_ratio < 0 or uniqueness_ratio > 255):
-            raise TypeError("uniqueness_ratio must be positive integer "
-                            "no larger than 255")
+        if (
+            not isinstance(uniqueness_ratio, int)
+            or uniqueness_ratio < 0
+            or uniqueness_ratio > 255
+        ):
+            raise TypeError(
+                "uniqueness_ratio must be positive integer no larger than 255"
+            )
         self.engine.set_uniqueness_ratio(uniqueness_ratio)
 
     def set_lr_max_diff(self, lr_max_diff: int) -> None:
@@ -289,8 +428,10 @@ class SimsenseDepth:
 
     @staticmethod
     def _get_registration_mat(
-        ir_size: tuple[int, int], k_ir: np.ndarray,
-        k_rgb: np.ndarray, ir2rgb: np.ndarray
+        ir_size: tuple[int, int],
+        k_ir: np.ndarray,
+        k_rgb: np.ndarray,
+        ir2rgb: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         R = ir2rgb[:3, :3]
         t = ir2rgb[:3, 3:]

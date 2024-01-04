@@ -1,24 +1,24 @@
 import argparse
 from pathlib import Path
 
-import pyrealsense2 as rs
 import numpy as np
+import pyrealsense2 as rs
 from tqdm import tqdm
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Read recorded bag file and save rgb_image and depth_image into .npz"
+        description=(
+            "Read recorded bag file and save rgb_image and depth_image into .npz"
+        )
+    )
+    parser.add_argument("bag_path", type=str, help="Path to the rosbag")
+    parser.add_argument(
+        "--save-dir",
+        type=str,
+        help="Path to saving directory. If not provided, save to same directory",
     )
     parser.add_argument(
-        'bag_path', type=str, help="Path to the rosbag"
-    )
-    parser.add_argument(
-        "--save-dir", type=str,
-        help="Path to saving directory. If not provided, save to same directory"
-    )
-    parser.add_argument(
-        "--debug", action="store_true",
-        help="Enable pyrealsense2 logging to console"
+        "--debug", action="store_true", help="Enable pyrealsense2 logging to console"
     )
     args = parser.parse_args()
 
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     if args.save_dir is None:
         save_npz_path = bag_path.with_suffix(".npz")
     else:
-        save_npz_path = Path(args.save_dir) / (bag_path.stem+".npz")
+        save_npz_path = Path(args.save_dir) / (bag_path.stem + ".npz")
         save_npz_path.parent.mkdir(parents=True, exist_ok=True)
     print(f'Converting rosbag "{bag_path}"\n')
 
@@ -76,11 +76,17 @@ if __name__ == "__main__":
             # Align the depth frame to color frame
             aligned_frames = align.process(frames)
             # Verify intrinsics
-            aligned_intrinsics = aligned_frames.get_profile().as_video_stream_profile().intrinsics
+            aligned_intrinsics = (
+                aligned_frames.get_profile().as_video_stream_profile().intrinsics
+            )
             np.testing.assert_allclose(
                 frames_dict["intrinsics"],
-                [aligned_intrinsics.fx, aligned_intrinsics.fy,
-                 aligned_intrinsics.ppx, aligned_intrinsics.ppy]
+                [
+                    aligned_intrinsics.fx,
+                    aligned_intrinsics.fy,
+                    aligned_intrinsics.ppx,
+                    aligned_intrinsics.ppy,
+                ],
             )
 
             # Get aligned frames
@@ -98,9 +104,11 @@ if __name__ == "__main__":
     for k, v in frames_dict.items():
         frames_dict[k] = np.stack(v)
 
-    print(f"Read {frames_dict['rgb_image'].shape} rgb frames "
-          f"and {frames_dict['depth_image'].shape} depth frames\n")
+    print(
+        f"Read {frames_dict['rgb_image'].shape} rgb frames "
+        f"and {frames_dict['depth_image'].shape} depth frames\n"
+    )
 
-    print('Saving to compressed npz ...')
+    print("Saving to compressed npz ...")
     np.savez_compressed(save_npz_path, **frames_dict)
     print(f'Saved frames to "{save_npz_path}"')

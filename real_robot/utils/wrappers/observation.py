@@ -25,8 +25,10 @@ class RGBDObservationWrapper(gym.ObservationWrapper):
         self.observation_space = deepcopy(env.observation_space)
         # Remove Position from camera obs space
         if self.obs_mode == "rgb":
-            [cam_space.spaces.pop("depth", None)
-             for cam_space in self.observation_space["image"].spaces.values()]
+            [
+                cam_space.spaces.pop("depth", None)
+                for cam_space in self.observation_space["image"].spaces.values()
+            ]
 
     def observation(self, observation: dict):
         """Applied on obs before returning from self.reset() and self.step()"""

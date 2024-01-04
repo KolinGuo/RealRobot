@@ -8,12 +8,12 @@ import gymnasium as gym
 from gymnasium.envs.registration import EnvSpec as GymEnvSpec
 
 from real_robot.envs.base_env import XArmBaseEnv
+from real_robot.utils.logger import get_logger
 from real_robot.utils.wrappers.observation import (
     PointCloudObservationWrapper,
     RGBDObservationWrapper,
     RobotSegmentationObservationWrapper,
 )
-from real_robot.utils.logger import get_logger
 
 
 class EnvSpec:
@@ -51,8 +51,10 @@ REGISTERED_ENVS: dict[str, EnvSpec] = {}
 
 
 def register(
-    name: str, cls: Type[XArmBaseEnv],
-    max_episode_steps: int | None = None, default_kwargs: dict | None = None
+    name: str,
+    cls: Type[XArmBaseEnv],
+    max_episode_steps: int | None = None,
+    default_kwargs: dict | None = None,
 ):
     """Register a real_robot environment."""
     if name in REGISTERED_ENVS:
@@ -60,8 +62,7 @@ def register(
     if not issubclass(cls, XArmBaseEnv):
         raise TypeError(f"Env {name} must inherit from XArmBaseEnv")
     REGISTERED_ENVS[name] = EnvSpec(
-        name, cls,
-        max_episode_steps=max_episode_steps, default_kwargs=default_kwargs
+        name, cls, max_episode_steps=max_episode_steps, default_kwargs=default_kwargs
     )
 
 

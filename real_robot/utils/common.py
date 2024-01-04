@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict, defaultdict
 from collections.abc import Sequence
 
 import numpy as np
-from sapien import Pose
 from gymnasium import spaces
+from sapien import Pose
 
 from .logger import get_logger
 
@@ -54,12 +54,10 @@ def convert_observation_to_space(observation, prefix=""):
     if isinstance(observation, (dict)):
         # CATUION: Explicitly create a list of key-value tuples
         # Otherwise, spaces.Dict will sort keys if a dict is provided
-        space = spaces.Dict(
-            [
-                (k, convert_observation_to_space(v, prefix + "/" + k))
-                for k, v in observation.items()
-            ]
-        )
+        space = spaces.Dict([
+            (k, convert_observation_to_space(v, prefix + "/" + k))
+            for k, v in observation.items()
+        ])
     elif isinstance(observation, np.ndarray):
         shape = observation.shape
         dtype = observation.dtype
@@ -93,10 +91,7 @@ def clip_and_scale_action(action, new_range, old_range=(-1, 1)):
 
     action = np.clip(action, old_low, old_high)
 
-    return (
-        (action - old_low) / (old_high - old_low)
-        * (new_high - new_low) + new_low
-    )
+    return (action - old_low) / (old_high - old_low) * (new_high - new_low) + new_low
 
 
 def vectorize_pose(pose: Pose) -> np.ndarray:

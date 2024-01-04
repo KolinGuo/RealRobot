@@ -1,16 +1,20 @@
-import os
-import time
-import tempfile
 import ctypes
-from time import perf_counter
-from contextlib import AbstractContextManager
 import multiprocessing as mp
+import os
+import tempfile
+import time
+from contextlib import AbstractContextManager
 from multiprocessing.shared_memory import SharedMemory
+from time import perf_counter
 
 import numpy as np
+
 from real_robot.utils.logger import get_logger
+
 os.environ["REAL_ROBOT_LOG_DIR"] = tempfile.TemporaryDirectory().name
-_logger = get_logger("Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s")
+_logger = get_logger(
+    "Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
+)
 
 
 class RuntimeTimer(AbstractContextManager):
@@ -31,6 +35,8 @@ class RuntimeTimer(AbstractContextManager):
 
 
 """1. Shared via manager_dict"""
+
+
 def read_forever(data_dict, lock):
     while True:
         with lock:
@@ -72,11 +78,14 @@ def test_shared_via_manager_dict(ctx, data, n_iters=3, n_updates=5):
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(f"manager_dict: {total_time = :.6f} {update_time = :.6f} "
-                 f"{setup_time = :.6f}")
+    _logger.info(
+        f"manager_dict: {total_time = :.6f} {update_time = :.6f} {setup_time = :.6f}"
+    )
 
 
 """2. Shared via ctype_array"""
+
+
 def read_forever_ctype(array, shape, joined):
     while True:
         with joined.get_lock():
@@ -98,7 +107,7 @@ def test_shared_via_ctype_array(ctx, data: np.ndarray, n_iters=3, n_updates=5):
             ctype = np.ctypeslib.as_ctypes(input_data[0])._type_
 
             array = ctx.Array(ctype, input_data.flatten(), lock=True)
-            shape = ctx.Array('i', input_data.shape, lock=array.get_lock())
+            shape = ctx.Array("i", input_data.shape, lock=array.get_lock())
             joined = ctx.Value(ctypes.c_bool, False, lock=True)
 
             data = np.ndarray(data.shape, data.dtype, array.get_obj())
@@ -119,11 +128,14 @@ def test_shared_via_ctype_array(ctx, data: np.ndarray, n_iters=3, n_updates=5):
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(f"ctype_array: {total_time = :.6f} {update_time = :.6f} "
-                 f"{setup_time = :.6f}")
+    _logger.info(
+        f"ctype_array: {total_time = :.6f} {update_time = :.6f} {setup_time = :.6f}"
+    )
 
 
 """3. Shared via ctype_rawarray"""
+
+
 def read_forever_ctype_raw(array, shape, joined, array_lock, joined_lock):
     while True:
         with joined_lock:
@@ -146,14 +158,16 @@ def test_shared_via_ctype_rawarray(ctx, data: np.ndarray, n_iters=3, n_updates=5
 
             array_lock = ctx.Lock()
             array = ctx.RawArray(ctype, input_data.flatten())
-            shape = ctx.RawArray('i', input_data.shape)
+            shape = ctx.RawArray("i", input_data.shape)
             joined_lock = ctx.Lock()
             joined = ctx.RawValue(ctypes.c_bool, False)
 
             data = np.ndarray(data.shape, data.dtype, array)
 
-            p = ctx.Process(target=read_forever_ctype_raw,
-                            args=(array, shape, joined, array_lock, joined_lock))
+            p = ctx.Process(
+                target=read_forever_ctype_raw,
+                args=(array, shape, joined, array_lock, joined_lock),
+            )
             p.start()
             with RuntimeTimer("ctype_rawarray: read_forever_ctype_raw") as t:
                 for _ in range(n_updates):
@@ -169,11 +183,14 @@ def test_shared_via_ctype_rawarray(ctx, data: np.ndarray, n_iters=3, n_updates=5
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(f"ctype_rawarray: {total_time = :.6f} {update_time = :.6f} "
-                 f"{setup_time = :.6f}")
+    _logger.info(
+        f"ctype_rawarray: {total_time = :.6f} {update_time = :.6f} {setup_time = :.6f}"
+    )
 
 
 """4. Shared via SharedMemory"""
+
+
 def read_forever_sharedmemory(array, shape, joined, array_lock, joined_lock):
     while True:
         with joined_lock:
@@ -194,15 +211,17 @@ def test_shared_via_sharedmemory(ctx, data: np.ndarray, n_iters=3, n_updates=5):
         for _ in range(n_iters):
             array_lock = ctx.Lock()
             array = SharedMemory("array", create=True, size=data.nbytes)
-            shape = ctx.RawArray('i', input_data.shape)
+            shape = ctx.RawArray("i", input_data.shape)
             joined_lock = ctx.Lock()
             joined = ctx.RawValue(ctypes.c_bool, False)
 
             data = np.ndarray(data.shape, dtype=data.dtype, buffer=array.buf)
             data[:] = input_data[:]
 
-            p = ctx.Process(target=read_forever_sharedmemory,
-                            args=(array, shape, joined, array_lock, joined_lock))
+            p = ctx.Process(
+                target=read_forever_sharedmemory,
+                args=(array, shape, joined, array_lock, joined_lock),
+            )
             p.start()
             with RuntimeTimer("SharedMemory: read_forever_sharedmemory") as t:
                 for _ in range(n_updates):
@@ -219,18 +238,23 @@ def test_shared_via_sharedmemory(ctx, data: np.ndarray, n_iters=3, n_updates=5):
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(f"SharedMemory: {total_time = :.6f} {update_time = :.6f} "
-                 f"{setup_time = :.6f}")
+    _logger.info(
+        f"SharedMemory: {total_time = :.6f} {update_time = :.6f} {setup_time = :.6f}"
+    )
+
 
 """5. Shared via MemoryMappedFile"""
+
+
 def read_forever_memmap_file(shape, joined, array_lock, joined_lock):
     while True:
         with joined_lock:
             if joined.value:
                 break
         with array_lock:
-            data = np.memmap("/tmp/data.np", dtype=np.double,
-                             mode="r+", shape=tuple(shape))
+            data = np.memmap(
+                "/tmp/data.np", dtype=np.double, mode="r+", shape=tuple(shape)
+            )
         print(type(joined), len(data), data[0, 0], flush=True)
         time.sleep(0.01)
 
@@ -243,16 +267,19 @@ def test_shared_via_memmap_file(ctx, data: np.ndarray, n_iters=3, n_updates=5):
     with RuntimeTimer("MemoryMappedFile") as t_all:
         for _ in range(n_iters):
             array_lock = ctx.Lock()
-            shape = ctx.RawArray('i', input_data.shape)
+            shape = ctx.RawArray("i", input_data.shape)
             joined_lock = ctx.Lock()
             joined = ctx.RawValue(ctypes.c_bool, False)
 
-            data = np.memmap("/tmp/data.np", dtype=data.dtype,
-                             mode="w+", shape=data.shape)
+            data = np.memmap(
+                "/tmp/data.np", dtype=data.dtype, mode="w+", shape=data.shape
+            )
             data[:] = input_data[:]
 
-            p = ctx.Process(target=read_forever_memmap_file,
-                            args=(shape, joined, array_lock, joined_lock))
+            p = ctx.Process(
+                target=read_forever_memmap_file,
+                args=(shape, joined, array_lock, joined_lock),
+            )
             p.start()
             with RuntimeTimer("MemoryMappedFile: read_forever_memmap_file") as t:
                 for _ in range(n_updates):
@@ -269,12 +296,16 @@ def test_shared_via_memmap_file(ctx, data: np.ndarray, n_iters=3, n_updates=5):
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(f"MemoryMappedFile: {total_time = :.6f} {update_time = :.6f} "
-                 f"{setup_time = :.6f}")
+    _logger.info(
+        f"MemoryMappedFile: {total_time = :.6f} {update_time = :.6f} "
+        f"{setup_time = :.6f}"
+    )
 
 
-if __name__ == '__main__':
-    ctx = mp.get_context("forkserver" if "forkserver" in mp.get_all_start_methods() else "spawn")
+if __name__ == "__main__":
+    ctx = mp.get_context(
+        "forkserver" if "forkserver" in mp.get_all_start_methods() else "spawn"
+    )
 
     n = 10000
     data = np.ones((n, n))

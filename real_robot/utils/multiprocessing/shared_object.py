@@ -36,6 +36,7 @@ Usage Notes:
     >>> so.fetch()[..., 0]           # Slice only
     >>> so.fetch(lambda x: x[..., 0].copy()) + 1  # Slice and apply operation
 """
+
 from __future__ import annotations
 
 import struct
@@ -131,7 +132,11 @@ class SharedObject:
             return init_size + 10
 
     _object_sizes = (
-        9, 10, 17, 17, 37,  # NoneType, bool, int, float, sapien.Pose
+        9,  # NoneType
+        10,  # bool
+        17,  # int
+        17,  # float
+        37,  # sapien.Pose
         _get_bytes_size.__func__,  # str
         _get_bytes_size.__func__,  # bytes
         lambda array, ndim: array.nbytes + ndim * 8 + 18,  # ndarray
@@ -164,12 +169,12 @@ class SharedObject:
 
     @staticmethod
     def _fetch_int(buf, fn: Callable[[int], Any] | None, *args) -> Any:
-        v = struct.unpack_from('q', buf, offset=9)[0]
+        v = struct.unpack_from("q", buf, offset=9)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
     def _fetch_float(buf, fn: Callable[[float], Any] | None, *args) -> Any:
-        v = struct.unpack_from('d', buf, offset=9)[0]
+        v = struct.unpack_from("d", buf, offset=9)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
@@ -181,17 +186,18 @@ class SharedObject:
 
     @staticmethod
     def _fetch_str(buf, fn: Callable[[str], Any] | None, *args) -> Any:
-        v = buf[9:].tobytes().rstrip(b'\x00')[:-1].decode(_encoding)
+        v = buf[9:].tobytes().rstrip(b"\x00")[:-1].decode(_encoding)
         return v if fn is None else fn(v)
 
     @staticmethod
     def _fetch_bytes(buf, fn: Callable[[bytes], Any] | None, *args) -> Any:
-        v = buf[9:].tobytes().rstrip(b'\x00')[:-1]
+        v = buf[9:].tobytes().rstrip(b"\x00")[:-1]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_ndarray(buf, fn: Callable[[np.ndarray], Any] | None,
-                       data_buf_ro: np.ndarray) -> Any:
+    def _fetch_ndarray(
+        buf, fn: Callable[[np.ndarray], Any] | None, data_buf_ro: np.ndarray
+    ) -> Any:
         """Always return a copy of the underlying buffer
         Examples (ordered from fastest to slowest, benchmarked with 480x848x3 np.uint8):
 
@@ -238,8 +244,9 @@ class SharedObject:
 
     @staticmethod
     def _assign_np_metas(buf, np_dtype_idx: int, data_ndim: int, data_shape: tuple):
-        struct.pack_into("=BQ" + "Q" * data_ndim, buf, 9,
-                         np_dtype_idx, data_ndim, *data_shape)
+        struct.pack_into(
+            "=BQ" + "Q" * data_ndim, buf, 9, np_dtype_idx, data_ndim, *data_shape
+        )
 
     @staticmethod
     def _assign_None(*args):
@@ -251,11 +258,11 @@ class SharedObject:
 
     @staticmethod
     def _assign_int(buf, data: int, *args):
-        struct.pack_into('q', buf, 9, data)
+        struct.pack_into("q", buf, 9, data)
 
     @staticmethod
     def _assign_float(buf, data: float, *args):
-        struct.pack_into('d', buf, 9, data)
+        struct.pack_into("d", buf, 9, data)
 
     @staticmethod
     def _assign_pose(buf, pose: Pose, *args):
@@ -263,7 +270,7 @@ class SharedObject:
 
     @staticmethod
     def _assign_bytes(buf, enc_data: bytes, buf_nbytes: int, *args):
-        struct.pack_into(f"{buf_nbytes-9}s", buf, 9, enc_data+b'\xff')
+        struct.pack_into(f"{buf_nbytes-9}s", buf, 9, enc_data + b"\xff")
 
     @staticmethod
     def _assign_ndarray(buf, data: np.ndarray, buf_nbytes: int, data_buf: np.ndarray):
@@ -280,10 +287,22 @@ class SharedObject:
         _assign_ndarray.__func__,
     )
     _np_dtypes = (
-        np.bool_, np.int8, np.uint8, np.int16, np.uint16, np.int32, np.uint32,
-        np.int64, np.uint64,
-        np.float16, np.float32, np.float64, np.float128,
-        np.complex64, np.complex128, np.complex256
+        np.bool_,
+        np.int8,
+        np.uint8,
+        np.int16,
+        np.uint16,
+        np.int32,
+        np.uint32,
+        np.int64,
+        np.uint64,
+        np.float16,
+        np.float32,
+        np.float64,
+        np.float128,
+        np.complex64,
+        np.complex128,
+        np.complex256,
     )
 
     def __init__(self, name: str, *, data: Union[_object_types] = None, init_size=100):
@@ -331,8 +350,9 @@ class SharedObject:
             self._writer_lock.release()
         else:
             self._readers_lock.acquire()
-            self.nbytes, self.mtime, self.object_type_idx, self.np_metas \
-                = self._fetch_metas(self.shm)
+            self.nbytes, self.mtime, self.object_type_idx, self.np_metas = (
+                self._fetch_metas(self.shm)
+            )
             self._readers_lock.release()
 
         # Create np.ndarray here to save frequent np.ndarray construction
@@ -340,8 +360,10 @@ class SharedObject:
         if self.object_type_idx == 7:  # np.ndarray
             np_dtype_idx, data_ndim, data_shape = self.np_metas
             self.np_ndarray = np.ndarray(
-                data_shape, dtype=self._np_dtypes[np_dtype_idx],
-                buffer=self.shm.buf, offset=data_ndim * 8 + 18
+                data_shape,
+                dtype=self._np_dtypes[np_dtype_idx],
+                buffer=self.shm.buf,
+                offset=data_ndim * 8 + 18,
             )
             # Create a read-only view for fetch()
             self.np_ndarray_ro = self.np_ndarray.view()
@@ -429,8 +451,9 @@ class SharedObject:
         self._readers_lock.acquire()
         # Update modified timestamp
         self.mtime = struct.unpack_from("Q", self.shm.buf, offset=0)[0]
-        data = self._fetch_objects[self.object_type_idx](self.shm.buf, fn,
-                                                         self.np_ndarray_ro)
+        data = self._fetch_objects[self.object_type_idx](
+            self.shm.buf, fn, self.np_ndarray_ro
+        )
         self._readers_lock.release()
         return data
 
@@ -446,13 +469,17 @@ class SharedObject:
         """Assign data to SharedMemory (protected by writer lock)"""
         return self._assign(*self._preprocess_data(data))
 
-    def _assign(self, data,
-                object_type_idx: int, nbytes: int, np_metas: tuple) -> "SharedObject":
+    def _assign(
+        self, data, object_type_idx: int, nbytes: int, np_metas: tuple
+    ) -> "SharedObject":
         """Inner function for assigning data (protected by writer lock)
         For SharedObject, object_type_idx, nbytes, and np_metas cannot be modified
         """
-        if (object_type_idx != self.object_type_idx or nbytes > self.nbytes
-                or np_metas != self.np_metas):
+        if (
+            object_type_idx != self.object_type_idx
+            or nbytes > self.nbytes
+            or np_metas != self.np_metas
+        ):
             raise BufferError(
                 f"Casting object type (new={self._object_types[object_type_idx]}, "
                 f"old={self._object_types[self.object_type_idx]}) OR "
@@ -466,8 +493,9 @@ class SharedObject:
         struct.pack_into("Q", self.shm.buf, 0, self.mtime)
 
         # Assign object data
-        self._assign_objects[self.object_type_idx](self.shm.buf, data,
-                                                   self.nbytes, self.np_ndarray)
+        self._assign_objects[self.object_type_idx](
+            self.shm.buf, data, self.nbytes, self.np_ndarray
+        )
         self._writer_lock.release()
         return self
 
@@ -491,9 +519,11 @@ class SharedObject:
         return self.__class__, (self.name,)
 
     def __repr__(self):
-        return (f'<{self.__class__.__name__}: name={self.name}, '
-                f'data_type={self._object_types[self.object_type_idx]}, '
-                f'nbytes={self.nbytes}>')
+        return (
+            f"<{self.__class__.__name__}: name={self.name}, "
+            f"data_type={self._object_types[self.object_type_idx]}, "
+            f"nbytes={self.nbytes}>"
+        )
 
 
 class SharedDynamicObject(SharedObject):
@@ -523,11 +553,13 @@ class SharedDynamicObject(SharedObject):
         """
         self._readers_lock.acquire()
         # Fetch shm info
-        self.nbytes, self.mtime, self.object_type_idx, self.np_metas \
-            = self._fetch_metas(self.shm)
+        self.nbytes, self.mtime, self.object_type_idx, self.np_metas = (
+            self._fetch_metas(self.shm)
+        )
 
-        data = self._fetch_objects[self.object_type_idx](self.shm.buf, fn,
-                                                         self.np_ndarray_ro)
+        data = self._fetch_objects[self.object_type_idx](
+            self.shm.buf, fn, self.np_ndarray_ro
+        )
         self._readers_lock.release()
         return data
 
@@ -540,8 +572,9 @@ class SharedDynamicObject(SharedObject):
 
         self._writer_lock.acquire()
         # Fetch shm info
-        self.nbytes, self.mtime, self.object_type_idx, self.np_metas \
-            = self._fetch_metas(self.shm)
+        self.nbytes, self.mtime, self.object_type_idx, self.np_metas = (
+            self._fetch_metas(self.shm)
+        )
 
         # Reallocate if necessary
         if reallocate or nbytes > self.nbytes or np_metas != self.np_metas:
@@ -551,6 +584,7 @@ class SharedDynamicObject(SharedObject):
             # Need to use os.ftruncate(sm._fd, new_size)
             raise NotImplementedError("reallocate is not yet implemented")
 
-        self._assign_objects[self.object_type_idx](self.shm.buf, data,
-                                                   self.nbytes, self.np_ndarray)
+        self._assign_objects[self.object_type_idx](
+            self.shm.buf, data, self.nbytes, self.np_ndarray
+        )
         self._writer_lock.release()

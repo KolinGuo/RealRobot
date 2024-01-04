@@ -1,6 +1,7 @@
-from real_robot.agents.xarm import XArm7
-from real_robot.utils.logger import get_logger, _log_dir
 import numpy as np
+
+from real_robot.agents.xarm import XArm7
+from real_robot.utils.logger import _log_dir, get_logger
 
 logger = get_logger("robot")
 get_logger(log_file=_log_dir / "3rd_party.log")  # root logger log file

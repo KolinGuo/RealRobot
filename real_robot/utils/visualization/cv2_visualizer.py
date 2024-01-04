@@ -1,26 +1,29 @@
 from __future__ import annotations
 
-import os
-import math
-import time
 import functools
+import math
+import os
+import time
 from collections import defaultdict
 
-import numpy as np
 import cv2
+import numpy as np
 
-from .utils import draw_mask, colorize_mask
-from ..multiprocessing import (
-    SharedObject, SharedObjectDefaultDict, signal_process_ready
-)
 from ..logger import get_logger
+from ..multiprocessing import (
+    SharedObject,
+    SharedObjectDefaultDict,
+    signal_process_ready,
+)
+from .utils import colorize_mask, draw_mask
 
 
 class CV2Visualizer:
     """OpenCV visualizer for RGB and depth images, fps is updated in window title"""
 
-    def __init__(self, window_name="Images", *,
-                 run_as_process=False, stream_camera=False):
+    def __init__(
+        self, window_name="Images", *, run_as_process=False, stream_camera=False
+    ):
         """
         :param window_name: window name
         :param run_as_process: whether to run CV2Visualizer as a separate process.
@@ -87,17 +90,18 @@ class CV2Visualizer:
     def get_image_layout(n_image: int) -> tuple[int, int]:
         """Get layout of Images (n_rows, n_cols) where n_rows >= n_cols"""
         s = math.isqrt(n_image)
-        s_squared = s*s
+        s_squared = s * s
         if s_squared == n_image:
             return s, s
-        elif n_image <= s_squared+s:
-            return s+1, s
+        elif n_image <= s_squared + s:
+            return s + 1, s
         else:
-            return s+1, s+1
+            return s + 1, s + 1
 
     @staticmethod
-    def resize_image(image: np.ndarray, max_H: int, max_W: int,
-                     interpolation=cv2.INTER_NEAREST_EXACT) -> np.ndarray:
+    def resize_image(
+        image: np.ndarray, max_H: int, max_W: int, interpolation=cv2.INTER_NEAREST_EXACT
+    ) -> np.ndarray:
         """Resize image to the requested size while preserving its aspect ratio"""
         # background is white
         new_image = np.full((max_H, max_W, 3), 255, np.uint8)
@@ -106,14 +110,14 @@ class CV2Visualizer:
         if (h_ratio := (max_H / h)) < (w_ratio := (max_W / w)):
             new_w = math.floor(w * h_ratio)
             start_i = (max_W - new_w) // 2
-            new_image[:, start_i:start_i+new_w] = cv2.resize(
+            new_image[:, start_i : start_i + new_w] = cv2.resize(
                 image, (new_w, max_H), interpolation=interpolation
             )
             return new_image
         else:
             new_h = math.floor(h * w_ratio)
             start_i = (max_H - new_h) // 2
-            new_image[start_i:start_i+new_h, :] = cv2.resize(
+            new_image[start_i : start_i + new_h, :] = cv2.resize(
                 image, (max_W, new_h), interpolation=interpolation
             )
             return new_image
@@ -131,8 +135,14 @@ class CV2Visualizer:
         # Resize non-equal sized image to max_shape
         max_shape = images[np.argmax([image.size for image in images])].shape
         max_H, max_W, _ = max_shape
-        images = [image if image.shape == max_shape
-                  else self.resize_image(image, max_H, max_W) for image in images]
+        images = [
+            (
+                image
+                if image.shape == max_shape
+                else self.resize_image(image, max_H, max_W)
+            )
+            for image in images
+        ]
 
         if n_image == 1:
             vis_image = images[0]
@@ -143,17 +153,19 @@ class CV2Visualizer:
             vis_image = np.zeros((max_H * n_rows, max_W * n_cols, 3), dtype=np.uint8)
             for r in range(n_rows):
                 for c in range(n_cols):
-                    if (idx := n_cols*r + c) >= n_image:
+                    if (idx := n_cols * r + c) >= n_image:
                         break
-                    vis_image[max_H*r:max_H*(r+1),
-                              max_W*c:max_W*(c+1)] = images[idx]
+                    vis_image[
+                        max_H * r : max_H * (r + 1), max_W * c : max_W * (c + 1)
+                    ] = images[idx]
 
         # Add fps to window title (overlay with cv2.putText is slower)
         cur_timestamp_ns = time.time_ns()
         fps = 1e9 / (cur_timestamp_ns - self.last_timestamp_ns)
         self.last_timestamp_ns = cur_timestamp_ns
-        cv2.setWindowTitle(self.window_name,
-                           f"{self.window_name} {max_W}x{max_H} @ {fps:6.2f}fps")
+        cv2.setWindowTitle(
+            self.window_name, f"{self.window_name} {max_W}x{max_H} @ {fps:6.2f}fps"
+        )
 
         cv2.imshow(self.window_name, vis_image)
         cv2.pollKey()
@@ -169,18 +181,23 @@ class CV2Visualizer:
         so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
 
         # {"rs_<device_uid>_color": image}
-        vis_data = defaultdict(functools.partial(
-            np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
-        ))
+        vis_data = defaultdict(
+            functools.partial(
+                np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
+            )
+        )
 
         def get_so_data_names(all_so_names: list[str]) -> list[str]:
             """Get so_data_names acceptable by CV2Visualizer"""
             return [
-                p for p in all_so_names
+                p
+                for p in all_so_names
                 if p.startswith(("rs_", "vis_", "viscv2_"))
-                and p.endswith(("_color", "_depth", "_infrared_1", "_infrared_2",
-                                "_mask"))
+                and p.endswith(
+                    ("_color", "_depth", "_infrared_1", "_infrared_2", "_mask")
+                )
             ]
+
         rs_so_name_suffix = ("_color", "_depth", "_infrared_1", "_infrared_2")
 
         signal_process_ready()  # current process is ready
@@ -194,15 +211,20 @@ class CV2Visualizer:
                 self.clear_image()
                 so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
                 # {"rs_<device_uid>_color": image}
-                vis_data = defaultdict(functools.partial(
-                    np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
-                ))
+                vis_data = defaultdict(
+                    functools.partial(
+                        np.full, shape=(480, 848, 3), fill_value=255, dtype=np.uint8
+                    )
+                )
 
             # ----- Capture and update from RSDevice stream ----- #
             if self.stream_camera:  # capture whenever a new frame comes in
                 updated = False
-                for so_data_name in [p for p in all_so_names if p.startswith("rs_")
-                                     and p.endswith(rs_so_name_suffix)]:
+                for so_data_name in [
+                    p
+                    for p in all_so_names
+                    if p.startswith("rs_") and p.endswith(rs_so_name_suffix)
+                ]:
                     if (so_data := so_dict[so_data_name]).modified:
                         vis_data[so_data_name] = so_data.fetch()
                         updated = True
@@ -210,8 +232,10 @@ class CV2Visualizer:
                     images = []
                     for so_data_name in get_so_data_names(all_so_names):
                         if so_data_name.endswith("_mask"):
-                            images += [vis_data[f"{so_data_name}_overlay"],
-                                       vis_data[f"{so_data_name}_colorized"]]
+                            images += [
+                                vis_data[f"{so_data_name}_overlay"],
+                                vis_data[f"{so_data_name}_colorized"],
+                            ]
                         else:
                             images.append(vis_data[so_data_name])
                     self.show_images(images)
@@ -219,8 +243,9 @@ class CV2Visualizer:
                 # for each camera sync, check if capture is triggered
                 for so_name in [p for p in all_so_names if p.startswith("sync_rs_")]:
                     if so_dict[so_name].triggered:
-                        for so_data_name in [f"{so_name[5:]}{suffix}"
-                                             for suffix in rs_so_name_suffix]:
+                        for so_data_name in [
+                            f"{so_name[5:]}{suffix}" for suffix in rs_so_name_suffix
+                        ]:
                             if so_data_name in all_so_names:
                                 vis_data[so_data_name] = so_dict[so_data_name].fetch()
 
@@ -235,20 +260,24 @@ class CV2Visualizer:
                         if so_data_name.startswith("rs_"):
                             color_image = image = vis_data[so_data_name]
                         else:
-                            vis_data[so_data_name] = color_image = image \
-                                = so_dict[so_data_name].fetch()
-                    elif (so_data_name.startswith("rs_") and
-                          not so_data_name.endswith("_mask")):
+                            vis_data[so_data_name] = color_image = image = so_dict[
+                                so_data_name
+                            ].fetch()
+                    elif so_data_name.startswith("rs_") and not so_data_name.endswith(
+                        "_mask"
+                    ):
                         image = vis_data[so_data_name]
                     else:
                         vis_data[so_data_name] = image = so_dict[so_data_name].fetch()
 
                     # Visualize mask by overlaying to color_image and colorizing mask
                     if so_data_name.endswith("_mask"):
-                        vis_data[f"{so_data_name}_overlay"] = mask_overlay \
-                            = draw_mask(color_image, image)
-                        vis_data[f"{so_data_name}_colorized"] = mask_colorized \
-                            = colorize_mask(image)
+                        vis_data[f"{so_data_name}_overlay"] = mask_overlay = draw_mask(
+                            color_image, image
+                        )
+                        vis_data[f"{so_data_name}_colorized"] = mask_colorized = (
+                            colorize_mask(image)
+                        )
                         images += [mask_overlay, mask_colorized]
                     else:
                         images.append(image)

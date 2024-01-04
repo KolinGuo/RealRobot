@@ -1,28 +1,30 @@
 from __future__ import annotations
 
-import os
 import glob
-import time
+import os
 import platform
-from pathlib import Path
-from functools import partial
+import time
 from dataclasses import dataclass, field
+from functools import partial
+from pathlib import Path
 
 import numpy as np
-from urchin import URDF
 import open3d as o3d
-from open3d.utility import Vector3dVector
 import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
+from open3d.utility import Vector3dVector
+from urchin import URDF
 
-from .gripper_utils import XArmGripper
-from ..camera import T_GL_CV, T_CV_GL, T_ROS_GL, T_ROS_CV, depth2xyz
-from ..multiprocessing import (
-    SharedObject, SharedObjectDefaultDict, signal_process_ready
-)
+from ..camera import T_CV_GL, T_GL_CV, T_ROS_CV, T_ROS_GL, depth2xyz
 from ..logger import get_logger
+from ..multiprocessing import (
+    SharedObject,
+    SharedObjectDefaultDict,
+    signal_process_ready,
+)
+from .gripper_utils import XArmGripper
 
-isMacOS = (platform.system() == "Darwin")
+isMacOS = platform.system() == "Darwin"
 
 _o3d_geometry_type = (
     o3d.geometry.Geometry3D | o3d.t.geometry.Geometry | rendering.TriangleMeshModel
@@ -44,7 +46,7 @@ class O3DGeometryDefaultDict(dict):
             )
         elif name.endswith("_bbox"):
             geometry = self[name] = o3d.geometry.AxisAlignedBoundingBox(
-                min_bound=[-1e-3]*3, max_bound=[1e-3]*3
+                min_bound=[-1e-3] * 3, max_bound=[1e-3] * 3
             )
         else:
             raise ValueError(f"Unknown {name=}")
@@ -133,7 +135,7 @@ class Settings:
             "reflectance": 0.5,
             "clearcoat": 0.2,
             "clearcoat_roughness": 0.2,
-            "anisotropy": 0.0
+            "anisotropy": 0.0,
         },
         "Metal (rougher)": {
             "metallic": 1.0,
@@ -141,7 +143,7 @@ class Settings:
             "reflectance": 0.9,
             "clearcoat": 0.0,
             "clearcoat_roughness": 0.0,
-            "anisotropy": 0.0
+            "anisotropy": 0.0,
         },
         "Metal (smoother)": {
             "metallic": 1.0,
@@ -149,7 +151,7 @@ class Settings:
             "reflectance": 0.9,
             "clearcoat": 0.0,
             "clearcoat_roughness": 0.0,
-            "anisotropy": 0.0
+            "anisotropy": 0.0,
         },
         "Plastic": {
             "metallic": 0.0,
@@ -157,7 +159,7 @@ class Settings:
             "reflectance": 0.5,
             "clearcoat": 0.5,
             "clearcoat_roughness": 0.2,
-            "anisotropy": 0.0
+            "anisotropy": 0.0,
         },
         "Glazed ceramic": {
             "metallic": 0.0,
@@ -165,7 +167,7 @@ class Settings:
             "reflectance": 0.9,
             "clearcoat": 1.0,
             "clearcoat_roughness": 0.1,
-            "anisotropy": 0.0
+            "anisotropy": 0.0,
         },
         "Clay": {
             "metallic": 0.0,
@@ -173,7 +175,7 @@ class Settings:
             "reflectance": 0.5,
             "clearcoat": 0.1,
             "clearcoat_roughness": 0.287,
-            "anisotropy": 0.0
+            "anisotropy": 0.0,
         },
     }
 
@@ -199,7 +201,7 @@ class Settings:
             Settings.UNLIT: rendering.MaterialRecord(),
             Settings.UNLIT_LINE: rendering.MaterialRecord(),
             Settings.NORMALS: rendering.MaterialRecord(),
-            Settings.DEPTH: rendering.MaterialRecord()
+            Settings.DEPTH: rendering.MaterialRecord(),
         }
         self._materials[Settings.LIT].base_color = [0.9, 0.9, 0.9, 1.0]
         self._materials[Settings.LIT].shader = Settings.LIT
@@ -218,7 +220,7 @@ class Settings:
         self.material = self._materials[Settings.UNLIT]
 
     def apply_material_prefab(self, name: str):
-        assert (self.material.shader == Settings.LIT)
+        assert self.material.shader == Settings.LIT
         prefab = Settings.PREFAB[name]
         for key, val in prefab.items():
             setattr(self.material, "base_" + key, val)
@@ -245,10 +247,11 @@ class GeometryNode:
     :ivar mat_color: material color
     :ivar mat_point_size: material point size
     """
+
     name: str
     id: int = -1
-    parent: 'GeometryNode' = None
-    children: list['GeometryNode'] = field(default_factory=list)
+    parent: "GeometryNode" = None
+    children: list["GeometryNode"] = field(default_factory=list)
     cell: gui.Widget = None
     # Material settings values
     mat_changed: bool = False
@@ -264,14 +267,19 @@ class GeometryNode:
         if self.parent is not None and self.parent.parent is not None:
             # NOTE: removeprefix is not in python3.8
             # return self.name.removeprefix(self.parent.name + '/')
-            return self.name[len(prefix):] if self.name.startswith(
-                (prefix := self.parent.name + '/')) else self.name
+            return (
+                self.name[len(prefix) :]
+                if self.name.startswith((prefix := self.parent.name + "/"))
+                else self.name
+            )
         return self.name
 
     def __repr__(self) -> str:
-        return (f"<{self.__class__.__name__}: '{self.name}' (id={self.id}), "
-                f"parent='{self.parent.name}', "
-                f"children={[f'{c.name}' for c in self.children]}>")
+        return (
+            f"<{self.__class__.__name__}: '{self.name}' (id={self.id}), "
+            f"parent='{self.parent.name}', "
+            f"children={[f'{c.name}' for c in self.children]}>"
+        )
 
 
 class O3DGUIVisualizer:
@@ -296,12 +304,22 @@ class O3DGUIVisualizer:
 
     MATERIAL_NAMES = ["Standard (Lit)", "Unlit", "Unlit Line", "Normal Map", "Depth"]
     MATERIAL_SHADERS = [
-        Settings.LIT, Settings.UNLIT, Settings.UNLIT_LINE,
-        Settings.NORMALS, Settings.DEPTH
+        Settings.LIT,
+        Settings.UNLIT,
+        Settings.UNLIT_LINE,
+        Settings.NORMALS,
+        Settings.DEPTH,
     ]
 
-    def __init__(self, window_name="Point Clouds", window_size=(1920, 1080), *,
-                 run_as_process=False, stream_camera=False, stream_robot=False):
+    def __init__(
+        self,
+        window_name="Point Clouds",
+        window_size=(1920, 1080),
+        *,
+        run_as_process=False,
+        stream_camera=False,
+        stream_robot=False,
+    ):
         """
         :param window_name: window name
         :param window_size: (width, height)
@@ -367,9 +385,7 @@ class O3DGUIVisualizer:
         gui.Application.instance.initialize()
 
         self.window_name = window_name
-        self.window = gui.Application.instance.create_window(
-            window_name, *window_size
-        )
+        self.window = gui.Application.instance.create_window(window_name, *window_size)
         self.paused = False
         self.single_step = False
         self.not_closed = True
@@ -392,9 +408,9 @@ class O3DGUIVisualizer:
         self.picked_pts_pcd_mat.base_color = [0.9, 0.9, 0.9, 1.0]
         self.picked_pts_pcd_mat.shader = Settings.UNLIT
         self.picked_pts_pcd_mat.point_size = int(3 * 2)
-        self._scene.scene.add_geometry(self.picked_pts_pcd_name,
-                                       self.picked_pts_pcd,
-                                       self.picked_pts_pcd_mat)
+        self._scene.scene.add_geometry(
+            self.picked_pts_pcd_name, self.picked_pts_pcd, self.picked_pts_pcd_mat
+        )
 
         # For computing update fps
         self.last_timestamp_ns = time.time_ns()
@@ -433,8 +449,9 @@ class O3DGUIVisualizer:
         # between items in the widget, and a margins parameter, which specifies
         # the spacing of the left, top, right, bottom margins. (This acts like
         # the 'padding' property in CSS.)
-        self._settings_panel = gui.Vert(0, gui.Margins(0.25 * em, 0.25 * em,
-                                                       0.25 * em, 0.25 * em))
+        self._settings_panel = gui.Vert(
+            0, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em)
+        )
 
         # -- Render controls widget --
         self._paused_checkbox = gui.Checkbox("Pause")
@@ -444,16 +461,18 @@ class O3DGUIVisualizer:
         self._single_step_button.horizontal_padding_em = 0.5
         self._single_step_button.vertical_padding_em = 0
         self._render_info = gui.Label("")
-        h = gui.Horiz(0.25 * em, gui.Margins(0.25 * em, 0.25 * em,
-                                             0.25 * em, 0.25 * em))
+        h = gui.Horiz(
+            0.25 * em, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em)
+        )
         h.add_child(self._paused_checkbox)
         h.add_child(self._single_step_button)
         h.add_child(self._render_info)
         h.add_stretch()
         self._settings_panel.add_child(h)
         self._fps_label = gui.Label("FPS: NaN      ")
-        h = gui.Horiz(0.25 * em, gui.Margins(0.25 * em, 0.25 * em,
-                                             0.25 * em, 0.25 * em))
+        h = gui.Horiz(
+            0.25 * em, gui.Margins(0.25 * em, 0.25 * em, 0.25 * em, 0.25 * em)
+        )
         h.add_child(self._fps_label)
         h.add_stretch()
         self._settings_panel.add_child(h)
@@ -463,8 +482,9 @@ class O3DGUIVisualizer:
         # space for all its children when open, but only enough for text when
         # closed. This is useful for property pages, so the user can hide sets
         # of properties they rarely use.
-        view_ctrls = gui.CollapsableVert("View Controls", 0.25 * em,
-                                         gui.Margins(em, 0, 0, 0))
+        view_ctrls = gui.CollapsableVert(
+            "View Controls", 0.25 * em, gui.Margins(em, 0, 0, 0)
+        )
 
         # Mouse controls
         def _create_mouse_control_button(
@@ -487,25 +507,27 @@ class O3DGUIVisualizer:
         # space, thus centering the buttons.
         h = gui.Horiz(0.25 * em)  # row 1
         h.add_stretch()
-        h.add_child(_create_mouse_control_button(
-            "Arcball", gui.SceneWidget.Controls.ROTATE_CAMERA
-        ))
-        h.add_child(_create_mouse_control_button(
-            "Fly", gui.SceneWidget.Controls.FLY
-        ))
-        h.add_child(_create_mouse_control_button(
-            "Model", gui.SceneWidget.Controls.ROTATE_MODEL
-        ))
+        h.add_child(
+            _create_mouse_control_button(
+                "Arcball", gui.SceneWidget.Controls.ROTATE_CAMERA
+            )
+        )
+        h.add_child(_create_mouse_control_button("Fly", gui.SceneWidget.Controls.FLY))
+        h.add_child(
+            _create_mouse_control_button("Model", gui.SceneWidget.Controls.ROTATE_MODEL)
+        )
         h.add_stretch()
         view_ctrls.add_child(h)
         h = gui.Horiz(0.25 * em)  # row 2
         h.add_stretch()
-        h.add_child(_create_mouse_control_button(
-            "Sun", gui.SceneWidget.Controls.ROTATE_SUN
-        ))
-        h.add_child(_create_mouse_control_button(
-            "Environment", gui.SceneWidget.Controls.ROTATE_IBL
-        ))
+        h.add_child(
+            _create_mouse_control_button("Sun", gui.SceneWidget.Controls.ROTATE_SUN)
+        )
+        h.add_child(
+            _create_mouse_control_button(
+                "Environment", gui.SceneWidget.Controls.ROTATE_IBL
+            )
+        )
         h.add_stretch()
         view_ctrls.add_child(h)
         self._set_mouse_mode(gui.SceneWidget.Controls.ROTATE_CAMERA)
@@ -525,8 +547,7 @@ class O3DGUIVisualizer:
         self._settings_panel.add_child(view_ctrls)
 
         # -- Scene controls widget --
-        scene_ctrls = gui.CollapsableVert("Scene", 0.25 * em,
-                                          gui.Margins(em, 0, 0, 0))
+        scene_ctrls = gui.CollapsableVert("Scene", 0.25 * em, gui.Margins(em, 0, 0, 0))
         # Coordinate axes and skybox
         self._show_axes = gui.Checkbox("Show axis")
         self._show_axes.set_on_checked(self._on_show_axes)
@@ -570,8 +591,7 @@ class O3DGUIVisualizer:
         self._settings_panel.add_child(scene_ctrls)
 
         # -- Advanced lighting controls widget --
-        advanced = gui.CollapsableVert("Advanced Lighting", 0,
-                                       gui.Margins(em, 0, 0, 0))
+        advanced = gui.CollapsableVert("Advanced Lighting", 0, gui.Margins(em, 0, 0, 0))
         advanced.set_is_open(False)
 
         self._use_ibl = gui.Checkbox("HDR map")
@@ -623,8 +643,9 @@ class O3DGUIVisualizer:
         self._settings_panel.add_child(advanced)
 
         # -- Material controls widget --
-        material_settings = gui.CollapsableVert("Material Settings", 0,
-                                                gui.Margins(em, 0, 0, 0))
+        material_settings = gui.CollapsableVert(
+            "Material Settings", 0, gui.Margins(em, 0, 0, 0)
+        )
         material_settings.set_is_open(False)
 
         self._shader = gui.Combobox()
@@ -672,8 +693,9 @@ class O3DGUIVisualizer:
         self._settings_panel.add_child(material_settings)
 
         # -- Geometries widget --
-        geometries_panel = gui.CollapsableVert("Geometries", 0.25 * em,
-                                               gui.Margins(em, 0, 0, 0))
+        geometries_panel = gui.CollapsableVert(
+            "Geometries", 0.25 * em, gui.Margins(em, 0, 0, 0)
+        )
         self._geometry_tree = gui.TreeView()
         self._geometry_tree.can_select_items_with_children = True
         self._geometry_tree.set_on_selection_changed(self._on_geometry_tree)
@@ -749,11 +771,11 @@ class O3DGUIVisualizer:
         # window, so that the window can call the appropriate function when the
         # menu item is activated.
         w.set_on_menu_item_activated(self.MENU_OPEN, self._on_menu_open)
-        w.set_on_menu_item_activated(self.MENU_EXPORT,
-                                     self._on_menu_export)
+        w.set_on_menu_item_activated(self.MENU_EXPORT, self._on_menu_export)
         w.set_on_menu_item_activated(self.MENU_QUIT, self._on_menu_quit)
-        w.set_on_menu_item_activated(self.MENU_SHOW_SETTINGS,
-                                     self._on_menu_toggle_settings_panel)
+        w.set_on_menu_item_activated(
+            self.MENU_SHOW_SETTINGS, self._on_menu_toggle_settings_panel
+        )
         w.set_on_menu_item_activated(self.MENU_ABOUT, self._on_menu_about)
         # ----
 
@@ -770,33 +792,39 @@ class O3DGUIVisualizer:
 
     def _apply_settings(self):
         bg_color = [
-            self.settings.bg_color.red, self.settings.bg_color.green,
-            self.settings.bg_color.blue, self.settings.bg_color.alpha
+            self.settings.bg_color.red,
+            self.settings.bg_color.green,
+            self.settings.bg_color.blue,
+            self.settings.bg_color.alpha,
         ]
         self._scene.scene.set_background(bg_color)
         self._scene.scene.show_axes(self.settings.show_axes)
         for camera_name in self.camera_poses:
             if camera_name != "default":
-                self._scene.scene.show_geometry(f"{camera_name}_lineset",
-                                                self.settings.show_camera)
+                self._scene.scene.show_geometry(
+                    f"{camera_name}_lineset", self.settings.show_camera
+                )
         self._scene.scene.show_skybox(self.settings.show_skybox)
-        self._scene.scene.show_ground_plane(self.settings.show_ground,
-                                            self.settings.ground_plane)
+        self._scene.scene.show_ground_plane(
+            self.settings.show_ground, self.settings.ground_plane
+        )
         if self.settings.new_ibl_name is not None:
-            self._scene.scene.scene.set_indirect_light(
-                self.settings.new_ibl_name)
+            self._scene.scene.scene.set_indirect_light(self.settings.new_ibl_name)
             # Clear new_ibl_name, so we don't keep reloading this image every
             # time the settings are applied.
             self.settings.new_ibl_name = None
         self._scene.scene.scene.enable_indirect_light(self.settings.use_ibl)
         self._scene.scene.scene.set_indirect_light_intensity(
-            self.settings.ibl_intensity)
+            self.settings.ibl_intensity
+        )
         sun_color = [
-            self.settings.sun_color.red, self.settings.sun_color.green,
-            self.settings.sun_color.blue
+            self.settings.sun_color.red,
+            self.settings.sun_color.green,
+            self.settings.sun_color.blue,
         ]
-        self._scene.scene.scene.set_sun_light(self.settings.sun_dir, sun_color,
-                                              self.settings.sun_intensity)
+        self._scene.scene.scene.set_sun_light(
+            self.settings.sun_dir, sun_color, self.settings.sun_intensity
+        )
         self._scene.scene.scene.enable_sun_light(self.settings.use_sun)
 
         if self.settings.apply_material:
@@ -813,11 +841,13 @@ class O3DGUIVisualizer:
         self._sun_intensity.int_value = self.settings.sun_intensity
         self._sun_dir.vector_value = self.settings.sun_dir
         self._sun_color.color_value = self.settings.sun_color
-        self._material_prefab.enabled = (self.settings.material.shader == Settings.LIT)
-        c = gui.Color(self.settings.material.base_color[0],
-                      self.settings.material.base_color[1],
-                      self.settings.material.base_color[2],
-                      self.settings.material.base_color[3])
+        self._material_prefab.enabled = self.settings.material.shader == Settings.LIT
+        c = gui.Color(
+            self.settings.material.base_color[0],
+            self.settings.material.base_color[1],
+            self.settings.material.base_color[2],
+            self.settings.material.base_color[3],
+        )
         self._material_color.color_value = c
         self._point_size.double_value = self.settings.material.point_size
 
@@ -826,9 +856,7 @@ class O3DGUIVisualizer:
         Update material settings values in GeometryNode
         """
         # Selected node can be root_geometry_node
-        unvisited_nodes = [
-            self.id_to_geometry_nodes[self._geometry_tree.selected_item]
-        ]
+        unvisited_nodes = [self.id_to_geometry_nodes[self._geometry_tree.selected_item]]
         while len(unvisited_nodes) > 0:
             node = unvisited_nodes.pop()
 
@@ -837,8 +865,9 @@ class O3DGUIVisualizer:
             node.mat_shader_index = self._shader.selected_index
             node.mat_prefab_text = self._material_prefab.selected_text
             color = self._material_color.color_value
-            node.mat_color = gui.Color(color.red, color.green, color.blue,
-                                       color.alpha)  # create a copy
+            node.mat_color = gui.Color(
+                color.red, color.green, color.blue, color.alpha
+            )  # create a copy
             node.mat_point_size = self._point_size.double_value
 
             # No geometry corresponds to group nodes, so no update is needed
@@ -863,10 +892,9 @@ class O3DGUIVisualizer:
             r.height,
             self._settings_panel.calc_preferred_size(
                 layout_context, gui.Widget.Constraints()
-            ).height
+            ).height,
         )
-        self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y,
-                                              width, height)
+        self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width, height)
         # ---- Floating info widget for point coordinate ----
         pref = self._point_coord_info.calc_preferred_size(
             layout_context, gui.Widget.Constraints()
@@ -961,8 +989,7 @@ class O3DGUIVisualizer:
             self._apply_settings()
 
     def _on_new_ibl(self, name: str, index: int):
-        self.settings.new_ibl_name = (gui.Application.instance.resource_path
-                                      + "/" + name)
+        self.settings.new_ibl_name = gui.Application.instance.resource_path + "/" + name
         self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
         self._apply_settings()
 
@@ -989,9 +1016,7 @@ class O3DGUIVisualizer:
     # Material controls callbacks
     # ---------------------------------------------------------------------- #
     def _on_shader(self, name: str, index: int):
-        self.settings.material = self.settings._materials[
-            self.MATERIAL_SHADERS[index]
-        ]
+        self.settings.material = self.settings._materials[self.MATERIAL_SHADERS[index]]
         self.settings.apply_material = True
         self._apply_settings()
 
@@ -1002,7 +1027,10 @@ class O3DGUIVisualizer:
 
     def _on_material_color(self, color: gui.Color):
         self.settings.material.base_color = [
-            color.red, color.green, color.blue, color.alpha
+            color.red,
+            color.green,
+            color.blue,
+            color.alpha,
         ]
         self.settings.apply_material = True
         self._apply_settings()
@@ -1038,7 +1066,10 @@ class O3DGUIVisualizer:
         if prefab_enabled:  # Settings.LIT
             self.settings.apply_material_prefab(prefab)
         self.settings.material.base_color = [
-            color.red, color.green, color.blue, color.alpha
+            color.red,
+            color.green,
+            color.blue,
+            color.alpha,
         ]
         self.settings.material.point_size = int(point_size)
 
@@ -1089,16 +1120,17 @@ class O3DGUIVisualizer:
     # Menu callbacks
     # ---------------------------------------------------------------------- #
     def _on_menu_open(self):
-        dlg = gui.FileDialog(gui.FileDialog.OPEN, "Choose file to load",
-                             self.window.theme)
+        dlg = gui.FileDialog(
+            gui.FileDialog.OPEN, "Choose file to load", self.window.theme
+        )
         dlg.add_filter(
             ".ply .stl .fbx .obj .off .gltf .glb",
-            "Triangle mesh files (.ply, .stl, .fbx, .obj, .off, "
-            ".gltf, .glb)")
+            "Triangle mesh files (.ply, .stl, .fbx, .obj, .off, .gltf, .glb)",
+        )
         dlg.add_filter(
             ".xyz .xyzn .xyzrgb .ply .pcd .pts",
-            "Point cloud files (.xyz, .xyzn, .xyzrgb, .ply, "
-            ".pcd, .pts)")
+            "Point cloud files (.xyz, .xyzn, .xyzrgb, .ply, .pcd, .pts)",
+        )
         dlg.add_filter(".ply", "Polygon files (.ply)")
         dlg.add_filter(".stl", "Stereolithography files (.stl)")
         dlg.add_filter(".fbx", "Autodesk Filmbox files (.fbx)")
@@ -1108,8 +1140,7 @@ class O3DGUIVisualizer:
         dlg.add_filter(".glb", "OpenGL binary transfer files (.glb)")
         dlg.add_filter(".xyz", "ASCII point cloud files (.xyz)")
         dlg.add_filter(".xyzn", "ASCII point cloud with normals (.xyzn)")
-        dlg.add_filter(".xyzrgb",
-                       "ASCII point cloud files with colors (.xyzrgb)")
+        dlg.add_filter(".xyzrgb", "ASCII point cloud files with colors (.xyzrgb)")
         dlg.add_filter(".pcd", "Point Cloud Data files (.pcd)")
         dlg.add_filter(".pts", "3D Points files (.pts)")
         dlg.add_filter("", "All files")
@@ -1127,8 +1158,9 @@ class O3DGUIVisualizer:
         self.load(filename)
 
     def _on_menu_export(self):
-        dlg = gui.FileDialog(gui.FileDialog.SAVE, "Choose file to save",
-                             self.window.theme)
+        dlg = gui.FileDialog(
+            gui.FileDialog.SAVE, "Choose file to save", self.window.theme
+        )
         dlg.add_filter(".png", "PNG files (.png)")
         dlg.set_on_cancel(self._on_file_dialog_cancel)
         dlg.set_on_done(self._on_export_dialog_done)
@@ -1145,7 +1177,8 @@ class O3DGUIVisualizer:
     def _on_menu_toggle_settings_panel(self):
         self._settings_panel.visible = not self._settings_panel.visible
         gui.Application.instance.menubar.set_checked(
-            self.MENU_SHOW_SETTINGS, self._settings_panel.visible)
+            self.MENU_SHOW_SETTINGS, self._settings_panel.visible
+        )
 
     def _on_menu_about(self):
         # Show a simple dialog. Although the Dialog is actually a widget,
@@ -1197,9 +1230,11 @@ class O3DGUIVisualizer:
                        widget will not handle the event. This is useful when
                        you are replacing functionality
         """
-        if (event.is_button_down(gui.MouseButton.LEFT)
-                and event.is_modifier_down(gui.KeyModifier.CTRL)
-                and event.type == event.Type.BUTTON_DOWN):  # CTRL + LEFT Down
+        if (
+            event.is_button_down(gui.MouseButton.LEFT)
+            and event.is_modifier_down(gui.KeyModifier.CTRL)
+            and event.type == event.Type.BUTTON_DOWN
+        ):  # CTRL + LEFT Down
 
             def depth_callback(depth_image: o3d.geometry.Image):
                 # Coordinates are expressed in absolute coordinates of the
@@ -1217,8 +1252,7 @@ class O3DGUIVisualizer:
                     self.picked_pts = []
                 else:
                     world_xyz = self._scene.scene.camera.unproject(
-                        x, y, depth,
-                        self._scene.frame.width, self._scene.frame.height
+                        x, y, depth, self._scene.frame.width, self._scene.frame.height
                     ).flatten()
                     text = "({:.3f}, {:.3f}, {:.3f})".format(*world_xyz)
                     self.picked_pts = [world_xyz]
@@ -1227,7 +1261,7 @@ class O3DGUIVisualizer:
                 # post to the main thread to safely access UI items.
                 def update_label():
                     self._point_coord_info.text = text
-                    self._point_coord_info.visible = (text != "")
+                    self._point_coord_info.visible = text != ""
                     # We are sizing the info label to be exactly
                     # the right size, so since the text likely changed width,
                     # we need to re-layout to set the new frame.
@@ -1242,13 +1276,13 @@ class O3DGUIVisualizer:
                     self.picked_pts_pcd_mat.point_size = int(
                         self.settings.material.point_size * 2
                     )
-                    self._scene.scene.add_geometry(self.picked_pts_pcd_name,
-                                                   self.picked_pts_pcd,
-                                                   self.picked_pts_pcd_mat)
+                    self._scene.scene.add_geometry(
+                        self.picked_pts_pcd_name,
+                        self.picked_pts_pcd,
+                        self.picked_pts_pcd_mat,
+                    )
 
-                gui.Application.instance.post_to_main_thread(
-                    self.window, update_label
-                )
+                gui.Application.instance.post_to_main_thread(self.window, update_label)
 
             self._scene.scene.scene.render_to_depth_image(depth_callback)
             return gui.SceneWidget.EventCallbackResult.HANDLED
@@ -1283,11 +1317,11 @@ class O3DGUIVisualizer:
                 self.logger.error(f"Failed to read points from {path}")
 
         if geometry is not None or mesh is not None:
-            self.add_geometry(geometry_name,
-                              geometry if mesh is None else mesh)
+            self.add_geometry(geometry_name, geometry if mesh is None else mesh)
 
-    def add_geometry(self, name: str, geometry: _o3d_geometry_type,
-                     show: bool = None) -> bool:
+    def add_geometry(
+        self, name: str, geometry: _o3d_geometry_type, show: bool = None
+    ) -> bool:
         """Add a geometry to scene and update the _geometries_tree
         :param name: geometry name separated by '/', str.
                      Group names are nested starting from root.
@@ -1296,10 +1330,10 @@ class O3DGUIVisualizer:
         :param show: whether to show geometry after loading
         :return success: whether geometry is successfully added
         """
-        name = name.split('/')
+        name = name.split("/")
         # group_names can be [], ["g1"], ["g1", "g1/g2"]
-        group_names = ['/'.join(name[:i]) for i in range(1, len(name))]
-        name = '/'.join(name)
+        group_names = ["/".join(name[:i]) for i in range(1, len(name))]
+        name = "/".join(name)
         # Get leaf node as parent_node
         parent_node = self.root_geometry_node
         new_group_idx = 0
@@ -1320,18 +1354,22 @@ class O3DGUIVisualizer:
             unlit_line_geometry = False
             if isinstance(geometry, rendering.TriangleMeshModel):
                 self._scene.scene.add_model(name, geometry)
-            elif isinstance(geometry, (o3d.geometry.LineSet,
-                                       o3d.geometry.AxisAlignedBoundingBox,
-                                       o3d.geometry.OrientedBoundingBox)):
+            elif isinstance(
+                geometry,
+                (
+                    o3d.geometry.LineSet,
+                    o3d.geometry.AxisAlignedBoundingBox,
+                    o3d.geometry.OrientedBoundingBox,
+                ),
+            ):
                 unlit_line_geometry = True
                 self._scene.scene.add_geometry(
                     name, geometry, self.settings._materials[Settings.UNLIT_LINE]
                 )
-            elif isinstance(geometry, (o3d.geometry.Geometry3D,
-                                       o3d.t.geometry.Geometry)):
-                self._scene.scene.add_geometry(
-                    name, geometry, self.settings.material
-                )
+            elif isinstance(
+                geometry, (o3d.geometry.Geometry3D, o3d.t.geometry.Geometry)
+            ):
+                self._scene.scene.add_geometry(name, geometry, self.settings.material)
         except Exception as e:
             self.logger.error(e)
 
@@ -1358,8 +1396,7 @@ class O3DGUIVisualizer:
             # Update GUI
             # Add geometry group to _geometries_tree
             for group_name in group_names:
-                parent_node = self._create_geometry_node(group_name,
-                                                         parent_node)
+                parent_node = self._create_geometry_node(group_name, parent_node)
                 self.geometry_groups[group_name] = parent_node
             # Add geometry to _geometries_tree
             node = self._create_geometry_node(name, parent_node)
@@ -1381,12 +1418,13 @@ class O3DGUIVisualizer:
         # Toggle geometry checkbox and show/hide
         self._on_geometry_toggle(
             show if show is not None else node.cell.checkbox.checked,
-            self.geometries[name]
+            self.geometries[name],
         )
         return True
 
-    def add_geometries(self, geometry_dict: dict[str, _o3d_geometry_type],
-                       show: bool = None):
+    def add_geometries(
+        self, geometry_dict: dict[str, _o3d_geometry_type], show: bool = None
+    ):
         """Add multiple geometries (allow for computing update fps)
         :param geometry_dict: dictionary with format {name: Open3D geometry}
         :param show: whether to show geometry after loading
@@ -1411,12 +1449,11 @@ class O3DGUIVisualizer:
             parent_id = parent_node.id
 
         child_node.cell = cell = gui.CheckableTextTreeCell(
-            child_node.display_name, True,  # always show initially
-            partial(self._on_geometry_toggle, node=child_node)
+            child_node.display_name,
+            True,  # always show initially
+            partial(self._on_geometry_toggle, node=child_node),
         )
-        child_node.id = child_id = self._geometry_tree.add_item(
-            parent_id, cell
-        )
+        child_node.id = child_id = self._geometry_tree.add_item(parent_id, cell)
         self.id_to_geometry_nodes[child_id] = child_node
         return child_node
 
@@ -1463,9 +1500,11 @@ class O3DGUIVisualizer:
                 self.geometries.pop(n.name)
 
         # If a parent group node has no children, remove it
-        while (node is not self.root_geometry_node
-               and (node := node.parent) is not self.root_geometry_node
-               and len(node.children) == 0):
+        while (
+            node is not self.root_geometry_node
+            and (node := node.parent) is not self.root_geometry_node
+            and len(node.children) == 0
+        ):
             node.parent.children.remove(node)
             self.geometry_groups.pop(node.name)
             self.id_to_geometry_nodes.pop(node.id)
@@ -1481,7 +1520,6 @@ class O3DGUIVisualizer:
             self._on_geometry_tree(item_id)
 
     def export_image(self, path: str, width: int, height: int):
-
         def on_image(image):
             img = image
 
@@ -1501,8 +1539,9 @@ class O3DGUIVisualizer:
         self._on_camera_list(name, list(self.camera_poses.keys()).index(name))
 
     @staticmethod
-    def get_camera_lineset(width: int, height: int,
-                           K: np.ndarray, far=1.0) -> o3d.geometry.LineSet:
+    def get_camera_lineset(
+        width: int, height: int, K: np.ndarray, far=1.0
+    ) -> o3d.geometry.LineSet:
         """Create a camera lineset with annotated up-direction
         :param width: camera image width
         :param height: camera image height
@@ -1521,16 +1560,26 @@ class O3DGUIVisualizer:
 
         lineset.points.append(p_00 + up_gap)
         lineset.points.append(p_10 + up_gap)
-        lineset.points.append((p_00 + p_10) / 2 + up_gap
-                              + up_axis * np.linalg.norm(p_00 - p_10) / 2 / np.sqrt(3))
+        lineset.points.append(
+            (p_00 + p_10) / 2
+            + up_gap
+            + up_axis * np.linalg.norm(p_00 - p_10) / 2 / np.sqrt(3)
+        )
         lineset.lines.append([5, 6])
         lineset.lines.append([5, 7])
         lineset.lines.append([6, 7])
         lineset.paint_uniform_color([0, 0, 1])
         return lineset
 
-    def add_camera(self, camera_name: str, width: int, height: int, K: np.ndarray,
-                   T: np.ndarray = None, fmt: str = "GL"):
+    def add_camera(
+        self,
+        camera_name: str,
+        width: int,
+        height: int,
+        K: np.ndarray,
+        T: np.ndarray = None,
+        fmt: str = "GL",
+    ):
         """Add a camera to view from (OpenGL convention)
         Camera frame is right(x), up(y), backwards(z)
         :param camera_name: camera unique name
@@ -1598,17 +1647,21 @@ class O3DGUIVisualizer:
             K = so_dict[f"rs_{camera_name}_intr"].fetch()
             pts_color = None
             if (so_data_name := f"rs_{camera_name}_color") in all_so_names:
-                pts_color = so_dict[so_data_name].fetch(lambda x: x/255.).reshape(-1, 3)
+                pts_color = (
+                    so_dict[so_data_name].fetch(lambda x: x / 255.0).reshape(-1, 3)
+                )
             depth_image = so_dict[f"rs_{camera_name}_depth"].fetch()
-            T_world_camROS = so_dict[f"rs_{camera_name}_pose"].fetch()\
-                .to_transformation_matrix()
+            T_world_camROS = (
+                so_dict[f"rs_{camera_name}_pose"].fetch().to_transformation_matrix()
+            )
 
             if pts_color is not None:
                 pcd.colors = Vector3dVector(pts_color)
             pcd.points = Vector3dVector(depth2xyz(depth_image, K).reshape(-1, 3))
             pcd.transform(T_world_camROS @ T_ROS_CV)
-            self.add_camera(camera_name, *depth_image.shape[1::-1], K,
-                            T_world_camROS, fmt="ROS")
+            self.add_camera(
+                camera_name, *depth_image.shape[1::-1], K, T_world_camROS, fmt="ROS"
+            )
 
         def init_urdf_geometries(robot_name: str, *, urdf_so_name: str = None):
             """Initialize robot geometries by reading from URDF
@@ -1616,34 +1669,42 @@ class O3DGUIVisualizer:
             :param urdf_so_name: name of SharedObject containing URDF path
             """
             if robot_name not in urdf_data_dict:
-                urdf_path = so_dict[f"{robot_name}_urdf_path" if urdf_so_name is None
-                                    else urdf_so_name].fetch()
-                geometry_dir = urdf_path.rsplit('/', 1)[0]
+                urdf_path = so_dict[
+                    f"{robot_name}_urdf_path" if urdf_so_name is None else urdf_so_name
+                ].fetch()
+                geometry_dir = urdf_path.rsplit("/", 1)[0]
                 robot = URDF.load(urdf_path, lazy_load_meshes=True)
                 urdf_geo_names = []
 
                 for link in robot.link_fk():
                     n_visuals = len(link.visuals)
                     for i, visual in enumerate(link.visuals):
-                        geo_name = (f"{robot_name}/{link.name}" if n_visuals == 1
-                                    else f"{robot_name}/{link.name}_{i}")
-                        self.load(f"{geometry_dir}/{visual.geometry.mesh.filename}",
-                                  name=geo_name)
+                        geo_name = (
+                            f"{robot_name}/{link.name}"
+                            if n_visuals == 1
+                            else f"{robot_name}/{link.name}_{i}"
+                        )
+                        self.load(
+                            f"{geometry_dir}/{visual.geometry.mesh.filename}",
+                            name=geo_name,
+                        )
                         urdf_geo_names.append(geo_name)
                 urdf_data_dict[robot_name] = (robot, urdf_geo_names)
 
                 update_urdf_geometries(robot_name)
 
-        def update_urdf_geometries(robot_name: str, *,
-                                   qpos: np.ndarray = None, pose: np.ndarray = None):
+        def update_urdf_geometries(
+            robot_name: str, *, qpos: np.ndarray = None, pose: np.ndarray = None
+        ):
             """Update robot geometries using qpos and FK
             :param pose: T_world_urdf pose, [4, 4] np.floating np.ndarray
             """
             robot, urdf_geo_names = urdf_data_dict[robot_name]
             if qpos is None:
                 qpos = np.zeros(len(robot.actuated_joints))
-            for geo_name, T in zip(urdf_geo_names,
-                                   robot.visual_geometry_fk(qpos).values()):
+            for geo_name, T in zip(
+                urdf_geo_names, robot.visual_geometry_fk(qpos).values()
+            ):
                 # TODO: currently assumes robot base is world frame
                 self._scene.scene.set_geometry_transform(
                     geo_name, T if pose is None else pose @ T
@@ -1665,8 +1726,11 @@ class O3DGUIVisualizer:
             # ----- Capture and update from RSDevice stream ----- #
             if self.stream_camera:  # capture whenever a new frame comes in
                 redraw_geometry_uids = []
-                for so_data_name in [p for p in all_so_names
-                                     if p.startswith("rs_") and p.endswith("_depth")]:
+                for so_data_name in [
+                    p
+                    for p in all_so_names
+                    if p.startswith("rs_") and p.endswith("_depth")
+                ]:
                     if so_dict[so_data_name].modified:
                         camera_name = so_data_name[3:-6]
                         data_uid = f"{camera_name}/captured_pcd"
@@ -1678,8 +1742,10 @@ class O3DGUIVisualizer:
                         redraw_geometry_uids.append(data_uid)
 
                 if len(redraw_geometry_uids) > 0:  # redraw scene for camera stream
-                    self.add_geometries({data_uid: data_dict[data_uid]
-                                         for data_uid in redraw_geometry_uids})
+                    self.add_geometries({
+                        data_uid: data_dict[data_uid]
+                        for data_uid in redraw_geometry_uids
+                    })
             else:  # synchronized capturing with env (no redraw here)
                 # Capture color, depth, and pose stream
                 # for each camera sync, check if capture is triggered
@@ -1694,8 +1760,11 @@ class O3DGUIVisualizer:
 
             # ----- Capture and update from robot state stream ----- #
             if self.stream_robot:  # update whenever a new robot state comes in
-                for so_data_name in [p for p in all_so_names
-                                     if p.startswith("xarm7_") and p.endswith("_qpos")]:
+                for so_data_name in [
+                    p
+                    for p in all_so_names
+                    if p.startswith("xarm7_") and p.endswith("_qpos")
+                ]:
                     if (so_data := so_dict[so_data_name]).modified:
                         robot_name = so_data_name[:-5]  # xarm7_<robot_uid>
                         init_urdf_geometries(robot_name)
@@ -1714,14 +1783,23 @@ class O3DGUIVisualizer:
                 redraw_geometry_uids = set()
 
                 so_data_names = [
-                    p for p in all_so_names
+                    p
+                    for p in all_so_names
                     if p.startswith(("rs_", "vis_", "viso3d_"))
-                    and p.endswith(("_color", "_depth", "_pose", "_xyzimg", "_pts",
-                                    "_qpos", "_bounds", "_gposes"))
+                    and p.endswith((
+                        "_color",
+                        "_depth",
+                        "_pose",
+                        "_xyzimg",
+                        "_pts",
+                        "_qpos",
+                        "_bounds",
+                        "_gposes",
+                    ))
                 ]
                 for so_data_name in so_data_names:
-                    data_source, data_uid = so_data_name.split('_', 1)
-                    data_uid, data_fmt = data_uid.replace('|', '/').rsplit('_', 1)
+                    data_source, data_uid = so_data_name.split("_", 1)
+                    data_uid, data_fmt = data_uid.replace("|", "/").rsplit("_", 1)
                     if data_source == "rs":  # all capturing / updating is already done
                         redraw_geometry_uids.add(f"{data_uid}/captured_pcd")
                         continue
@@ -1731,21 +1809,26 @@ class O3DGUIVisualizer:
                         if data_uid.endswith("_camera"):  # camera capture
                             data_uid = f"{data_uid}/captured_pcd"
                         data_dict[data_uid].colors = Vector3dVector(
-                            so_dict[so_data_name].fetch(lambda x: x/255.).reshape(-1, 3)
+                            so_dict[so_data_name]
+                            .fetch(lambda x: x / 255.0)
+                            .reshape(-1, 3)
                         )
                         redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "depth":  # camera capture
                         camera_name = data_uid
-                        data_prefix = f"{data_source}_{camera_name}".replace('/', '|')
+                        data_prefix = f"{data_source}_{camera_name}".replace("/", "|")
                         data_uid = f"{camera_name}/captured_pcd"
 
                         K = so_dict[f"{data_prefix}_intr"].fetch()
                         depth_image = so_dict[so_data_name].fetch()
 
-                        data_dict[data_uid].points = Vector3dVector(depth2xyz(
-                            depth_image, K,
-                            1000.0 if depth_image.dtype == np.uint16 else 1.0
-                        ).reshape(-1, 3))
+                        data_dict[data_uid].points = Vector3dVector(
+                            depth2xyz(
+                                depth_image,
+                                K,
+                                1000.0 if depth_image.dtype == np.uint16 else 1.0,
+                            ).reshape(-1, 3)
+                        )
                         self.add_camera(camera_name, *depth_image.shape[1::-1], K)
                         redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "pose":  # object / camera pose
@@ -1773,8 +1856,9 @@ class O3DGUIVisualizer:
                     elif data_fmt == "qpos":  # robot joint states
                         robot_name = so_data_name[:-5]  # xarm7_<robot_uid>
                         init_urdf_geometries(robot_name)
-                        update_urdf_geometries(robot_name,
-                                               qpos=so_dict[so_data_name].fetch())
+                        update_urdf_geometries(
+                            robot_name, qpos=so_dict[so_data_name].fetch()
+                        )
                     elif data_fmt == "bounds":  # bbox
                         bounds = so_dict[so_data_name].fetch()  # [xyz_min, xyz_max]
                         data_dict[data_uid].min_bound = bounds[0]
@@ -1783,8 +1867,9 @@ class O3DGUIVisualizer:
                     elif data_fmt == "gposes":  # gripper grasp poses
                         # CGN_grasps/obj1/best_grasp_mesh
                         grasp_mesh_name = f"{data_uid}/best_grasp_mesh"
-                        init_urdf_geometries(grasp_mesh_name,
-                                             urdf_so_name="robot_gripper_urdf_path")
+                        init_urdf_geometries(
+                            grasp_mesh_name, urdf_so_name="robot_gripper_urdf_path"
+                        )
                         grasp_poses_world = so_dict[so_data_name].fetch()
                         grasp_scores = so_dict[f"{so_data_name[:-7]}_gscores"].fetch()
                         grasp_qvals = so_dict[f"{so_data_name[:-7]}_gqvals"].fetch()
@@ -1792,8 +1877,9 @@ class O3DGUIVisualizer:
                         # update gripper mesh
                         max_score_idx = grasp_scores.argmax()
                         update_urdf_geometries(
-                            grasp_mesh_name, qpos=[0]*6+[grasp_qvals[max_score_idx]]*2,
-                            pose=grasp_poses_world[max_score_idx]
+                            grasp_mesh_name,
+                            qpos=[0] * 6 + [grasp_qvals[max_score_idx]] * 2,
+                            pose=grasp_poses_world[max_score_idx],
                         )
                         # add gripper lineset
                         lineset = gripper.get_control_points_lineset(
@@ -1804,8 +1890,9 @@ class O3DGUIVisualizer:
                     else:
                         raise ValueError(f"Unknown {so_data_name = }")
 
-                self.add_geometries({data_uid: data_dict[data_uid]
-                                     for data_uid in redraw_geometry_uids})
+                self.add_geometries(
+                    {data_uid: data_dict[data_uid] for data_uid in redraw_geometry_uids}
+                )
 
             self.render()
 
