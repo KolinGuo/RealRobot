@@ -7,7 +7,7 @@ name = "real_robot"
 dynamic = ["version"]
 dependencies = [
   "pyrealsense2",
-  "numpy",
+  "numpy<2.0",
   "gymnasium",
   "transforms3d",
   "urchin",  # loading URDF
@@ -16,7 +16,7 @@ dependencies = [
   "opencv-contrib-python",
   "open3d>=0.17.0",  # for visualization
   "Pillow",
-  "scipy",
+  "scipy>=1.10.0",
   "sapien~=3.0.0.dev",  # for sapien.Pose and simsense
 ]
 requires-python = ">=3.8"
@@ -59,15 +59,78 @@ count_commits_from_version_file = true
 dev_template = "{tag}.dev{timestamp:%Y%m%d}+git.{sha}"
 dirty_template = "{tag}.dev{timestamp:%Y%m%d}+git.{sha}.dirty"
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-required-version = "23.12.1"
-preview = true  # FIXME: This behavior is only in 24.* release: https://github.com/psf/black/pull/3992
-extend-exclude = "3rd_party/|pyrealsense2_examples/"
+preview = true  # for certain rules and black preview behavior
+exclude = ["3rd_party", "pyrealsense2_examples"]
 
-[tool.isort]
-profile = "black"
-line_length = 88
-atomic = true
-skip_gitignore = true
-skip = ["3rd_party/", "pyrealsense2_examples/"]
+[tool.ruff.lint]
+select = [
+  "F",  # Flake8
+  "E", "W",  # pycodestyle
+  "I",  # isort
+  "UP",  # pyupgrade
+  "B",  # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "EXE",  # flake8-executable
+  "G",  # flake8-logging-format
+  "SIM",  # flake8-simplify
+  "NPY",  # NumPy
+  "PERF",  # Perflint
+  "PGH004",  # no bare noqa
+  "PIE794",
+  "PIE800",
+  "PIE804",
+  "PIE807",
+  "PIE810",
+  "PLC0131",  # type bivariance
+  "PLC0132",  # type param mismatch
+  "PLC0205",  # string as __slots__
+  "PLE",
+  "PLR0133",  # constant comparison
+  "PLR0206",  # property with params
+  "PLR1722",  # use sys exit
+  "PLW0129",  # assert on string literal
+  "PLW0406",  # import self
+  "PLW0711",  # binary op exception
+  "PLW1509",  # preexec_fn not safe with threads
+  "PLW3301",  # nested min max
+  "PT006",  # flake8-pytest-style
+  "PT022",
+  "PT023",
+  "PT024",
+  "PT025",
+  "PT026",
+  "PYI",  # flake8-pyi
+  "TRY302",
+  "RUF008",  # mutable dataclass default
+  "RUF013",  # implicit typing.Optional is disallowed
+  "RUF015",  # access first ele in constant time
+  "RUF016",  # type error non-integer index
+  "RUF017",  # avoid quadratic list summation
+]
+ignore = [
+  "B007",  # unused-loop-control-variable
+  "B008",  # function-call-in-default-argument
+  "UP007",   # allow typing.Optional[int], instead of forcing int | None
+  "EXE002",  # ntfs has no executable bit
+  "SIM105",  # allow try-except-pass blocks
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = [
+  "F401",  # unused import
+  "E402",  # Module level import not at top of file
+]
+"*.pyi" = [
+  "F821",  # allow undefined name
+  "E501",  # line too long
+  "PYI001",  # allow TypeVar name without '_' prefix
+  "PYI021",  # allow docstrings in stub files
+  "PYI029",  # allow __str__ and __repr__ in stubs
+  "PYI032",  # allow typing.Any annotations for __eq__ and __ne__
+  "PYI054",  # allow long numeric literals
+]
+
+[tool.ruff.format]
+docstring-code-format = true
