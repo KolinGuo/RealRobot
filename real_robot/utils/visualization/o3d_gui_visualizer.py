@@ -1155,7 +1155,7 @@ class O3DGUIVisualizer:
 
     def _on_load_dialog_done(self, filename: str):
         self.window.close_dialog()
-        self.load(filename)
+        self.load_geometry(filename)
 
     def _on_menu_export(self):
         dlg = gui.FileDialog(
@@ -1291,7 +1291,7 @@ class O3DGUIVisualizer:
     # ---------------------------------------------------------------------- #
     # Methods
     # ---------------------------------------------------------------------- #
-    def load(self, path: str, *, name: str = None):
+    def load_geometry(self, path: str, *, name: str = None):
         """Load and add a geometry from file"""
         geometry_name = Path(path).stem if name is None else name
 
@@ -1684,7 +1684,7 @@ class O3DGUIVisualizer:
                             if n_visuals == 1
                             else f"{robot_name}/{link.name}_{i}"
                         )
-                        self.load(
+                        self.load_geometry(
                             f"{geometry_dir}/{visual.geometry.mesh.filename}",
                             name=geo_name,
                         )
