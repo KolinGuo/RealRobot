@@ -1890,9 +1890,9 @@ class O3DGUIVisualizer:
                     else:
                         raise ValueError(f"Unknown {so_data_name = }")
 
-                self.add_geometries(
-                    {data_uid: data_dict[data_uid] for data_uid in redraw_geometry_uids}
-                )
+                self.add_geometries({
+                    data_uid: data_dict[data_uid] for data_uid in redraw_geometry_uids
+                })
 
             self.render()
 
