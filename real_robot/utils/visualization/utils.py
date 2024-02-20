@@ -1,6 +1,11 @@
+import tempfile
+from pathlib import Path
+
 import numpy as np
 from PIL import Image
 from scipy.ndimage import binary_dilation
+
+from real_robot.utils.logger import get_logger
 
 _rng = np.random.RandomState(0)
 _palette = ((_rng.random((3 * 255)) * 0.7 + 0.3) * 255).astype(np.uint8).tolist()
@@ -55,3 +60,25 @@ def draw_mask(rgb_img, mask, alpha=0.5, id_countour=False) -> np.ndarray:
         img_mask[binary_mask] = foreground[binary_mask]
         img_mask[countours, :] = 0
     return img_mask
+
+
+def convert_mesh_format(mesh_path: str | Path, export_suffix=".glb") -> str:
+    """Convert mesh format to glb for open3d.io.read_triangle_model()"""
+    try:
+        import trimesh
+    except ImportError as e:
+        get_logger("real_robot").critical("Failed to import trimesh: %s", e)
+
+    mesh_format = Path(mesh_path).suffix[1:]
+    assert (
+        mesh_format in trimesh.exchange.load.mesh_formats()  # type: ignore
+    ), f"mesh format {mesh_path} not supported"
+
+    mesh = trimesh.load(mesh_path, process=False, force="mesh")
+    assert isinstance(mesh, trimesh.Trimesh), f"mesh type {type(mesh)} not supported"
+
+    with tempfile.NamedTemporaryFile(suffix=export_suffix, delete=False) as f:
+        file_path = f.name
+        mesh.export(file_path)
+
+    return file_path

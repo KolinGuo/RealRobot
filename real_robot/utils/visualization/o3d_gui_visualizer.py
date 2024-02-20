@@ -24,6 +24,7 @@ from ..multiprocessing import (
     signal_process_ready,
 )
 from .gripper_utils import XArmGripper
+from .utils import convert_mesh_format
 
 isMacOS = platform.system() == "Darwin"
 
@@ -1365,6 +1366,8 @@ class O3DGUIVisualizer:
                      Geometry and geometry group with same names can coexist.
         """
         geometry_name = Path(path).stem if name is None else name
+        if Path(path).suffix not in [".ply", ".stl", ".obj", ".off", ".gltf", ".glb"]:
+            path = convert_mesh_format(path, export_suffix=".glb")
 
         geometry = None
         geometry_type = o3d.io.read_file_geometry_type(path)
