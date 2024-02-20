@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import open3d as o3d
@@ -397,6 +398,8 @@ class O3DGUIVisualizer:
         self.geometries = {}  # {geometry_name: GeometryNode}
         self.geometry_groups = {}  # {geometry_group_name: GeometryNode}
         self.id_to_geometry_nodes = {}  # {id: GeometryNode}
+        # URDF data: {robot_name: (URDF, base_pose, [link_geometry_name])}
+        self.urdf_data = {}
 
         self.construct_gui()
 
@@ -1291,8 +1294,76 @@ class O3DGUIVisualizer:
     # ---------------------------------------------------------------------- #
     # Methods
     # ---------------------------------------------------------------------- #
-    def load_geometry(self, path: str, *, name: str = None):
-        """Load and add a geometry from file"""
+    def load_urdf(
+        self,
+        urdf_path: str | Path,
+        *,
+        robot_name: Optional[str] = None,
+        qpos: Optional[np.ndarray] = None,
+        base_pose: np.ndarray = np.eye(4),
+    ):
+        """Load a robot from a URDF file
+
+        :param urdf_path: path to a URDF file.
+        :param robot_name: robot name. If not given, use <robot> name attributes.
+        :param qpos: robot joint positions.
+        :param base_pose: T_world_urdfbase pose, [4, 4] np.floating np.ndarray
+        """
+        urdf_path = Path(urdf_path).resolve()
+        geometry_dir = urdf_path.parent
+
+        robot: URDF = URDF.load(urdf_path, lazy_load_meshes=True)
+        robot_name = robot.name if robot_name is None else robot_name
+
+        urdf_geometry_names = []
+        for link in robot.link_fk():
+            n_visuals = len(link.visuals)
+            for i, visual in enumerate(link.visuals):
+                geo_name = (
+                    f"{robot_name}/{link.name}"
+                    if n_visuals == 1
+                    else f"{robot_name}/{link.name}_{i}"
+                )
+                self.load_geometry(
+                    f"{geometry_dir}/{visual.geometry.mesh.filename}",
+                    name=geo_name,
+                )
+                urdf_geometry_names.append(geo_name)
+        self.urdf_data[robot_name] = (robot, base_pose, urdf_geometry_names)
+
+        self.update_urdf(robot_name, qpos=qpos, base_pose=base_pose)
+
+    def update_urdf(
+        self,
+        robot_name: str,
+        *,
+        qpos: Optional[np.ndarray] = None,
+        base_pose: Optional[np.ndarray] = None,
+    ):
+        """Update a robot URDF with given qpos and base_pose
+
+        :param robot_name: robot name.
+        :param qpos: robot joint positions.
+        :param base_pose: T_world_urdfbase pose, [4, 4] np.floating np.ndarray
+        """
+        robot, prev_base_pose, urdf_geo_names = self.urdf_data[robot_name]
+        if qpos is None:
+            qpos = np.zeros(len(robot.actuated_joints))
+        if base_pose is None:
+            base_pose = prev_base_pose
+
+        for geo_name, T in zip(urdf_geo_names, robot.visual_geometry_fk(qpos).values()):
+            self._scene.scene.set_geometry_transform(geo_name, base_pose @ T)
+
+    def load_geometry(self, path: str | Path, *, name: Optional[str] = None):
+        """Load and add a geometry from file
+
+        :param path: path to a geometry file supported by open3d.
+                     https://www.open3d.org/docs/release/tutorial/geometry/file_io.html
+        :param name: geometry name separated by '/', str.
+                     Group names are nested starting from root.
+                     Geometry and geometry group with same names can coexist.
+        """
         geometry_name = Path(path).stem if name is None else name
 
         geometry = None
@@ -1638,7 +1709,6 @@ class O3DGUIVisualizer:
         so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
 
         data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
-        urdf_data_dict = {}  # {xarm7_<robot_uid>: (URDF, [geometry name])}
         gripper = XArmGripper()
 
         def fetch_rs_camera_stream_and_update_pcd(camera_name: str, pcd, all_so_names):
@@ -1668,47 +1738,11 @@ class O3DGUIVisualizer:
             and adding all meshes to visualizer
             :param urdf_so_name: name of SharedObject containing URDF path
             """
-            if robot_name not in urdf_data_dict:
+            if robot_name not in self.urdf_data:
                 urdf_path = so_dict[
                     f"{robot_name}_urdf_path" if urdf_so_name is None else urdf_so_name
                 ].fetch()
-                geometry_dir = urdf_path.rsplit("/", 1)[0]
-                robot = URDF.load(urdf_path, lazy_load_meshes=True)
-                urdf_geo_names = []
-
-                for link in robot.link_fk():
-                    n_visuals = len(link.visuals)
-                    for i, visual in enumerate(link.visuals):
-                        geo_name = (
-                            f"{robot_name}/{link.name}"
-                            if n_visuals == 1
-                            else f"{robot_name}/{link.name}_{i}"
-                        )
-                        self.load_geometry(
-                            f"{geometry_dir}/{visual.geometry.mesh.filename}",
-                            name=geo_name,
-                        )
-                        urdf_geo_names.append(geo_name)
-                urdf_data_dict[robot_name] = (robot, urdf_geo_names)
-
-                update_urdf_geometries(robot_name)
-
-        def update_urdf_geometries(
-            robot_name: str, *, qpos: np.ndarray = None, pose: np.ndarray = None
-        ):
-            """Update robot geometries using qpos and FK
-            :param pose: T_world_urdf pose, [4, 4] np.floating np.ndarray
-            """
-            robot, urdf_geo_names = urdf_data_dict[robot_name]
-            if qpos is None:
-                qpos = np.zeros(len(robot.actuated_joints))
-            for geo_name, T in zip(
-                urdf_geo_names, robot.visual_geometry_fk(qpos).values()
-            ):
-                # TODO: currently assumes robot base is world frame
-                self._scene.scene.set_geometry_transform(
-                    geo_name, T if pose is None else pose @ T
-                )
+                self.load_urdf(urdf_path, robot_name=robot_name)
 
         signal_process_ready()  # current process is ready
 
@@ -1721,7 +1755,7 @@ class O3DGUIVisualizer:
                 self.clear_geometries()
                 so_dict = SharedObjectDefaultDict()  # {so_name: SharedObject}
                 data_dict = O3DGeometryDefaultDict()  # {geometry name: o3d geometry}
-                urdf_data_dict = {}  # {xarm7_<robot_uid>: (URDF, [geometry name])}
+                self.urdf_data = {}  # {xarm7_<robot_uid>: (URDF, [geometry name])}
 
             # ----- Capture and update from RSDevice stream ----- #
             if self.stream_camera:  # capture whenever a new frame comes in
@@ -1768,13 +1802,13 @@ class O3DGUIVisualizer:
                     if (so_data := so_dict[so_data_name]).modified:
                         robot_name = so_data_name[:-5]  # xarm7_<robot_uid>
                         init_urdf_geometries(robot_name)
-                        update_urdf_geometries(robot_name, qpos=so_data.fetch())
+                        self.update_urdf(robot_name, qpos=so_data.fetch())
             else:
                 for so_name in [p for p in all_so_names if p.startswith("sync_xarm7_")]:
                     robot_name = so_name[5:]  # xarm7_<robot_uid>
                     init_urdf_geometries(robot_name)
                     if so_dict[so_name].triggered:
-                        update_urdf_geometries(
+                        self.update_urdf(
                             robot_name, qpos=so_dict[f"{robot_name}_qpos"].fetch()
                         )
 
@@ -1856,9 +1890,7 @@ class O3DGUIVisualizer:
                     elif data_fmt == "qpos":  # robot joint states
                         robot_name = so_data_name[:-5]  # xarm7_<robot_uid>
                         init_urdf_geometries(robot_name)
-                        update_urdf_geometries(
-                            robot_name, qpos=so_dict[so_data_name].fetch()
-                        )
+                        self.update_urdf(robot_name, qpos=so_dict[so_data_name].fetch())
                     elif data_fmt == "bounds":  # bbox
                         bounds = so_dict[so_data_name].fetch()  # [xyz_min, xyz_max]
                         data_dict[data_uid].min_bound = bounds[0]
@@ -1876,10 +1908,10 @@ class O3DGUIVisualizer:
 
                         # update gripper mesh
                         max_score_idx = grasp_scores.argmax()
-                        update_urdf_geometries(
+                        self.update_urdf(
                             grasp_mesh_name,
-                            qpos=[0] * 6 + [grasp_qvals[max_score_idx]] * 2,
-                            pose=grasp_poses_world[max_score_idx],
+                            qpos=np.asarray([0] * 6 + [grasp_qvals[max_score_idx]] * 2),
+                            base_pose=grasp_poses_world[max_score_idx],
                         )
                         # add gripper lineset
                         lineset = gripper.get_control_points_lineset(
