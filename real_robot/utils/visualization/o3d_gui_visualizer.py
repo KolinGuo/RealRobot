@@ -1370,16 +1370,16 @@ class O3DGUIVisualizer:
             path = convert_mesh_format(path, export_suffix=".glb")
 
         geometry = None
-        geometry_type = o3d.io.read_file_geometry_type(path)
+        geometry_type = o3d.io.read_file_geometry_type(str(path))
 
         mesh = None
         if geometry_type & o3d.io.CONTAINS_TRIANGLES:
-            mesh = o3d.io.read_triangle_model(path)
+            mesh = o3d.io.read_triangle_model(str(path))
         if mesh is None:
             self.logger.debug(f"{path} appears to be a point cloud")
             cloud = None
             try:
-                cloud = o3d.io.read_point_cloud(path)
+                cloud = o3d.io.read_point_cloud(str(path))
             except Exception:
                 pass
             if cloud is not None:
