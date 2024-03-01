@@ -93,6 +93,48 @@ def merge_geometries(geometries: O3D_GEOMETRY_LIST) -> ANY_O3D_GEOMETRY:
     return merged_geometry
 
 
+def sample_pcd_from_mesh(
+    mesh: o3d.geometry.TriangleMesh | rendering.TriangleMeshModel,
+    number_of_points: int = 100,
+    method: str = "uniform",
+    use_triangle_normal: bool = False,
+    seed: Optional[int] = None,
+    **kwargs,
+) -> o3d.geometry.PointCloud:
+    """Sample points from an Open3D mesh
+
+    :param mesh: an Open3D TriangleMesh or rendering.TriangleMeshModel.
+    :param number_of_points: number of points to sample.
+    :param method: "uniform" or "poisson_disk".
+                   uniform: sample uniformly (faster).
+                   poisson_disk: sample such that each point has approximately the same
+                                 distance to the neighbouring points (slower).
+    :param use_triangle_normal: If True, assigns the triangle normals instead of
+                                the interpolated vertex normals to the returned points.
+                                The triangle normals will be computed and added to
+                                the mesh if necessary.
+    :param seed: If not None, set Open3D's random seed.
+    :param kwargs: additional kwargs for sample_points_poisson_disk():
+                   init_factor=5, pcl=None.
+    """
+    if isinstance(mesh, rendering.TriangleMeshModel):
+        mesh = merge_geometries([mesh_info.mesh for mesh_info in mesh.meshes])
+
+    if seed is not None:
+        o3d.utility.random.seed(seed)
+
+    if method == "uniform":
+        return mesh.sample_points_uniformly(
+            number_of_points, use_triangle_normal=use_triangle_normal
+        )
+    elif method == "poisson_disk":
+        return mesh.sample_points_poisson_disk(
+            number_of_points, use_triangle_normal=use_triangle_normal, **kwargs
+        )
+    else:
+        raise ValueError(f"Unknown {method=}, choices: ['uniform', 'poisson_disk']")
+
+
 def convert_mesh_format(mesh_path: str | Path, export_suffix=".glb") -> str:
     """Convert mesh format to glb for open3d.io.read_triangle_model()"""
     try:
