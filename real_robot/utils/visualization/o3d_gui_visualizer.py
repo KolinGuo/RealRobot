@@ -14,9 +14,9 @@ import open3d as o3d
 import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
 from open3d.utility import Vector3dVector
-from urchin import URDF
 
 from ..camera import T_CV_GL, T_GL_CV, T_ROS_CV, T_ROS_GL, depth2xyz
+from ..lib3d.o3d_utils import load_geometry, load_urdf_geometries
 from ..logger import get_logger
 from ..multiprocessing import (
     SharedObject,
@@ -24,7 +24,6 @@ from ..multiprocessing import (
     signal_process_ready,
 )
 from .gripper_utils import XArmGripper
-from .utils import convert_mesh_format
 
 isMacOS = platform.system() == "Darwin"
 
@@ -1310,29 +1309,23 @@ class O3DGUIVisualizer:
         :param qpos: robot joint positions.
         :param base_pose: T_world_urdfbase pose, [4, 4] np.floating np.ndarray
         """
-        urdf_path = Path(urdf_path).resolve()
-        geometry_dir = urdf_path.parent
-
-        robot: URDF = URDF.load(urdf_path, lazy_load_meshes=True)
+        robot, urdf_geometries = load_urdf_geometries(
+            urdf_path,
+            qpos=qpos,
+            base_pose=base_pose,
+            return_pose=True,
+            logger=self.logger,
+        )
         robot_name = robot.name if robot_name is None else robot_name
 
         urdf_geometry_names = []
-        for link in robot.link_fk():
-            n_visuals = len(link.visuals)
-            for i, visual in enumerate(link.visuals):
-                geo_name = (
-                    f"{robot_name}/{link.name}"
-                    if n_visuals == 1
-                    else f"{robot_name}/{link.name}_{i}"
-                )
-                self.load_geometry(
-                    f"{geometry_dir}/{visual.geometry.mesh.filename}",
-                    name=geo_name,
-                )
-                urdf_geometry_names.append(geo_name)
+        for geom_name, (geometry, T_world_geom) in urdf_geometries.items():
+            geom_name = f"{robot_name}/{geom_name}"
+            if geometry is not None:
+                self.add_geometry(geom_name, geometry)
+                self._scene.scene.set_geometry_transform(geom_name, T_world_geom)
+            urdf_geometry_names.append(geom_name)
         self.urdf_data[robot_name] = (robot, base_pose, urdf_geometry_names)
-
-        self.update_urdf(robot_name, qpos=qpos, base_pose=base_pose)
 
     def update_urdf(
         self,
@@ -1366,32 +1359,9 @@ class O3DGUIVisualizer:
                      Geometry and geometry group with same names can coexist.
         """
         geometry_name = Path(path).stem if name is None else name
-        if Path(path).suffix not in [".ply", ".stl", ".obj", ".off", ".gltf", ".glb"]:
-            path = convert_mesh_format(path, export_suffix=".glb")
-
-        geometry = None
-        geometry_type = o3d.io.read_file_geometry_type(str(path))
-
-        mesh = None
-        if geometry_type & o3d.io.CONTAINS_TRIANGLES:
-            mesh = o3d.io.read_triangle_model(str(path))
-        if mesh is None:
-            self.logger.debug(f"{path} appears to be a point cloud")
-            cloud = None
-            try:
-                cloud = o3d.io.read_point_cloud(str(path))
-            except Exception:
-                pass
-            if cloud is not None:
-                if not cloud.has_normals():
-                    cloud.estimate_normals()
-                cloud.normalize_normals()
-                geometry = cloud
-            else:
-                self.logger.error(f"Failed to read points from {path}")
-
-        if geometry is not None or mesh is not None:
-            self.add_geometry(geometry_name, geometry if mesh is None else mesh)
+        geometry = load_geometry(path, logger=self.logger)
+        if geometry is not None:
+            self.add_geometry(geometry_name, geometry)
 
     def add_geometry(
         self, name: str, geometry: _o3d_geometry_type, show: bool = None
