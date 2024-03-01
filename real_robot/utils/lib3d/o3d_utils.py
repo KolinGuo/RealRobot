@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 from copy import deepcopy
 from pathlib import Path
-from typing import Optional, Union
+from typing import Literal, Optional, TypeVar, Union
 
 import numpy as np
 import open3d as o3d
@@ -12,8 +12,15 @@ from urchin import URDF
 
 from real_robot.utils.logger import get_logger
 
+_N = TypeVar("_N", bound=int)
 
-def np2pcd(points, colors=None, normals=None):
+
+def np2pcd(
+    points: np.ndarray[tuple[_N, Literal[3]], np.dtype[np.floating]]
+    | o3d.geometry.PointCloud,
+    colors: Optional[np.ndarray[tuple[_N, Literal[3]], np.dtype[np.floating]]] = None,
+    normals: Optional[np.ndarray[tuple[_N, Literal[3]], np.dtype[np.floating]]] = None,
+) -> o3d.geometry.PointCloud:
     """Convert numpy array to open3d PointCloud."""
     if isinstance(points, o3d.geometry.PointCloud):
         return points
