@@ -150,6 +150,7 @@ def load_geometry(
 def load_urdf_geometries(
     urdf_path: str | Path,
     *,
+    skip_links: Optional[list[str]] = None,
     qpos: Optional[np.ndarray] = None,
     base_pose: np.ndarray = np.eye(4),
     return_pose: bool = False,
@@ -166,6 +167,7 @@ def load_urdf_geometries(
     """Load a robot geometries from a URDF file
 
     :param urdf_path: path to a URDF file.
+    :param skip_links: names of links to skip loading.
     :param qpos: robot joint positions. If None, all joints are at zero positions.
     :param base_pose: T_world_urdfbase pose, [4, 4] np.floating np.ndarray
     :param return_pose: Whether to return the geometries pose in world frame
@@ -178,8 +180,14 @@ def load_urdf_geometries(
 
     robot: URDF = URDF.load(urdf_path, lazy_load_meshes=True)
 
+    # Filter based on skip_links
+    link_names = [link.name for link in robot.links]
+    if skip_links is not None:
+        link_names = [name for name in link_names if name not in skip_links]
+
+    # Load URDF geometries
     urdf_geometries = {}  # {geometry_name: rendering.TriangleMeshModel}
-    for link in robot.link_fk():
+    for link in robot.link_fk(links=link_names):
         n_visuals = len(link.visuals)
         for i, visual in enumerate(link.visuals):
             geo_name = link.name if n_visuals == 1 else f"{link.name}_{i}"
@@ -195,7 +203,8 @@ def load_urdf_geometries(
     if merge:
         return_pose = False
     for (geometry_name, geometry), T_base_geom in zip(
-        urdf_geometries.items(), robot.visual_geometry_fk(qpos).values()
+        urdf_geometries.items(),
+        robot.visual_geometry_fk(qpos, links=link_names).values(),
     ):
         urdf_geometries[geometry_name] = (
             (geometry, base_pose @ T_base_geom)
