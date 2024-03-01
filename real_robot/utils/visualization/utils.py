@@ -7,8 +7,8 @@ from scipy.ndimage import binary_dilation
 
 from real_robot.utils.logger import get_logger
 
-_rng = np.random.RandomState(0)
-_palette = ((_rng.random((3 * 255)) * 0.7 + 0.3) * 255).astype(np.uint8).tolist()
+_rng = np.random.default_rng(0)
+_palette = ((_rng.random(3 * 255) * 0.7 + 0.3) * 255).astype(np.uint8).tolist()
 _palette = [0, 0, 0] + _palette
 
 
@@ -39,10 +39,7 @@ def draw_mask(rgb_img, mask, alpha=0.5, id_countour=False) -> np.ndarray:
 
         for id in obj_ids:
             # Overlay color on binary mask
-            if id <= 255:
-                color = _palette[id * 3 : id * 3 + 3]
-            else:
-                color = [0, 0, 0]
+            color = _palette[id * 3 : id * 3 + 3] if id <= 255 else [0, 0, 0]
             foreground = rgb_img * (1 - alpha) + np.ones_like(
                 rgb_img
             ) * alpha * np.asarray(color)
