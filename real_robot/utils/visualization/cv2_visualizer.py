@@ -5,6 +5,9 @@ import math
 import os
 import time
 from collections import defaultdict
+from collections.abc import Callable
+from enum import Enum
+from typing import Any, Optional
 
 import cv2
 import numpy as np
@@ -21,11 +24,48 @@ from .utils import colorize_mask, draw_mask
 class CV2Visualizer:
     """OpenCV visualizer for RGB and depth images, fps is updated in window title"""
 
+    images: list[np.ndarray] = []  # images being visualized
+    # images boundaries [[[x_min, x_max+1], [y_min, y_max+1]]]
+    image_boundaries: np.ndarray = np.empty((0, 2, 2), dtype=np.floating)
+
+    class DrawingMode(Enum):
+        """Drawing mode when draw_with_mouse()"""
+
+        Box = 0
+        Point = 1
+
+    # Attributes for drawing points / bbox
+    _done_drawing: bool = True  # whether drawing with mouse is done
+    _in_drawing: bool = False  # whether currently in drawing
+    selected_image_idx: int | None = None  # previously selected image during drawing
+    _image: np.ndarray | None = None  # the image currently in drawing
+    _extra_ret_data: Any = None  # extra data returned from _update_drawing_fn()
+    _mouse_pos: tuple[int, int] = (-1, -1)  # mouse position when selecting image
+    _CTRLKEY: int = 0  # whether CTRL key is pressed
+    _drawing_mode: DrawingMode = DrawingMode.Box  # Drawing mode
+    points: np.ndarray = np.empty((0, 2), dtype=int)  # Drawn points: [x, y]
+    point_labels: np.ndarray = np.empty(0, dtype=int)  # Drawn point labels: (0, 1)
+    boxes: np.ndarray = np.empty((0, 4), dtype=int)  # Drawn boxes XYXY coordinates
+    box_labels: np.ndarray = np.empty(0, dtype=int)  # Drawn box labels: (0, 1)
+
     def __init__(
-        self, window_name="Images", *, run_as_process=False, stream_camera=False
+        self,
+        window_name="Images",
+        *,
+        update_drawing_fn: Optional[
+            Callable[[np.ndarray, dict[str, np.ndarray]], tuple[np.ndarray, Any]]
+        ] = None,
+        run_as_process=False,
+        stream_camera=False,
     ):
         """
         :param window_name: window name
+        :param update_drawing_fn: callback function with drawn points/boxes
+            during drawing.
+            Inputs to this function are an RGB image and a dictionary of
+            {"points": np.ndarray, "point_labels": np.ndarray,
+             "boxes": np.ndarray, "box_labels": np.ndarray}
+            Outputs are the modified image and any additional data.
         :param run_as_process: whether to run CV2Visualizer as a separate process.
           If True, CV2Visualizer needs to be created as a `mp.Process`.
           Several SharedObject are mounted to control CV2Visualizer and fetch data:
@@ -52,6 +92,10 @@ class CV2Visualizer:
         self.window_name = window_name
         self.last_timestamp_ns = time.time_ns()
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.setMouseCallback(window_name, self.on_mouse)
+        cv2.displayOverlay(self.window_name, "Press 'd' to go into drawing mode", 5000)
+        if update_drawing_fn is not None:
+            self._update_drawing_fn = update_drawing_fn
 
         if run_as_process:
             self.stream_camera = stream_camera
@@ -130,6 +174,7 @@ class CV2Visualizer:
         """
         if (n_image := len(images)) == 0:
             return
+        self.images = images  # save input images
         images = [self.preprocess_image(image) for image in images]
 
         # Resize non-equal sized image to max_shape
@@ -146,11 +191,16 @@ class CV2Visualizer:
 
         if n_image == 1:
             vis_image = images[0]
+            self.image_boundaries = np.asarray([[[0, max_W], [0, max_H]]])
         elif n_image < 4:
             vis_image = np.vstack(images)
+            self.image_boundaries = np.asarray([
+                [[0, max_W], [max_H * i, max_H * (i + 1)]] for i in range(n_image)
+            ])
         else:
             n_rows, n_cols = self.get_image_layout(n_image)
             vis_image = np.zeros((max_H * n_rows, max_W * n_cols, 3), dtype=np.uint8)
+            self.image_boundaries = np.empty((0, 2, 2), dtype=int)
             for r in range(n_rows):
                 for c in range(n_cols):
                     if (idx := n_cols * r + c) >= n_image:
@@ -158,6 +208,12 @@ class CV2Visualizer:
                     vis_image[
                         max_H * r : max_H * (r + 1), max_W * c : max_W * (c + 1)
                     ] = images[idx]
+                    self.image_boundaries = np.concatenate([
+                        self.image_boundaries,
+                        np.asarray([
+                            [[max_W * c, max_W * (c + 1)], [max_H * r, max_H * (r + 1)]]
+                        ]),
+                    ])
 
         # Add fps to window title (overlay with cv2.putText is slower)
         cur_timestamp_ns = time.time_ns()
@@ -168,7 +224,7 @@ class CV2Visualizer:
         )
 
         cv2.imshow(self.window_name, vis_image)
-        cv2.pollKey()
+        self.render()
 
     def run_as_process(self):
         """Run CV2Visualizer as a separate process"""
@@ -193,9 +249,13 @@ class CV2Visualizer:
                 p
                 for p in all_so_names
                 if p.startswith(("rs_", "vis_", "viscv2_"))
-                and p.endswith(
-                    ("_color", "_depth", "_infrared_1", "_infrared_2", "_mask")
-                )
+                and p.endswith((
+                    "_color",
+                    "_depth",
+                    "_infrared_1",
+                    "_infrared_2",
+                    "_mask",
+                ))
             ]
 
         rs_so_name_suffix = ("_color", "_depth", "_infrared_1", "_infrared_2")
@@ -296,7 +356,279 @@ class CV2Visualizer:
 
     def render(self):
         """Update renderer to show image and respond to mouse and keyboard events"""
-        cv2.pollKey()
+        if cv2.pollKey() == ord("d"):
+            self.draw_with_mouse()
+
+    def draw_with_mouse(
+        self,
+        *,
+        update_drawing_fn: Optional[
+            Callable[[np.ndarray, dict[str, np.ndarray]], tuple[np.ndarray, Any]]
+        ] = None,
+    ) -> tuple[np.ndarray, dict[str, np.ndarray], Any] | None:
+        """Enter drawing mode with mouse
+
+        :param update_drawing_fn: function to be called with the image and drawn
+            points/boxes.
+            Inputs to this function are an RGB image and a dictionary of
+            {"points": np.ndarray, "point_labels": np.ndarray,
+            "boxes": np.ndarray, "box_labels": np.ndarray}
+            Outputs are the modified image and any additional data.
+        :return: Original image before drawing, drawn labels dict, _extra_ret_data
+            returned from self._update_drawing_fn()
+        """
+        self.selected_image_idx = None
+        self._image = None  # the image currently in drawing
+        if update_drawing_fn is not None:
+            self._update_drawing_fn = update_drawing_fn
+        self._extra_ret_data = None
+        self._mouse_pos = (-1, -1)
+        self._CTRLKEY = 0
+        self._drawing_mode = self.DrawingMode.Box
+        self.points = np.empty((0, 2), dtype=int)  # Drawn points: [x, y]
+        self.point_labels = np.empty(0, dtype=int)  # Drawn point labels: (0, 1)
+        self.boxes = np.empty((0, 4), dtype=int)  # Drawn boxes XYXY coordinates
+        self.box_labels = np.empty(0, dtype=int)  # Drawn box labels: (0, 1)
+        self._done_drawing = False
+
+        init_overlay_text = (
+            "Drawing mode! 's/x' to select/delete image, 'Esc/Enter/Space' to quit"
+        )
+        cv2.displayOverlay(self.window_name, init_overlay_text)
+
+        def get_drawing_overlay_text():
+            return (
+                f"{str(self._drawing_mode).split('.')[-1]} drawing mode! "
+                "'Enter/Space' to apply, 'Esc' to quit, 'm' to change mode, "
+                "'z' to remove last drawing, 'r' to remove all drawings, "
+                "hold 'Ctrl' to draw with negative label"
+            )
+
+        def draw_image(image: np.ndarray, with_cursor=False) -> np.ndarray:
+            """Draw points and boxes on image
+
+            :param image: RGB image to drawn onto
+            :return image: drawn image in BGR format
+            """
+            image = self.preprocess_image(image)
+            point_radius = int(np.sqrt(np.prod(image.shape[:2])) * 0.005)
+            line_thickness = int(np.sqrt(np.prod(image.shape[:2])) * 0.004)
+            # Current mouse position
+            if with_cursor:
+                image = cv2.circle(  # type: ignore
+                    image,
+                    self._mouse_pos,
+                    radius=point_radius,
+                    color=(0, 0, 255) if self._CTRLKEY else (0, 255, 0),
+                    thickness=-1,
+                )
+            # Drawn points
+            for point, label in zip(self.points, self.point_labels):
+                image = cv2.circle(
+                    image,
+                    point,
+                    radius=point_radius,
+                    color=(0, 255, 0) if label else (0, 0, 255),
+                    thickness=-1,
+                )
+            # Drawn boxes
+            for (x0, y0, x1, y1), label in zip(self.boxes, self.box_labels):
+                image = cv2.rectangle(  # type: ignore
+                    image,
+                    (x0, y0),
+                    (x1, y1),
+                    color=(0, 255, 0) if label else (0, 0, 255),
+                    thickness=line_thickness,
+                )
+            return image
+
+        def get_image_idx() -> int | None:
+            """Get image index that the mouse is pointing at"""
+            image_idx_mask = np.all(
+                [
+                    (self.image_boundaries[:, :, 0] <= self._mouse_pos).all(1),
+                    (self._mouse_pos < self.image_boundaries[:, :, 1]).all(1),
+                ],
+                axis=0,
+            )
+            if image_idx_mask.any():
+                return int(np.flatnonzero(image_idx_mask))
+            else:
+                self.logger.warning("No selection, please move mouse to select")
+                return None
+
+        while True:
+            if (key := cv2.pollKey()) in [13, 32]:  # ENTER or Space
+                self._done_drawing = True
+                if (
+                    self.selected_image_idx is not None
+                    and self._image is not None
+                    and (len(self.points) > 0 or len(self.boxes) > 0)
+                ):
+                    self.images.insert(
+                        self.selected_image_idx + 1,
+                        cv2.cvtColor(draw_image(self._image), cv2.COLOR_BGR2RGB),
+                    )
+                self.show_images(self.images)
+                break
+            elif key == 27:  # ESC, stop current drawing and restart
+                if self.selected_image_idx is None:
+                    self._done_drawing = True
+                    break
+                else:
+                    self.selected_image_idx = None
+                    self._image = None
+                    self._extra_ret_data = None
+                    self._mouse_pos = (-1, -1)
+                    self.points = np.empty((0, 2), dtype=int)
+                    self.point_labels = np.empty(0, dtype=int)
+                    self.boxes = np.empty((0, 4), dtype=int)
+                    self.box_labels = np.empty(0, dtype=int)
+                    self.show_images(self.images)
+                    cv2.displayOverlay(self.window_name, init_overlay_text)
+            elif (
+                key == ord("x") and (image_idx := get_image_idx()) is not None
+            ):  # delete image
+                self.images.pop(image_idx)
+                self.show_images(self.images)
+            elif (
+                key == ord("s")  # select image
+                and self.selected_image_idx is None
+                and (image_idx := get_image_idx()) is not None
+            ):
+                self.selected_image_idx = image_idx
+                self._image = self.images[self.selected_image_idx].copy()
+                self.points = np.empty((0, 2), dtype=int)
+                self.point_labels = np.empty(0, dtype=int)
+                self.boxes = np.empty((0, 4), dtype=int)
+                self.box_labels = np.empty(0, dtype=int)
+                cv2.displayOverlay(self.window_name, get_drawing_overlay_text())
+            if self._image is None:
+                continue
+
+            # Draw image
+            cv2.imshow(self.window_name, draw_image(self._image, with_cursor=True))
+
+            if key == ord("m"):  # change drawing mode
+                self._drawing_mode = (
+                    self.DrawingMode.Box
+                    if self._drawing_mode == self.DrawingMode.Point
+                    else self.DrawingMode.Point
+                )
+                cv2.displayOverlay(self.window_name, get_drawing_overlay_text())
+            elif key == ord("z") and not self._in_drawing:  # remove previous drawing
+                if (
+                    self._drawing_mode == self.DrawingMode.Point
+                    and len(self.points) > 0
+                ):
+                    self.points = self.points[:-1]
+                    self.point_labels = self.point_labels[:-1]
+                    self.call_update_drawing_fn()
+                elif self._drawing_mode == self.DrawingMode.Box and len(self.boxes) > 0:
+                    self.boxes = self.boxes[:-1]
+                    self.box_labels = self.box_labels[:-1]
+                    self.call_update_drawing_fn()
+            elif key == ord("r") and not self._in_drawing:  # remove all drawings
+                self.points = np.empty((0, 2), dtype=int)
+                self.point_labels = np.empty(0, dtype=int)
+                self.boxes = np.empty((0, 4), dtype=int)
+                self.box_labels = np.empty(0, dtype=int)
+
+        cv2.displayOverlay(
+            self.window_name, "Drawing ended. Press 'd' to go into drawing mode", 5000
+        )
+
+        if self.selected_image_idx is not None:
+            return (
+                self.images[self.selected_image_idx].copy(),
+                self.drawn_labels,
+                self._extra_ret_data,
+            )
+        else:
+            return None
+
+    @staticmethod
+    def _update_drawing_fn(
+        image: np.ndarray, drawn_labels: dict[str, np.ndarray], /
+    ) -> tuple[np.ndarray, Any]:
+        """Callback function with drawn points/boxes during drawing"""
+        return image, None
+
+    def call_update_drawing_fn(self) -> None:
+        """Call self._update_drawing_fn with current drawings
+        This happens when the user adds/removes any drawing.
+        """
+        if self.selected_image_idx is None:
+            self.logger.error("No image selected, please select image first")
+            return
+
+        cv2.setWindowTitle(self.window_name, "Busy updating drawings...")
+        self._image, self._extra_ret_data = self._update_drawing_fn(
+            self.images[self.selected_image_idx].copy(), self.drawn_labels
+        )
+        cv2.setWindowTitle(self.window_name, self.window_name)
+
+    @property
+    def drawn_labels(self) -> dict[str, np.ndarray]:
+        return {
+            "points": self.points,
+            "point_labels": self.point_labels,
+            "boxes": self.boxes,
+            "box_labels": self.box_labels,
+        }
+
+    def on_mouse(self, event: int, x: int, y: int, flags: int, param: Any = None):
+        """
+        Callback function for mouse events.
+
+        :param event: one of the cv2.MouseEventTypes:
+                      [EVENT_MOUSEMOVE,
+                       EVENT_LBUTTONDOWN, EVENT_RBUTTONDOWN, EVENT_MBUTTONDOWN,
+                       EVENT_LBUTTONUP, EVENT_RBUTTONUP, EVENT_MBUTTONUP,
+                       EVENT_LBUTTONDBLCLK, EVENT_RBUTTONDBLCLK, EVENT_MBUTTONDBLCLK,
+                       EVENT_MOUSEWHEEL, EVENT_MOUSEHWHEEL]
+                      https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#ga927593befdddc7e7013602bca9b079b0
+        :param x: The x-coordinate of the mouse event.
+        :param y: The y-coordinate of the mouse event.
+        :param flags: one of the cv2.MouseEventFlags:
+                      [EVENT_FLAG_LBUTTON, EVENT_FLAG_RBUTTON, EVENT_FLAG_MBUTTON,
+                       EVENT_FLAG_CTRLKEY, EVENT_FLAG_SHIFTKEY, EVENT_FLAG_ALTKEY]
+                      https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#gaab4dc057947f70058c80626c9f1c25ce
+        :param param: The optional user data passed by cv2.setMouseCallback().
+        """
+        if self._done_drawing:
+            return
+
+        self._mouse_pos = (x, y)
+        self._CTRLKEY = flags & cv2.EVENT_FLAG_CTRLKEY
+
+        if self.selected_image_idx is None:
+            return
+
+        if self._drawing_mode == self.DrawingMode.Box:
+            if event == cv2.EVENT_LBUTTONDOWN:
+                self._in_drawing = True
+                self.boxes = np.vstack([self.boxes, [x, y, x, y]])
+                self.box_labels = np.hstack([
+                    self.box_labels,
+                    0 if self._CTRLKEY else 1,
+                ])
+            elif event == cv2.EVENT_LBUTTONUP:
+                self._in_drawing = False
+                self.boxes[-1, 2:] = self._mouse_pos
+                self.call_update_drawing_fn()
+            elif event == cv2.EVENT_MOUSEMOVE and self._in_drawing:
+                self.boxes[-1, 2:] = self._mouse_pos
+        elif (
+            self._drawing_mode == self.DrawingMode.Point
+            and event == cv2.EVENT_LBUTTONUP
+        ):
+            self.points = np.vstack([self.points, self._mouse_pos])
+            self.point_labels = np.hstack([
+                self.point_labels,
+                0 if self._CTRLKEY else 1,
+            ])
+            self.call_update_drawing_fn()
 
     def close(self):
         cv2.destroyWindow(self.window_name)
