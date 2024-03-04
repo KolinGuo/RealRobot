@@ -457,6 +457,11 @@ class CV2Visualizer:
                 self.logger.warning("No selection, please move mouse to select")
                 return None
 
+        if len(self.images) == 1:  # when there is only one image, skip selection
+            self.selected_image_idx = 0
+            self._image = self.images[self.selected_image_idx].copy()
+            cv2.displayOverlay(self.window_name, get_drawing_overlay_text())
+
         while True:
             if self._in_drawing:
                 cv2.imshow(self.window_name, draw_labels(self._image, with_cursor=True))  # type: ignore
