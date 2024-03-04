@@ -458,6 +458,11 @@ class CV2Visualizer:
                 return None
 
         while True:
+            if self._in_drawing:
+                cv2.imshow(self.window_name, draw_labels(self._image, with_cursor=True))  # type: ignore
+                cv2.pollKey()
+                continue
+
             if (key := cv2.pollKey()) in [13, 32]:  # ENTER or Space
                 self._done_drawing = True
                 if (
@@ -516,7 +521,7 @@ class CV2Visualizer:
                     else self.DrawingMode.Point
                 )
                 cv2.displayOverlay(self.window_name, get_drawing_overlay_text())
-            elif key == ord("z") and not self._in_drawing:  # remove previous drawing
+            elif key == ord("z"):  # remove previous drawing
                 if (
                     self._drawing_mode == self.DrawingMode.Point
                     and len(self.points) > 0
@@ -528,7 +533,7 @@ class CV2Visualizer:
                     self.boxes = self.boxes[:-1]
                     self.box_labels = self.box_labels[:-1]
                     self.call_update_drawing_fn()
-            elif key == ord("r") and not self._in_drawing:  # remove all drawings
+            elif key == ord("r"):  # remove all drawings
                 self.points = np.empty((0, 2), dtype=int)
                 self.point_labels = np.empty(0, dtype=int)
                 self.boxes = np.empty((0, 4), dtype=int)
@@ -594,24 +599,25 @@ class CV2Visualizer:
                 x0, y0 = self.boxes[-1, :2]
                 self.boxes[-1] = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
                 self.call_update_drawing_fn()
-            elif event == cv2.EVENT_MOUSEMOVE and self._in_drawing:
+            elif event == cv2.EVENT_MOUSEMOVE and self._in_drawing:  # for visualization
                 self.boxes[-1, 2:] = self._mouse_pos
-        elif (
-            self._drawing_mode == self.DrawingMode.Point
-            and event == cv2.EVENT_LBUTTONUP
-        ):
-            if not (
-                (image_bounds[:, 0] <= self._mouse_pos).all()
-                and (self._mouse_pos < image_bounds[:, 1]).all()
-            ):
-                self.logger.warning("Drawn points outside image bounds, ignoring")
-                return
-            self.points = np.vstack([self.points, self._mouse_pos])
-            self.point_labels = np.hstack([
-                self.point_labels,
-                0 if self._CTRLKEY else 1,
-            ])
-            self.call_update_drawing_fn()
+        elif self._drawing_mode == self.DrawingMode.Point:
+            if event == cv2.EVENT_LBUTTONDOWN:
+                self._in_drawing = True
+            elif event == cv2.EVENT_LBUTTONUP:
+                self._in_drawing = False
+                if not (
+                    (image_bounds[:, 0] <= self._mouse_pos).all()
+                    and (self._mouse_pos < image_bounds[:, 1]).all()
+                ):
+                    self.logger.warning("Drawn points outside image bounds, ignoring")
+                    return
+                self.points = np.vstack([self.points, self._mouse_pos])
+                self.point_labels = np.hstack([
+                    self.point_labels,
+                    0 if self._CTRLKEY else 1,
+                ])
+                self.call_update_drawing_fn()
 
     @staticmethod
     def _update_drawing_fn(
