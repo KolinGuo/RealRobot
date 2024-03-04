@@ -538,6 +538,7 @@ class CV2Visualizer:
                 self.point_labels = np.empty(0, dtype=int)
                 self.boxes = np.empty((0, 4), dtype=int)
                 self.box_labels = np.empty(0, dtype=int)
+                self.call_update_drawing_fn()
 
         cv2.displayOverlay(
             self.window_name, "Drawing ended. Press 'd' to go into drawing mode", 5000
