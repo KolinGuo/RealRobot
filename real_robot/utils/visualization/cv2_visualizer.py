@@ -404,8 +404,8 @@ class CV2Visualizer:
                 "hold 'Ctrl' to draw with negative label"
             )
 
-        def draw_image(image: np.ndarray, with_cursor=False) -> np.ndarray:
-            """Draw points and boxes on image
+        def draw_labels(image: np.ndarray, with_cursor=False) -> np.ndarray:
+            """Draw points/boxes labels on image
 
             :param image: RGB image to drawn onto
             :return image: drawn image in BGR format
@@ -467,7 +467,7 @@ class CV2Visualizer:
                 ):
                     self.images.insert(
                         self.selected_image_idx + 1,
-                        cv2.cvtColor(draw_image(self._image), cv2.COLOR_BGR2RGB),
+                        cv2.cvtColor(draw_labels(self._image), cv2.COLOR_BGR2RGB),
                     )
                 self.show_images(self.images)
                 break
@@ -507,7 +507,7 @@ class CV2Visualizer:
                 continue
 
             # Draw image
-            cv2.imshow(self.window_name, draw_image(self._image, with_cursor=True))
+            cv2.imshow(self.window_name, draw_labels(self._image, with_cursor=True))
 
             if key == ord("m"):  # change drawing mode
                 self._drawing_mode = (
@@ -547,6 +547,72 @@ class CV2Visualizer:
         else:
             return None
 
+    def on_mouse(self, event: int, x: int, y: int, flags: int, param: Any = None):
+        """
+        Callback function for mouse events.
+
+        :param event: one of the cv2.MouseEventTypes:
+                      [EVENT_MOUSEMOVE,
+                       EVENT_LBUTTONDOWN, EVENT_RBUTTONDOWN, EVENT_MBUTTONDOWN,
+                       EVENT_LBUTTONUP, EVENT_RBUTTONUP, EVENT_MBUTTONUP,
+                       EVENT_LBUTTONDBLCLK, EVENT_RBUTTONDBLCLK, EVENT_MBUTTONDBLCLK,
+                       EVENT_MOUSEWHEEL, EVENT_MOUSEHWHEEL]
+                      https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#ga927593befdddc7e7013602bca9b079b0
+        :param x: The x-coordinate of the mouse event.
+        :param y: The y-coordinate of the mouse event.
+        :param flags: one of the cv2.MouseEventFlags:
+                      [EVENT_FLAG_LBUTTON, EVENT_FLAG_RBUTTON, EVENT_FLAG_MBUTTON,
+                       EVENT_FLAG_CTRLKEY, EVENT_FLAG_SHIFTKEY, EVENT_FLAG_ALTKEY]
+                      https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#gaab4dc057947f70058c80626c9f1c25ce
+        :param param: The optional user data passed by cv2.setMouseCallback().
+        """
+        if self._done_drawing:
+            return
+
+        self._mouse_pos = (x, y)
+        self._CTRLKEY = flags & cv2.EVENT_FLAG_CTRLKEY
+
+        if self._image is None:  # No selected image
+            return
+
+        image_bounds = np.stack([[0, 0], self._image.shape[1::-1]]).T
+        if self._drawing_mode == self.DrawingMode.Box:
+            if event == cv2.EVENT_LBUTTONDOWN:
+                self._in_drawing = True
+                self.boxes = np.vstack([self.boxes, [x, y, x, y]])
+                self.box_labels = np.hstack([
+                    self.box_labels,
+                    0 if self._CTRLKEY else 1,
+                ])
+            elif event == cv2.EVENT_LBUTTONUP:
+                # Clip mouse position to be within image bounds
+                self._mouse_pos = (x1, y1) = tuple(  # type: ignore
+                    np.clip(self._mouse_pos, image_bounds[:, 0], image_bounds[:, 1] - 1)
+                )
+                self._in_drawing = False
+                # Enforce boxes to be XYXY coordinates
+                x0, y0 = self.boxes[-1, :2]
+                self.boxes[-1] = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+                self.call_update_drawing_fn()
+            elif event == cv2.EVENT_MOUSEMOVE and self._in_drawing:
+                self.boxes[-1, 2:] = self._mouse_pos
+        elif (
+            self._drawing_mode == self.DrawingMode.Point
+            and event == cv2.EVENT_LBUTTONUP
+        ):
+            if not (
+                (image_bounds[:, 0] <= self._mouse_pos).all()
+                and (self._mouse_pos < image_bounds[:, 1]).all()
+            ):
+                self.logger.warning("Drawn points outside image bounds, ignoring")
+                return
+            self.points = np.vstack([self.points, self._mouse_pos])
+            self.point_labels = np.hstack([
+                self.point_labels,
+                0 if self._CTRLKEY else 1,
+            ])
+            self.call_update_drawing_fn()
+
     @staticmethod
     def _update_drawing_fn(
         image: np.ndarray, drawn_labels: dict[str, np.ndarray], /
@@ -576,59 +642,6 @@ class CV2Visualizer:
             "boxes": self.boxes,
             "box_labels": self.box_labels,
         }
-
-    def on_mouse(self, event: int, x: int, y: int, flags: int, param: Any = None):
-        """
-        Callback function for mouse events.
-
-        :param event: one of the cv2.MouseEventTypes:
-                      [EVENT_MOUSEMOVE,
-                       EVENT_LBUTTONDOWN, EVENT_RBUTTONDOWN, EVENT_MBUTTONDOWN,
-                       EVENT_LBUTTONUP, EVENT_RBUTTONUP, EVENT_MBUTTONUP,
-                       EVENT_LBUTTONDBLCLK, EVENT_RBUTTONDBLCLK, EVENT_MBUTTONDBLCLK,
-                       EVENT_MOUSEWHEEL, EVENT_MOUSEHWHEEL]
-                      https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#ga927593befdddc7e7013602bca9b079b0
-        :param x: The x-coordinate of the mouse event.
-        :param y: The y-coordinate of the mouse event.
-        :param flags: one of the cv2.MouseEventFlags:
-                      [EVENT_FLAG_LBUTTON, EVENT_FLAG_RBUTTON, EVENT_FLAG_MBUTTON,
-                       EVENT_FLAG_CTRLKEY, EVENT_FLAG_SHIFTKEY, EVENT_FLAG_ALTKEY]
-                      https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#gaab4dc057947f70058c80626c9f1c25ce
-        :param param: The optional user data passed by cv2.setMouseCallback().
-        """
-        if self._done_drawing:
-            return
-
-        self._mouse_pos = (x, y)
-        self._CTRLKEY = flags & cv2.EVENT_FLAG_CTRLKEY
-
-        if self.selected_image_idx is None:
-            return
-
-        if self._drawing_mode == self.DrawingMode.Box:
-            if event == cv2.EVENT_LBUTTONDOWN:
-                self._in_drawing = True
-                self.boxes = np.vstack([self.boxes, [x, y, x, y]])
-                self.box_labels = np.hstack([
-                    self.box_labels,
-                    0 if self._CTRLKEY else 1,
-                ])
-            elif event == cv2.EVENT_LBUTTONUP:
-                self._in_drawing = False
-                self.boxes[-1, 2:] = self._mouse_pos
-                self.call_update_drawing_fn()
-            elif event == cv2.EVENT_MOUSEMOVE and self._in_drawing:
-                self.boxes[-1, 2:] = self._mouse_pos
-        elif (
-            self._drawing_mode == self.DrawingMode.Point
-            and event == cv2.EVENT_LBUTTONUP
-        ):
-            self.points = np.vstack([self.points, self._mouse_pos])
-            self.point_labels = np.hstack([
-                self.point_labels,
-                0 if self._CTRLKEY else 1,
-            ])
-            self.call_update_drawing_fn()
 
     def close(self):
         cv2.destroyWindow(self.window_name)
