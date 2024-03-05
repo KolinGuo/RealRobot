@@ -8,7 +8,7 @@ Runs camera capturing and visualization as separate processes to make it closer 
 ## Installation
 
 ```bash
-python3 -m pip install -U real_robot
+python3 -m pip install -U git+https://github.com/KolinGuo/RealRobot.git
 ```
 
 ---
