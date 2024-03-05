@@ -31,9 +31,9 @@ Usage Notes:
     >>> so.triggered  # check if triggered
   * Best practices when fetching np.ndarray (see `SharedObject._fetch_ndarray()`):
     >>> so.fetch(lambda x: x.sum())  # Apply operation only
-    >>> so.fetch(lambda x: x + 1)    # Apply operation only
+    >>> so.fetch(lambda x: x + 1)  # Apply operation only
     >>> so.fetch()  # If different operations need to be applied on the same data
-    >>> so.fetch()[..., 0]           # Slice only
+    >>> so.fetch()[..., 0]  # Slice only
     >>> so.fetch(lambda x: x[..., 0].copy()) + 1  # Slice and apply operation
 """
 
@@ -157,7 +157,7 @@ class SharedObject:
         data_shape = struct.unpack_from("Q" * data_ndim, buf, offset=18)
         return np_dtype_idx, data_ndim, data_shape
 
-    _fetch_fn_type = Callable[[Union[_object_types]], Any] | None
+    _fetch_fn_type = "Callable[[Union[_object_types]], Any] | None"
 
     @staticmethod
     def _fetch_None(buf, fn: Callable[[None.__class__], Any] | None, *args) -> Any:
@@ -270,7 +270,7 @@ class SharedObject:
 
     @staticmethod
     def _assign_bytes(buf, enc_data: bytes, buf_nbytes: int, *args):
-        struct.pack_into(f"{buf_nbytes-9}s", buf, 9, enc_data + b"\xff")
+        struct.pack_into(f"{buf_nbytes - 9}s", buf, 9, enc_data + b"\xff")
 
     @staticmethod
     def _assign_ndarray(buf, data: np.ndarray, buf_nbytes: int, data_buf: np.ndarray):
