@@ -28,7 +28,7 @@ from .gripper_utils import XArmGripper
 isMacOS = platform.system() == "Darwin"
 
 _o3d_geometry_type = (
-    o3d.geometry.Geometry3D | o3d.t.geometry.Geometry | rendering.TriangleMeshModel
+    "o3d.geometry.Geometry3D | o3d.t.geometry.Geometry | rendering.TriangleMeshModel"
 )
 
 
