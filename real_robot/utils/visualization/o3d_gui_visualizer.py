@@ -234,8 +234,10 @@ class Settings:
 
 @dataclass
 class GeometryNode:
-    """A geometry node in gui.TreeView() for easy parent-node lookup
+    """
+    A geometry node in gui.TreeView() for easy parent-node lookup.
     NOTE: geometry group node with no children is not allowed
+
     :ivar name: full geometry name containing all nested group names starting
                 from root, separated by '/'.
                 That is, name is unique based on its path from root node.
@@ -1366,7 +1368,9 @@ class O3DGUIVisualizer:
     def add_geometry(
         self, name: str, geometry: _o3d_geometry_type, show: bool = None
     ) -> bool:
-        """Add a geometry to scene and update the _geometries_tree
+        """
+        Add a geometry to scene and update the _geometries_tree.
+
         :param name: geometry name separated by '/', str.
                      Group names are nested starting from root.
                      Geometry and geometry group with same names can coexist.
@@ -1506,7 +1510,9 @@ class O3DGUIVisualizer:
         self._remove_geometry_node(self.root_geometry_node)
 
     def remove_geometry(self, name: str):
-        """Remove a geometry from scene and update the _geometries_tree
+        """
+        Remove a geometry from scene and update the _geometries_tree.
+
         :param name: geometry or geometry group name separated by '/', str.
                      Group names are nested starting from root.
                      Geometry and geometry group with same names can coexist.

@@ -39,7 +39,8 @@ class XArmGripper:
         self.gripper_width = 0.086
 
     def get_control_points(self, q=0.0, pose=np.eye(4), symmetric=False) -> np.ndarray:
-        """Return the 5 control points of gripper representation
+        """
+        Return the 5 control points of gripper representation.
         Control point order indices are shown below (symmetric=True is in parentheses)
                   * 0 (0)
                   |            y <---*

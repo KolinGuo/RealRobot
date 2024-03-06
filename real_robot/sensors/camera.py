@@ -238,8 +238,10 @@ class Camera:
             return (pose_CV_ROS * self.pose.inv()).to_transformation_matrix()
 
     def get_model_matrix(self, pose: Pose = None) -> np.ndarray:
-        """Returns a 4x4 camera model matrix in OpenCV format
-        right(x), down(y), forward(z)
+        """
+        Returns a 4x4 camera model matrix in OpenCV format
+            right(x), down(y), forward(z)
+
         Note: this impl is different from sapien where the format is
               right(x), up(y), back(z)
         """

@@ -175,9 +175,8 @@ class Visualizer:
         """Render observations
 
         :param obs_dict: dict, {so_data_name: obs_data}
-                         See CV2Visualizer.__init__.__doc__ and
-                             O3DGUIVisualizer.__init__.__doc__
-                         for acceptable so_data_name
+            See CV2Visualizer.__init__.__doc__ and O3DGUIVisualizer.__init__.__doc__
+            for acceptable so_data_name
         """
         if self.run_as_process:
             self._show_obs_async(obs_dict)

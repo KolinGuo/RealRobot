@@ -21,7 +21,6 @@ _default_file_handler = None
 
 
 class ColorFormatter(logging.Formatter):
-
     grey = "\x1b[37m"
     cyan = "\x1b[36m"
     green = "\x1b[32m"
@@ -75,14 +74,16 @@ def get_logger(
     log_level=logging.INFO,
     log_file_level=logging.NOTSET,
 ) -> logging.Logger:
-    """Initialize a logger by name and add to registry.
+    """
+    Initialize a logger by name and add to registry.
     By default, it will add a FileHandler to
-        _log_dir / "master.log" for main process
-        _log_dir / "<proc_name>_<proc_pid>.log" for child processes
+
+    * _log_dir / "master.log" for main process
+    * _log_dir / "<proc_name>_<proc_pid>.log" for child processes
 
     If logger is in _registry, that logger is directly returned
     If logger is a child of a logger in _registry, its kwargs are ignored and
-        will use its parent's kwargs
+    will use its parent's kwargs
 
     :param name: Logger name. If not specified, get the root logger
     :param fmt: stream logging format, default is logger._format

@@ -330,8 +330,9 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         pass
 
     def initialize_episode(self):
-        """Initialize the episode, e.g., poses of actors and articulations,
-            and robot configuration.
+        """
+        Initialize the episode, e.g., poses of actors and articulations,
+        and robot configuration.
         No new assets are created.
         Task-relevant information can be initialized here, like goals.
         Left empty for real_robot
@@ -565,13 +566,13 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
     # Visualization
     # ---------------------------------------------------------------------- #
     def render(self, obs_dict: dict[str, Union[SharedObject._object_types]] = {}):
-        """Render observations by updating previously rendered obs with obs_dict.
+        """
+        Render observations by updating previously rendered obs with obs_dict.
         Previous obs will be cached until reset.
 
         :param obs_dict: dict, {so_data_name: obs_data}
-                         See CV2Visualizer.__init__.__doc__ and
-                             O3DGUIVisualizer.__init__.__doc__
-                         for acceptable so_data_name
+            See CV2Visualizer.__init__.__doc__ and O3DGUIVisualizer.__init__.__doc__
+            for acceptable so_data_name
         """
         self.visualizer.show_obs(obs_dict)
         self.visualizer.render()

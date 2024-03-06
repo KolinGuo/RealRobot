@@ -113,9 +113,9 @@ def sample_pcd_from_mesh(
     :param mesh: an Open3D TriangleMesh or rendering.TriangleMeshModel.
     :param number_of_points: number of points to sample.
     :param method: "uniform" or "poisson_disk".
-                   uniform: sample uniformly (faster).
-                   poisson_disk: sample such that each point has approximately the same
-                                 distance to the neighbouring points (slower).
+        * uniform: sample uniformly (faster).
+        * poisson_disk: sample such that each point has approximately the same
+        distance to the neighbouring points (slower).
     :param use_triangle_normal: If True, assigns the triangle normals instead of
                                 the interpolated vertex normals to the returned points.
                                 The triangle normals will be computed and added to

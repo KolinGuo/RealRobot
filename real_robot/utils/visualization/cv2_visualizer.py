@@ -168,9 +168,10 @@ class CV2Visualizer:
 
     def show_images(self, images: list[np.ndarray]):
         """Show the list of images, support non-equal size (cv2.rerize to max size)
+
         :param images: List of np.ndarray images. Supports depth or RGB color images.
-                       If depth image, dtype can be np.uint16 or np.floating
-                       If RGB image, dtype must be np.uint8
+            If depth image, dtype can be np.uint16 or np.floating
+            If RGB image, dtype must be np.uint8
         """
         if (n_image := len(images)) == 0:
             return
@@ -563,18 +564,18 @@ class CV2Visualizer:
         Callback function for mouse events.
 
         :param event: one of the cv2.MouseEventTypes:
-                      [EVENT_MOUSEMOVE,
-                       EVENT_LBUTTONDOWN, EVENT_RBUTTONDOWN, EVENT_MBUTTONDOWN,
-                       EVENT_LBUTTONUP, EVENT_RBUTTONUP, EVENT_MBUTTONUP,
-                       EVENT_LBUTTONDBLCLK, EVENT_RBUTTONDBLCLK, EVENT_MBUTTONDBLCLK,
-                       EVENT_MOUSEWHEEL, EVENT_MOUSEHWHEEL]
-                      https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#ga927593befdddc7e7013602bca9b079b0
+            [EVENT_MOUSEMOVE,
+            EVENT_LBUTTONDOWN, EVENT_RBUTTONDOWN, EVENT_MBUTTONDOWN,
+            EVENT_LBUTTONUP, EVENT_RBUTTONUP, EVENT_MBUTTONUP,
+            EVENT_LBUTTONDBLCLK, EVENT_RBUTTONDBLCLK, EVENT_MBUTTONDBLCLK,
+            EVENT_MOUSEWHEEL, EVENT_MOUSEHWHEEL]
+            https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#ga927593befdddc7e7013602bca9b079b0
         :param x: The x-coordinate of the mouse event.
         :param y: The y-coordinate of the mouse event.
         :param flags: one of the cv2.MouseEventFlags:
-                      [EVENT_FLAG_LBUTTON, EVENT_FLAG_RBUTTON, EVENT_FLAG_MBUTTON,
-                       EVENT_FLAG_CTRLKEY, EVENT_FLAG_SHIFTKEY, EVENT_FLAG_ALTKEY]
-                      https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#gaab4dc057947f70058c80626c9f1c25ce
+            [EVENT_FLAG_LBUTTON, EVENT_FLAG_RBUTTON, EVENT_FLAG_MBUTTON,
+            EVENT_FLAG_CTRLKEY, EVENT_FLAG_SHIFTKEY, EVENT_FLAG_ALTKEY]
+            https://docs.opencv.org/4.9.0/d0/d90/group__highgui__window__flags.html#gaab4dc057947f70058c80626c9f1c25ce
         :param param: The optional user data passed by cv2.setMouseCallback().
         """
         if self._done_drawing:

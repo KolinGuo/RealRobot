@@ -233,7 +233,8 @@ class XArm7:
         elif self._control_mode == "ee_delta_pose_quat":
             # TODO: Apply axangle_scale?
             delta_tcp_pose = Pose(
-                p=action[:3] * translation_scale, q=action[3:7]  # in milimeters
+                p=action[:3] * translation_scale,
+                q=action[3:7],  # in milimeters
             )
             tgt_tcp_pose = cur_tcp_pose * delta_tcp_pose
         else:
@@ -408,6 +409,7 @@ class XArm7:
         wait=False,
     ):
         """Set xarm qpos using maniskill2 qpos
+
         :param qpos: joint qpos (angles for arm joints, gripper_qpos for gripper)
                      See self.joint_limits_ms2
         :param speed: move speed.

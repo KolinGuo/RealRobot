@@ -101,20 +101,25 @@ class WriterLock:
 
 
 class SharedObject:
-    """Shared object implemented with SharedMemory and synchronization
+    """
+    Shared object implemented with SharedMemory and synchronization.
     SharedMemory reallocation, casting object_type, changing numpy metas are not allowed
     Use SharedDynamicObject instead
 
     The shared memory buffer is organized as follows:
+
     - 8 bytes: object modified timestamp in ns (since the epoch), stored as 'Q'
     - 1 byte: object data type index, stored as 'B'
-    - X bytes: data area
-      For NoneType, data area is ignored
-      For bool, 1 byte data
-      For int / float, 8 bytes data
-      For sapien.Pose, 7*4 = 28 bytes data ([xyz, wxyz], float32)
-      For str / bytes, (N + 1) bytes data, N is str / bytes length, 1 is for termination
-      For np.ndarray,
+    - X bytes: data area.
+
+      For `NoneType`, data area is ignored.
+      For `bool`, 1 byte data.
+      For `int` / `float`, 8 bytes data.
+      For `sapien.Pose`, 7*4 = 28 bytes data ([xyz, wxyz], float32).
+      For `str` / `bytes`, (N + 1) bytes data, N is str / bytes length,
+      1 is for termination.
+      For `np.ndarray`,
+
       - 1 byte: array dtype index, stored as 'B'
       - 8 bytes: array ndim, stored as 'Q'
       - (K * 8) bytes: array shape for each dimension, stored as 'Q'
@@ -437,15 +442,16 @@ class SharedObject:
         return modified
 
     def fetch(self, fn: _fetch_fn_type = None) -> Any:
-        """Fetch a copy of data from SharedMemory (protected by readers lock)
+        """
+        Fetch a copy of data from SharedMemory (protected by readers lock)
         See SharedObject._fetch_ndarray() for best practices of fn with np.ndarray
 
         :param fn: function to apply on data, e.g., lambda x: x + 1.
-                   If fn is None or does not trigger a copy for ndarray
-                     (e.g., slicing, masking), a manual copy is applied.
-                   Thus, the best practices are ordered as:
-                   fn (triggers a copy) > fn = None >> fn (does not trigger a copy)
-                     because copying non-contiguous ndarray takes much longer time.
+            If fn is None or does not trigger a copy for ndarray
+            (e.g., slicing, masking), a manual copy is applied.
+            Thus, the best practices are ordered as:
+            fn (triggers a copy) > fn = None >> fn (does not trigger a copy)
+            because copying non-contiguous ndarray takes much longer time.
         :return data: a copy of data read from SharedMemory
         """
         self._readers_lock.acquire()
@@ -527,11 +533,13 @@ class SharedObject:
 
 
 class SharedDynamicObject(SharedObject):
-    """Shared object implemented with SharedMemory and synchronization
+    """
+    Shared object implemented with SharedMemory and synchronization
     Allow reallocating SharedMemory.
-        Need more checks and thus is slower than SharedObject.
-        In fact, this should never be implemented.
-        For size-variable np.ndarray, just implement similar support as str/bytes
+
+    Need more checks and thus is slower than SharedObject.
+    In fact, this should never be implemented.
+    For size-variable np.ndarray, just implement similar support as str/bytes
     """
 
     @staticmethod

@@ -32,10 +32,11 @@ def check_rs_product_support(name: str) -> None:
 def get_connected_rs_devices(
     device_sn: str | list[str] | None = None,
 ) -> list[str] | rs.device | list[rs.device]:
-    """Returns list of connected RealSense devices
+    """Returns list of connected RealSense devices.
+
     :param device_sn: list of serial numbers of devices to get.
-                      If not None, only return those devices in matching order.
-                      Else, return all connected devices' serial number
+        If not None, only return those devices in matching order.
+        Else, return all connected devices' serial number
     :return devices: list of rs.device if device_sn is not None:
                      list of connected devices' serial number if device_sn is None
     """
@@ -66,12 +67,13 @@ def get_connected_rs_devices(
 
 
 class RSDevice:
-    """RealSense Device
+    """
+    RealSense Device.
     Depth stream will be aligned to camera color frame and resolution
-        if Color stream is enabled.
+    if Color stream is enabled.
 
     For best depth accuracy with D435,
-        set preset="High Accuracy" and use (848, 480) depth resolution
+    set preset="High Accuracy" and use (848, 480) depth resolution
 
     References:
     * https://dev.intelrealsense.com/docs/d400-series-visual-presets
@@ -383,7 +385,7 @@ class RSDevice:
         streams = self.pipeline_profile.get_streams()
         self.logger.info(f"Started device {self!r} with {len(streams)} streams")
         for i, stream in enumerate(streams):
-            self.logger.info(f"Stream {i+1}: {stream}")
+            self.logger.info(f"Stream {i + 1}: {stream}")
 
         # Stores camera intrinsics
         frames = self.pipeline.wait_for_frames()
@@ -403,12 +405,14 @@ class RSDevice:
         return True
 
     def wait_for_frames(self) -> dict[str, np.ndarray]:
-        """Wait until a new set of frames becomes available.
+        """
+        Wait until a new set of frames becomes available.
         Each enabled stream in the pipeline is time-synchronized.
+
         :return ret_frames: dictionary {stream_name: np.ndarray}. Supported examples:
-                            "Color": color image, [H, W, 3] np.uint8 array
-                            "Depth": depth image, [H, W] np.uint16 array
-                            "Infrared 1/2": infrared image, [H, W] np.uint8 array
+            * "Color": color image, [H, W, 3] np.uint8 array
+            * "Depth": depth image, [H, W] np.uint16 array
+            * "Infrared 1/2": infrared image, [H, W] np.uint8 array
         """
         if not self.is_running:
             self.logger.error(f"Device {self!r} is not started")
@@ -578,9 +582,10 @@ class RSDevice:
         return extr
 
     def print_device_info(self) -> None:
-        """Print device information (similar to running `rs-enumerate-devices -c`)
+        """
+        Print device information (similar to running `rs-enumerate-devices -c`).
         This includes:
-            supported_configs, all_intrinsics, all_extrinsics
+        supported_configs, all_intrinsics, all_extrinsics
 
         Only prints information with self._default_stream_formats
         """
@@ -625,14 +630,14 @@ class RSDevice:
 
             stream_profiles += (
                 f"Stream Profiles supported by {stream_name=}\n"
-                f"{tab}stream{' '*n_space_after_stream}resolution"
+                f"{tab}stream{' ' * n_space_after_stream}resolution"
                 "      fps       format\n"
             )
             if isinstance(params[0], tuple):  # video streams, params: [(w, h, fps),]
                 stream_profiles += "\n".join([
                     f"{tab}{stream_name}{tab} {width}x{height}"
-                    f"{' '*(len('resolution')-2-len(str(width))-len(str(height)))}"
-                    f"     @ {fps}Hz{' '*(7-len(str(fps)))}{format}"
+                    f"{' ' * (len('resolution') - 2 - len(str(width)) - len(str(height)))}"
+                    f"     @ {fps}Hz{' ' * (7 - len(str(fps)))}{format}"
                     for (width, height, fps) in params
                 ])
             else:  # motion streams, params: [fps,]

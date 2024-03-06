@@ -125,18 +125,16 @@ def make(env_id, as_gym=True, enable_segmentation=False, **kwargs):
 def register_env(uid: str, max_episode_steps=None, override=False, **kwargs):
     """A decorator to register real_robot environments.
 
-    Args:
-        uid (str): unique id of the environment.
-        max_episode_steps (int): maximum number of steps in an episode.
-        override (bool): whether to override the environment
-                         if it is already registered.
+    :param uid: unique id of the environment.
+    :param max_episode_steps: maximum number of steps in an episode.
+    :param override: whether to override the environment if it is already registered.
 
     Notes:
-        - `max_episode_steps` is processed differently
-              from other keyword arguments in gym.
-          `gym.make` wraps the env with `gym.wrappers.TimeLimit`
-              to limit the maximum number of steps.
-        - `gym.EnvSpec` uses kwargs instead of **kwargs!
+
+    - `max_episode_steps` is processed differently from other keyword arguments in gym.
+        `gym.make` wraps the env with `gym.wrappers.TimeLimit`
+        to limit the maximum number of steps.
+    - `gym.EnvSpec` uses kwargs instead of **kwargs!
     """
 
     def _register_env(cls):
