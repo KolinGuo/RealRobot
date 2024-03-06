@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 import cv2
 import numpy as np
 from sapien import Pose
@@ -29,11 +31,19 @@ pose_ROS_GL = pose_GL_ROS.inv()
 T_ROS_GL = pose_ROS_GL.to_transformation_matrix()
 
 
-def depth2xyz(depth_image, intrinsics, depth_scale=1000.0) -> np.ndarray:
+def depth2xyz(
+    depth_image: np.ndarray,
+    intrinsics: np.ndarray,
+    depth_scale: Optional[int | float] = None,
+) -> np.ndarray:
     """Use camera intrinsics to convert depth_image to xyz_image
-    :param depth_image: [H, W] or [H, W, 1] np.uint16 np.ndarray
-    :param intrinsics: [3, 3] camera intrinsics matrix
-    :return xyz_image: [H, W, 3] np.float64 np.ndarray
+
+    :param depth_image: [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
+        For np.uint16, depth_scale is assumed to be 1000 (in millimeters).
+        For np.floating, depth_scale is assumed to be 1 (in meters).
+    :param intrinsics: [3, 3] camera intrinsics matrix or [fx, fy, cx, cy]
+    :param depth_scale: depth scale units, in meters. If None, choose based on dtype.
+    :return xyz_image: [H, W, 3] np.floating np.ndarray
     """
     if intrinsics.size == 4:
         fx, fy, cx, cy = intrinsics
@@ -49,6 +59,14 @@ def depth2xyz(depth_image, intrinsics, depth_scale=1000.0) -> np.ndarray:
 
     height, width = depth_image.shape[:2]
     uu, vv = np.meshgrid(np.arange(width), np.arange(height))
+
+    if depth_scale is None:
+        if np.issubdtype(depth_image.dtype, np.uint16):
+            depth_scale = 1000.0
+        elif np.issubdtype(depth_image.dtype, np.floating):
+            depth_scale = 1.0
+        else:
+            raise TypeError(f"Unsupported depth image dtype: {depth_image.dtype}")
 
     z = depth_image / depth_scale
     x = (uu - cx) * z / fx
