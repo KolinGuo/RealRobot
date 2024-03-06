@@ -149,7 +149,7 @@ def convert_mesh_format(mesh_path: str | Path, export_suffix=".glb") -> str:
     except ImportError as e:
         get_logger("real_robot").critical("Failed to import trimesh: %s", e)
 
-    mesh_format = Path(mesh_path).suffix[1:]
+    mesh_format = Path(mesh_path).suffix[1:].lower()
     assert (
         mesh_format in trimesh.exchange.load.mesh_formats()  # type: ignore
     ), f"mesh format {mesh_path} not supported"
@@ -164,6 +164,10 @@ def convert_mesh_format(mesh_path: str | Path, export_suffix=".glb") -> str:
     return file_path
 
 
+O3D_PCD_FORMATS = ("xyz", "xyzn", "xyzrgb", "pts", "ply", "pcd")
+O3D_MESH_FORMATS = ("ply", "stl", "obj", "off", "gltf", "glb")
+
+
 def load_geometry(
     path: str | Path, *, logger=get_logger("real_robot")
 ) -> rendering.TriangleMeshModel | o3d.geometry.PointCloud | None:
@@ -172,7 +176,9 @@ def load_geometry(
     :param path: path to a geometry file supported by open3d.
                  https://www.open3d.org/docs/release/tutorial/geometry/file_io.html
     """
-    if Path(path).suffix not in [".ply", ".stl", ".obj", ".off", ".gltf", ".glb"]:
+    if (mesh_format := Path(path).suffix[1:].lower()) in O3D_PCD_FORMATS:
+        pass
+    elif mesh_format not in O3D_MESH_FORMATS:
         path = convert_mesh_format(path, export_suffix=".glb")
 
     geometry_type = o3d.io.read_file_geometry_type(str(path))
