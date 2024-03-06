@@ -31,12 +31,24 @@ jobs:
           name: wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: dist/*
 
+  trigger-build-doc:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ReadTheDocs build
+        uses: dfm/rtds-action@v1
+        with:
+          webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
+          webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
+          commit_ref: ${{ github.ref }}
+
   nightly-release:
-    if: startsWith(github.ref, 'refs/heads/')  # if a commit is pushed
+    if: startsWith(github.ref, 'refs/heads/') # if a commit is pushed
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # create nightly release
+      contents: write # create nightly release
     steps:
       - name: Download wheel artifacts
         uses: actions/download-artifact@v4
@@ -51,17 +63,18 @@ jobs:
           tag_name: nightly
           name: 'Nightly Release'
           prerelease: true
-          body: 'RealRobot development nightly release. This release is mainly for internal testing. Stable releases are published to pypi https://pypi.org/p/real-robot/'
+          body: 'RealRobot development nightly release. This release is mainly for
+            internal testing. Stable releases are published to pypi https://pypi.org/p/real-robot/'
           files: |
             dist/*
 
   publish-pypi:
-    if: startsWith(github.ref, 'refs/tags/v')  # if a tag is pushed
+    if: startsWith(github.ref, 'refs/tags/v') # if a tag is pushed
     needs: build
     runs-on: ubuntu-latest
     environment: pypi_publish
     permissions:
-      id-token: write  # mandatory for PyPI trusted publishing
+      id-token: write # mandatory for PyPI trusted publishing
     steps:
       - name: Download wheel artifacts
         uses: actions/download-artifact@v4
