@@ -6,7 +6,7 @@ build:
     python: "3.10"
   jobs:
     post_install:
-      - python docs/get_wheel_artifact.py KolinGuo/RealRobot --py cp310
+      - python docs/get_wheel_artifact.py KolinGuo/RealRobot --py latest
       - pip install wheelhouse/real_robot*.whl
 
 python:
