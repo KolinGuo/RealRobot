@@ -1,0 +1,4 @@
+myst-parser
+furo
+sphinx-copybutton
+sphinxext-opengraph
