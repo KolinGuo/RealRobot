@@ -50,7 +50,8 @@ class O3DGeometryDefaultDict(dict):
                 min_bound=[-1e-3] * 3, max_bound=[1e-3] * 3
             )
         else:
-            raise ValueError(f"Unknown {name=}")
+            raise ValueError("data_uid must end with '_pcd', '_frame', or '_bbox' and "
+                             f"be non-empty before underscore but {name} is given.")
         return geometry
 
 
@@ -335,49 +336,53 @@ class O3DGUIVisualizer:
             * "reset_vis": If triggered, call self.clear_geometries().
             * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
             * "sync_xarm7_<robot_uid>": If triggered, fetch joint states from robot.
-            Corresponding data have the same prefix (implemented as sorting)
-            * Data unique to O3DGUIVisualizer have prefix "viso3d_<data_uid>_"
-            * Data shared with CV2Visualizer have prefix "vis_<data_uid>_"
-            * RSDevice camera feeds have prefix "rs_<device_uid>_"
+          Corresponding data have the same format (implemented as sorting)
+            * Data unique to O3DGUIVisualizer have format "viso3d_<data_uid>_<data_format>"
+            * Data shared with CV2Visualizer have format "vis_<data_uid>_<data_format>"
+            * RSDevice camera feeds have format "rs_<device_uid>_<data_format>"
               * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
               * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
               * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
               * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
                                         forward(x), left(y) and up(z), sapien.Pose
-            * xArm7 state feeds have prefix "xarm7_<robot_uid>_"
+            * xArm7 state feeds have format "xarm7_<robot_uid>_<data_format>"
               * "xarm7_<robot_uid>_urdf_path": xArm7 URDF path, str
               * "xarm7_<robot_uid>_qpos": xArm7 joint angles, [8,] np.float32 np.ndarray
             Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
               <device_uid>, <robot_uid>, and <data_uid> must not be the same
-          Acceptable <data_uid> suffixes with its acceptable data member suffixes:
-            (data members in brackets are optional)
-          * "_camera": PointCloud capture: ("_depth", "_intr", ["_color", "_pose"])
-                       For rs camera stream, "_pose" is in ROS convention
-                       For camera capture, "_pose" is in OpenCV convention
-          * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
-                                ("_xyzimg", ["_color", "_pose"])
-          * "*": Robot mesh: ("_urdf_path", "_qpos")
-          * "_frame": Coordinate frame: ("_pose",)
-          * "_bbox": bounding box pts: ("_bounds", ["_pose"])
-          * "*": Robot gripper mesh / lineset: ("_gposes", "_gscores", "_gqvals")
-                 E.g., "viso3d_CGN_grasps|obj1_gposes"
-                 Also mounts "robot_gripper_urdf_path" to load gripper URDF.
+          Acceptable <data_uid> suffixes with their acceptable <data_formats>:
+            (data formats in brackets are optional, for example, pcd_color is optional but
+            but without it the pcd_pts data will be displayed with the same color)
+            * "_camera": PointCloud capture: ("_depth", "_intr", ["_color", "_pose"])
+                        For rs camera stream, "_pose" is in ROS convention
+                        For camera capture, "_pose" is in OpenCV convention
+            * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
+                                    ("_xyzimg", ["_color", "_pose"])
+            * "*": Robot mesh: ("_urdf_path", "_qpos")
+            * "_frame": Coordinate frame: ("_pose",)
+            * "_bbox": bounding box pts: ("_bounds", ["_pose"])
+            * "*": Robot gripper mesh / lineset: ("_gposes", "_gscores", "_gqvals")
+                    E.g., "viso3d_CGN_grasps|obj1_gposes"
+                    Also mounts "robot_gripper_urdf_path" to load gripper URDF.
+            * for example "pts_pcd, pts_color"
 
-          Acceptable visualization SharedObject data formats:
-          * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
-                      or pts color, [N, 3] np.uint8 np.ndarray
-          * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
-          * "_intr": camera intrinsic matrix, [3, 3] np.floating np.ndarray
-          * "_pose": object / camera pose, sapien.Pose
-          * "_xyzimg": xyz image, [H, W, 3] np.floating np.ndarray
-          * "_pts": points, [N, 3] np.floating np.ndarray
-          * "_urdf_path": robot URDF path, str
-          * "_qpos": robot qpos, [ndof,] np.float32 np.ndarray
-          * "_bounds": AxisAlignedBoundingBox bounds, (xyz_min, xyz_max),
-                       [2, 3] np.floating np.ndarray
-          * "_gposes": Gripper poses in world frame, [N, 4, 4] np.floating np.ndarray
-          * "_gscores": Gripper pose confidence scores, [N,] np.floating np.ndarray
-          * "_gqvals": Gripper joint values, [N,] np.floating np.ndarray
+          Acceptable visualization SharedObject <data_format>:
+            * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
+                        or pts color, [N, 3] np.uint8 np.ndarray
+            * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
+            * "_intr": camera intrinsic matrix, [3, 3] np.floating np.ndarray
+            * "_pose": object / camera pose, sapien.Pose
+            * "_xyzimg": xyz image, [H, W, 3] np.floating np.ndarray
+            * "_pts": points, [N, 3] np.floating np.ndarray
+            * "_urdf_path": robot URDF path, str
+            * "_qpos": robot qpos, [ndof,] np.float32 np.ndarray
+            * "_bounds": AxisAlignedBoundingBox bounds, (xyz_min, xyz_max),
+                        [2, 3] np.floating np.ndarray
+            * "_gposes": Gripper poses in world frame, [N, 4, 4] np.floating np.ndarray
+            * "_gscores": Gripper pose confidence scores, [N,] np.floating np.ndarray
+            * "_gqvals": Gripper joint values, [N,] np.floating np.ndarray
+
+          Examples for some complete names: "viso3d_1_pcd_pts", "vis_front_camera_depth",
         :param stream_camera: whether to redraw camera stream when a new frame arrives
         :param stream_robot: whether to update robot mesh when a new robot state arrives
         """
@@ -1795,21 +1800,30 @@ class O3DGUIVisualizer:
             if so_draw.triggered:  # triggers redraw
                 redraw_geometry_uids = set()
 
+                valid_prefixes = ("rs_", "vis_", "viso3d_")
+                valid_suffixes = (
+                    "_color",
+                    "_depth",
+                    "_pose",
+                    "_xyzimg",
+                    "_pts",
+                    "_qpos",
+                    "_bounds",
+                    "_gposes",
+                )
+
                 so_data_names = [
                     p
                     for p in all_so_names
-                    if p.startswith(("rs_", "vis_", "viso3d_"))
-                    and p.endswith((
-                        "_color",
-                        "_depth",
-                        "_pose",
-                        "_xyzimg",
-                        "_pts",
-                        "_qpos",
-                        "_bounds",
-                        "_gposes",
-                    ))
+                    if p.startswith(valid_prefixes)
+                    and p.endswith(valid_suffixes)
                 ]
+
+                if len(so_data_names) == 0:
+                    self.logger.warning("No valid data names found at /dev/shm. Must "
+                                        f"have prefix in {valid_prefixes} and "
+                                        f"suffix in {valid_suffixes}")
+
                 for so_data_name in so_data_names:
                     data_source, data_uid = so_data_name.split("_", 1)
                     data_uid, data_fmt = data_uid.replace("|", "/").rsplit("_", 1)
