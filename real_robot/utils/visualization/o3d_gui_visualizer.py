@@ -1371,7 +1371,8 @@ class O3DGUIVisualizer:
             self.add_geometry(geometry_name, geometry)
 
     def add_geometry(
-        self, name: str, geometry: _o3d_geometry_type, show: bool = None
+        self, name: str, geometry: _o3d_geometry_type, show: bool = None,
+        reset_camera: bool = False
     ) -> bool:
         """
         Add a geometry to scene and update the _geometries_tree.
@@ -1381,6 +1382,7 @@ class O3DGUIVisualizer:
                      Geometry and geometry group with same names can coexist.
         :param geometry: Open3D geometry
         :param show: whether to show geometry after loading
+        :reset_camera: whether to reset camera view to fit all geometries
         :return success: whether geometry is successfully added
         """
         name = name.split("/")
@@ -1438,13 +1440,14 @@ class O3DGUIVisualizer:
             return False
 
         if name not in self.geometries:  # adding new geometry
-            # Update camera pose
-            bounds = self._scene.scene.bounding_box
-            self._scene.setup_camera(60, bounds, bounds.get_center())
-            # Store the new camera pose as default
-            self.update_camera_pose(
-                "default", self._scene.scene.camera.get_model_matrix()
-            )
+            # Update camera pose if it's the first draw or reset_camera is True
+            if reset_camera or len(self.geometries) == 0:
+                bounds = self._scene.scene.bounding_box
+                self._scene.setup_camera(60, bounds, bounds.get_center())
+                # Store the new camera pose as default
+                self.update_camera_pose(
+                    "default", self._scene.scene.camera.get_model_matrix()
+                )
 
             # Update GUI
             # Add geometry group to _geometries_tree
@@ -1475,15 +1478,27 @@ class O3DGUIVisualizer:
         )
         return True
 
+    def hide_all_geometries(self):
+        """Hide all geometries"""
+        for node in self.geometries.values():
+            self._scene.scene.show_geometry(node.name, False)
+            node.cell.checkbox.checked = False
+
     def add_geometries(
-        self, geometry_dict: dict[str, _o3d_geometry_type], show: bool = None
+        self, geometry_dict: dict[str, _o3d_geometry_type], show: bool = None,
+        hide_others: bool = True, reset_camera: bool = False
     ):
         """Add multiple geometries (allow for computing update fps)
         :param geometry_dict: dictionary with format {name: Open3D geometry}
         :param show: whether to show geometry after loading
+        :param hide_others: whether to hide all other geometries (only display new ones)
+        :param reset_camera: whether to reset camera view to fit all geometries
         """
+        if hide_others:
+            self.hide_all_geometries()
+
         for name, geometry in geometry_dict.items():
-            self.add_geometry(name, geometry, show)
+            self.add_geometry(name, geometry, show, reset_camera)
 
         # Compute fps
         cur_timestamp_ns = time.time_ns()
