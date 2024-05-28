@@ -256,6 +256,7 @@ class GeometryNode:
     id: int = -1
     parent: "GeometryNode" = None
     children: list["GeometryNode"] = field(default_factory=list)
+    content: _o3d_geometry_type = None
     cell: gui.Widget = None
     # Material settings values
     mat_changed: bool = False
@@ -1246,16 +1247,25 @@ class O3DGUIVisualizer:
             and event.type == event.Type.BUTTON_DOWN
         ):  # CTRL + LEFT Down
 
-            def depth_callback(depth_image: o3d.geometry.Image):
+            def depth_callback(depth_image: o3d.geometry.Image, fuzzy_select_radius: int=5):
                 # Coordinates are expressed in absolute coordinates of the
                 # window, but to dereference the image correctly we need them
                 # relative to the origin of the widget. Note that even if the
                 # scene widget is the only thing in the window, if a menubar
                 # exists it also takes up space in the window (except on macOS)
+                # fuzzy_select_radius: radius of the fuzzy selection in pixels
                 x = event.x - self._scene.frame.x
                 y = event.y - self._scene.frame.y
+
+                # take the min depth values around the clicked point
                 # Note that np.asarray() reverses the axes.
-                depth = np.asarray(depth_image)[y, x]
+                np_depth_image = np.asarray(depth_image)
+                depth = 1.0
+                for dx in range(-fuzzy_select_radius, fuzzy_select_radius+1):
+                    for dy in range(-fuzzy_select_radius, fuzzy_select_radius+1):
+                        if 0 <= x + dx < np_depth_image.shape[1] and 0 <= y + dy < np_depth_image.shape[0]:
+                            continue
+                        depth = min(depth, np_depth_image[y + dy, x + dx])
 
                 if depth == 1.0:  # clicked on nothing (i.e. the far plane)
                     text = ""
@@ -1265,6 +1275,11 @@ class O3DGUIVisualizer:
                         x, y, depth, self._scene.frame.width, self._scene.frame.height
                     ).flatten()
                     text = "({:.3f}, {:.3f}, {:.3f})".format(*world_xyz)
+                    # get the geometry name of the selected point
+                    geom_name = self.find_geometry_with_point(world_xyz)
+                    if geom_name is not None:
+                        text = f"{geom_name}: {text}"
+
                     self.picked_pts = [world_xyz]
 
                 # This is not called on the main thread, so we need to
@@ -1455,7 +1470,7 @@ class O3DGUIVisualizer:
                 parent_node = self._create_geometry_node(group_name, parent_node)
                 self.geometry_groups[group_name] = parent_node
             # Add geometry to _geometries_tree
-            node = self._create_geometry_node(name, parent_node)
+            node = self._create_geometry_node(name, parent_node, geometry)
             if unlit_line_geometry:
                 node.mat_shader_index = 2  # Settings.UNLIT_LINE
             self.geometries[name] = node
@@ -1507,10 +1522,10 @@ class O3DGUIVisualizer:
         self._fps_label.text = f"FPS: {fps:6.2f}"
 
     def _create_geometry_node(
-        self, name: str, parent_node: GeometryNode | None = None
+        self, name: str, parent_node: GeometryNode | None = None, content: _o3d_geometry_type = None
     ) -> GeometryNode:
         """Create a GeometryNode and update GUI"""
-        child_node = GeometryNode(name, parent=parent_node)
+        child_node = GeometryNode(name, parent=parent_node, content=content)
         parent_id = self._geometry_tree.get_root_item()
         if parent_node is not None:
             parent_node.children.append(child_node)
@@ -1607,6 +1622,14 @@ class O3DGUIVisualizer:
         assert name in self.camera_poses, f"Camera {name=} does not exist"
         self._camera_list.selected_text = name
         self._on_camera_list(name, list(self.camera_poses.keys()).index(name))
+
+    def find_geometry_with_point(self, point):
+        for name, geometry in self.geometries.items():
+            if geometry.content and isinstance(geometry.content, o3d.geometry.Geometry3D):
+                bbox = geometry.content.get_axis_aligned_bounding_box()
+                result = bbox.get_point_indices_within_bounding_box(o3d.utility.Vector3dVector([point]))
+                if len(result):  # point is within the bounding box
+                    return name
 
     @staticmethod
     def get_camera_lineset(
