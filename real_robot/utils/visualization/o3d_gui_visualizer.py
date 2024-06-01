@@ -1264,8 +1264,7 @@ class O3DGUIVisualizer:
                 for dx in range(-fuzzy_select_radius, fuzzy_select_radius+1):
                     for dy in range(-fuzzy_select_radius, fuzzy_select_radius+1):
                         if 0 <= x + dx < np_depth_image.shape[1] and 0 <= y + dy < np_depth_image.shape[0]:
-                            continue
-                        depth = min(depth, np_depth_image[y + dy, x + dx])
+                            depth = min(depth, np_depth_image[y + dy, x + dx])
 
                 if depth == 1.0:  # clicked on nothing (i.e. the far plane)
                     text = ""
