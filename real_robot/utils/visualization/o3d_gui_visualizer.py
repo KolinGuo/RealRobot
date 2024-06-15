@@ -1484,10 +1484,8 @@ class O3DGUIVisualizer:
         return True
 
     def hide_all_geometries(self):
-        """Hide all geometries"""
-        for node in self.geometries.values():
-            self._scene.scene.show_geometry(node.name, False)
-            node.cell.checkbox.checked = False
+        """Hide all geometries by toggling root_geometry_node off"""
+        self._on_geometry_toggle(False, self.root_geometry_node)
 
     def add_geometries(
         self,
