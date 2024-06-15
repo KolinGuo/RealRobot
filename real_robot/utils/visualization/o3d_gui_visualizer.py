@@ -246,6 +246,7 @@ class GeometryNode:
     :ivar id: item id in gui.TreeView
     :ivar parent: parent GeometryNode instance.
     :ivar children: list of children GeometryNode instances.
+    :ivar geometry_data: the visualized geometry data of _o3d_geometry_type
     :ivar cell: gui.Widget for changing checkbox
     :ivar mat_shader_index: _shader item index
     :ivar mat_prefab_text: _material_prefab item text
@@ -257,7 +258,7 @@ class GeometryNode:
     id: int = -1
     parent: "GeometryNode" = None
     children: list["GeometryNode"] = field(default_factory=list)
-    content: _o3d_geometry_type = None
+    geometry_data: _o3d_geometry_type = None
     cell: gui.Widget = None
     # Material settings values
     mat_changed: bool = False
@@ -1516,10 +1517,10 @@ class O3DGUIVisualizer:
         self,
         name: str,
         parent_node: GeometryNode | None = None,
-        content: _o3d_geometry_type = None,
+        geometry_data: _o3d_geometry_type = None,
     ) -> GeometryNode:
         """Create a GeometryNode and update GUI"""
-        child_node = GeometryNode(name, parent=parent_node, content=content)
+        child_node = GeometryNode(name, parent=parent_node, geometry_data=geometry_data)
         parent_id = self._geometry_tree.get_root_item()
         if parent_node is not None:
             parent_node.children.append(child_node)
@@ -1623,10 +1624,10 @@ class O3DGUIVisualizer:
         (Only support o3d.geometry.Geometry3D for now)
         """
         for name, geometry in self.geometries.items():
-            if geometry.content and isinstance(
-                geometry.content, o3d.geometry.Geometry3D
+            if geometry.geometry_data and isinstance(
+                geometry.geometry_data, o3d.geometry.Geometry3D
             ):
-                bbox = geometry.content.get_axis_aligned_bounding_box()
+                bbox = geometry.geometry_data.get_axis_aligned_bounding_box()
                 result = bbox.get_point_indices_within_bounding_box(
                     o3d.utility.Vector3dVector([point])
                 )
