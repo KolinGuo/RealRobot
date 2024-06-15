@@ -246,7 +246,7 @@ class CV2Visualizer:
 
         def get_so_data_names(all_so_names: list[str]) -> list[str]:
             """Get so_data_names acceptable by CV2Visualizer"""
-            return [
+            valid_names = [
                 p
                 for p in all_so_names
                 if p.startswith(("rs_", "vis_", "viscv2_"))
@@ -258,6 +258,13 @@ class CV2Visualizer:
                     "_mask",
                 ))
             ]
+            if len(valid_names) == 0:
+                self.logger.warning(
+                    "No valid shm data names found under /dev/shm. The shm file names "
+                    "must have prefix in ['rs_', 'vis_', 'viscv2_'] and "
+                    "suffix in ['_color', '_depth', '_mask']"
+                )
+            return valid_names
 
         rs_so_name_suffix = ("_color", "_depth", "_infrared_1", "_infrared_2")
 

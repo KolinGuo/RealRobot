@@ -50,7 +50,8 @@ class O3DGeometryDefaultDict(dict):
                 min_bound=[-1e-3] * 3, max_bound=[1e-3] * 3
             )
         else:
-            raise ValueError(f"Unknown {name=}")
+            raise ValueError("data_uid must end with '_pcd', '_frame', or '_bbox' and "
+                             f"be non-empty before underscore but {name} is given.")
         return geometry
 
 
@@ -255,6 +256,7 @@ class GeometryNode:
     id: int = -1
     parent: "GeometryNode" = None
     children: list["GeometryNode"] = field(default_factory=list)
+    content: _o3d_geometry_type = None
     cell: gui.Widget = None
     # Material settings values
     mat_changed: bool = False
@@ -335,49 +337,53 @@ class O3DGUIVisualizer:
             * "reset_vis": If triggered, call self.clear_geometries().
             * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
             * "sync_xarm7_<robot_uid>": If triggered, fetch joint states from robot.
-            Corresponding data have the same prefix (implemented as sorting)
-            * Data unique to O3DGUIVisualizer have prefix "viso3d_<data_uid>_"
-            * Data shared with CV2Visualizer have prefix "vis_<data_uid>_"
-            * RSDevice camera feeds have prefix "rs_<device_uid>_"
+          Corresponding data have the same format (implemented as sorting)
+            * Data unique to O3DGUIVisualizer have format "viso3d_<data_uid>_<data_format>"
+            * Data shared with CV2Visualizer have format "vis_<data_uid>_<data_format>"
+            * RSDevice camera feeds have format "rs_<device_uid>_<data_format>"
               * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
               * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
               * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
               * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
                                         forward(x), left(y) and up(z), sapien.Pose
-            * xArm7 state feeds have prefix "xarm7_<robot_uid>_"
+            * xArm7 state feeds have format "xarm7_<robot_uid>_<data_format>"
               * "xarm7_<robot_uid>_urdf_path": xArm7 URDF path, str
               * "xarm7_<robot_uid>_qpos": xArm7 joint angles, [8,] np.float32 np.ndarray
             Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
               <device_uid>, <robot_uid>, and <data_uid> must not be the same
-          Acceptable <data_uid> suffixes with its acceptable data member suffixes:
-            (data members in brackets are optional)
-          * "_camera": PointCloud capture: ("_depth", "_intr", ["_color", "_pose"])
-                       For rs camera stream, "_pose" is in ROS convention
-                       For camera capture, "_pose" is in OpenCV convention
-          * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
-                                ("_xyzimg", ["_color", "_pose"])
-          * "*": Robot mesh: ("_urdf_path", "_qpos")
-          * "_frame": Coordinate frame: ("_pose",)
-          * "_bbox": bounding box pts: ("_bounds", ["_pose"])
-          * "*": Robot gripper mesh / lineset: ("_gposes", "_gscores", "_gqvals")
-                 E.g., "viso3d_CGN_grasps|obj1_gposes"
-                 Also mounts "robot_gripper_urdf_path" to load gripper URDF.
+          Acceptable <data_uid> suffixes with their acceptable <data_formats>:
+            (data formats in brackets are optional, for example, pcd_color is optional but
+            but without it the pcd_pts data will be displayed with the same color)
+            * "_camera": PointCloud capture: ("_depth", "_intr", ["_color", "_pose"])
+                        For rs camera stream, "_pose" is in ROS convention
+                        For camera capture, "_pose" is in OpenCV convention
+            * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
+                                    ("_xyzimg", ["_color", "_pose"])
+            * "*": Robot mesh: ("_urdf_path", "_qpos")
+            * "_frame": Coordinate frame: ("_pose",)
+            * "_bbox": bounding box pts: ("_bounds", ["_pose"])
+            * "*": Robot gripper mesh / lineset: ("_gposes", "_gscores", "_gqvals")
+                    E.g., "viso3d_CGN_grasps|obj1_gposes"
+                    Also mounts "robot_gripper_urdf_path" to load gripper URDF.
+            * for example "pts_pcd, pts_color"
 
-          Acceptable visualization SharedObject data formats:
-          * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
-                      or pts color, [N, 3] np.uint8 np.ndarray
-          * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
-          * "_intr": camera intrinsic matrix, [3, 3] np.floating np.ndarray
-          * "_pose": object / camera pose, sapien.Pose
-          * "_xyzimg": xyz image, [H, W, 3] np.floating np.ndarray
-          * "_pts": points, [N, 3] np.floating np.ndarray
-          * "_urdf_path": robot URDF path, str
-          * "_qpos": robot qpos, [ndof,] np.float32 np.ndarray
-          * "_bounds": AxisAlignedBoundingBox bounds, (xyz_min, xyz_max),
-                       [2, 3] np.floating np.ndarray
-          * "_gposes": Gripper poses in world frame, [N, 4, 4] np.floating np.ndarray
-          * "_gscores": Gripper pose confidence scores, [N,] np.floating np.ndarray
-          * "_gqvals": Gripper joint values, [N,] np.floating np.ndarray
+          Acceptable visualization SharedObject <data_format>:
+            * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
+                        or pts color, [N, 3] np.uint8 np.ndarray
+            * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
+            * "_intr": camera intrinsic matrix, [3, 3] np.floating np.ndarray
+            * "_pose": object / camera pose, sapien.Pose
+            * "_xyzimg": xyz image, [H, W, 3] np.floating np.ndarray
+            * "_pts": points, [N, 3] np.floating np.ndarray
+            * "_urdf_path": robot URDF path, str
+            * "_qpos": robot qpos, [ndof,] np.float32 np.ndarray
+            * "_bounds": AxisAlignedBoundingBox bounds, (xyz_min, xyz_max),
+                        [2, 3] np.floating np.ndarray
+            * "_gposes": Gripper poses in world frame, [N, 4, 4] np.floating np.ndarray
+            * "_gscores": Gripper pose confidence scores, [N,] np.floating np.ndarray
+            * "_gqvals": Gripper joint values, [N,] np.floating np.ndarray
+
+          Examples for some complete names: "viso3d_1_pcd_pts", "vis_front_camera_depth",
         :param stream_camera: whether to redraw camera stream when a new frame arrives
         :param stream_robot: whether to update robot mesh when a new robot state arrives
         """
@@ -1241,16 +1247,24 @@ class O3DGUIVisualizer:
             and event.type == event.Type.BUTTON_DOWN
         ):  # CTRL + LEFT Down
 
-            def depth_callback(depth_image: o3d.geometry.Image):
+            def depth_callback(depth_image: o3d.geometry.Image, fuzzy_select_radius: int=5):
                 # Coordinates are expressed in absolute coordinates of the
                 # window, but to dereference the image correctly we need them
                 # relative to the origin of the widget. Note that even if the
                 # scene widget is the only thing in the window, if a menubar
                 # exists it also takes up space in the window (except on macOS)
+                # fuzzy_select_radius: radius of the fuzzy selection in pixels
                 x = event.x - self._scene.frame.x
                 y = event.y - self._scene.frame.y
+
+                # take the min depth values around the clicked point
                 # Note that np.asarray() reverses the axes.
-                depth = np.asarray(depth_image)[y, x]
+                np_depth_image = np.asarray(depth_image)
+                depth = 1.0
+                for dx in range(-fuzzy_select_radius, fuzzy_select_radius+1):
+                    for dy in range(-fuzzy_select_radius, fuzzy_select_radius+1):
+                        if 0 <= x + dx < np_depth_image.shape[1] and 0 <= y + dy < np_depth_image.shape[0]:
+                            depth = min(depth, np_depth_image[y + dy, x + dx])
 
                 if depth == 1.0:  # clicked on nothing (i.e. the far plane)
                     text = ""
@@ -1260,6 +1274,11 @@ class O3DGUIVisualizer:
                         x, y, depth, self._scene.frame.width, self._scene.frame.height
                     ).flatten()
                     text = "({:.3f}, {:.3f}, {:.3f})".format(*world_xyz)
+                    # get the geometry name of the selected point
+                    geom_name = self.find_geometry_with_point(world_xyz)
+                    if geom_name is not None:
+                        text = f"{geom_name}: {text}"
+
                     self.picked_pts = [world_xyz]
 
                 # This is not called on the main thread, so we need to
@@ -1366,7 +1385,8 @@ class O3DGUIVisualizer:
             self.add_geometry(geometry_name, geometry)
 
     def add_geometry(
-        self, name: str, geometry: _o3d_geometry_type, show: bool = None
+        self, name: str, geometry: _o3d_geometry_type, show: bool = None,
+        reset_camera: bool = False
     ) -> bool:
         """
         Add a geometry to scene and update the _geometries_tree.
@@ -1376,6 +1396,7 @@ class O3DGUIVisualizer:
                      Geometry and geometry group with same names can coexist.
         :param geometry: Open3D geometry
         :param show: whether to show geometry after loading
+        :reset_camera: whether to reset camera view to fit all geometries
         :return success: whether geometry is successfully added
         """
         name = name.split("/")
@@ -1433,13 +1454,14 @@ class O3DGUIVisualizer:
             return False
 
         if name not in self.geometries:  # adding new geometry
-            # Update camera pose
-            bounds = self._scene.scene.bounding_box
-            self._scene.setup_camera(60, bounds, bounds.get_center())
-            # Store the new camera pose as default
-            self.update_camera_pose(
-                "default", self._scene.scene.camera.get_model_matrix()
-            )
+            # Update camera pose if it's the first draw or reset_camera is True
+            if reset_camera or len(self.geometries) == 0:
+                bounds = self._scene.scene.bounding_box
+                self._scene.setup_camera(60, bounds, bounds.get_center())
+                # Store the new camera pose as default
+                self.update_camera_pose(
+                    "default", self._scene.scene.camera.get_model_matrix()
+                )
 
             # Update GUI
             # Add geometry group to _geometries_tree
@@ -1447,7 +1469,7 @@ class O3DGUIVisualizer:
                 parent_node = self._create_geometry_node(group_name, parent_node)
                 self.geometry_groups[group_name] = parent_node
             # Add geometry to _geometries_tree
-            node = self._create_geometry_node(name, parent_node)
+            node = self._create_geometry_node(name, parent_node, geometry)
             if unlit_line_geometry:
                 node.mat_shader_index = 2  # Settings.UNLIT_LINE
             self.geometries[name] = node
@@ -1470,15 +1492,27 @@ class O3DGUIVisualizer:
         )
         return True
 
+    def hide_all_geometries(self):
+        """Hide all geometries"""
+        for node in self.geometries.values():
+            self._scene.scene.show_geometry(node.name, False)
+            node.cell.checkbox.checked = False
+
     def add_geometries(
-        self, geometry_dict: dict[str, _o3d_geometry_type], show: bool = None
+        self, geometry_dict: dict[str, _o3d_geometry_type], show: bool = None,
+        hide_others: bool = True, reset_camera: bool = False
     ):
         """Add multiple geometries (allow for computing update fps)
         :param geometry_dict: dictionary with format {name: Open3D geometry}
         :param show: whether to show geometry after loading
+        :param hide_others: whether to hide all other geometries (only display new ones)
+        :param reset_camera: whether to reset camera view to fit all geometries
         """
+        if hide_others:
+            self.hide_all_geometries()
+
         for name, geometry in geometry_dict.items():
-            self.add_geometry(name, geometry, show)
+            self.add_geometry(name, geometry, show, reset_camera)
 
         # Compute fps
         cur_timestamp_ns = time.time_ns()
@@ -1487,10 +1521,10 @@ class O3DGUIVisualizer:
         self._fps_label.text = f"FPS: {fps:6.2f}"
 
     def _create_geometry_node(
-        self, name: str, parent_node: GeometryNode | None = None
+        self, name: str, parent_node: GeometryNode | None = None, content: _o3d_geometry_type = None
     ) -> GeometryNode:
         """Create a GeometryNode and update GUI"""
-        child_node = GeometryNode(name, parent=parent_node)
+        child_node = GeometryNode(name, parent=parent_node, content=content)
         parent_id = self._geometry_tree.get_root_item()
         if parent_node is not None:
             parent_node.children.append(child_node)
@@ -1587,6 +1621,14 @@ class O3DGUIVisualizer:
         assert name in self.camera_poses, f"Camera {name=} does not exist"
         self._camera_list.selected_text = name
         self._on_camera_list(name, list(self.camera_poses.keys()).index(name))
+
+    def find_geometry_with_point(self, point):
+        for name, geometry in self.geometries.items():
+            if geometry.content and isinstance(geometry.content, o3d.geometry.Geometry3D):
+                bbox = geometry.content.get_axis_aligned_bounding_box()
+                result = bbox.get_point_indices_within_bounding_box(o3d.utility.Vector3dVector([point]))
+                if len(result):  # point is within the bounding box
+                    return name
 
     @staticmethod
     def get_camera_lineset(
@@ -1795,21 +1837,30 @@ class O3DGUIVisualizer:
             if so_draw.triggered:  # triggers redraw
                 redraw_geometry_uids = set()
 
+                valid_prefixes = ("rs_", "vis_", "viso3d_")
+                valid_suffixes = (
+                    "_color",
+                    "_depth",
+                    "_pose",
+                    "_xyzimg",
+                    "_pts",
+                    "_qpos",
+                    "_bounds",
+                    "_gposes",
+                )
+
                 so_data_names = [
                     p
                     for p in all_so_names
-                    if p.startswith(("rs_", "vis_", "viso3d_"))
-                    and p.endswith((
-                        "_color",
-                        "_depth",
-                        "_pose",
-                        "_xyzimg",
-                        "_pts",
-                        "_qpos",
-                        "_bounds",
-                        "_gposes",
-                    ))
+                    if p.startswith(valid_prefixes)
+                    and p.endswith(valid_suffixes)
                 ]
+
+                if len(so_data_names) == 0:
+                    self.logger.warning("No valid data names found at /dev/shm. Must "
+                                        f"have prefix in {valid_prefixes} and "
+                                        f"suffix in {valid_suffixes}")
+
                 for so_data_name in so_data_names:
                     data_source, data_uid = so_data_name.split("_", 1)
                     data_uid, data_fmt = data_uid.replace("|", "/").rsplit("_", 1)
