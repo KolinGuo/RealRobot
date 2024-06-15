@@ -260,7 +260,7 @@ class CV2Visualizer:
             ]
             if len(valid_names) == 0:
                 self.logger.warning(
-                    "No valid shm data names found under /dev/shm. The shm file names "
+                    "No valid shm data names found under /dev/shm. The shm filenames "
                     "must have prefix in ['rs_', 'vis_', 'viscv2_'] and "
                     "suffix in ['_color', '_depth', '_mask']"
                 )

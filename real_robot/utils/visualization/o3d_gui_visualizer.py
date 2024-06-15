@@ -50,8 +50,9 @@ class O3DGeometryDefaultDict(dict):
                 min_bound=[-1e-3] * 3, max_bound=[1e-3] * 3
             )
         else:
-            raise ValueError("data_uid must end with '_pcd', '_frame', or '_bbox' and "
-                             f"be non-empty before underscore but {name} is given.")
+            raise ValueError(
+                f"<data_uid> must end with '_pcd', '_frame', or '_bbox', but got {name}"
+            )
         return geometry
 
 
@@ -337,7 +338,7 @@ class O3DGUIVisualizer:
             * "reset_vis": If triggered, call self.clear_geometries().
             * "sync_rs_<device_uid>": If triggered, capture from RSDevice.
             * "sync_xarm7_<robot_uid>": If triggered, fetch joint states from robot.
-          Corresponding data have the same format (implemented as sorting)
+          Corresponding data have the same type (implemented as sorting)
             * Data unique to O3DGUIVisualizer have format "viso3d_<data_uid>_<data_format>"
             * Data shared with CV2Visualizer have format "vis_<data_uid>_<data_format>"
             * RSDevice camera feeds have format "rs_<device_uid>_<data_format>"
@@ -349,23 +350,23 @@ class O3DGUIVisualizer:
             * xArm7 state feeds have format "xarm7_<robot_uid>_<data_format>"
               * "xarm7_<robot_uid>_urdf_path": xArm7 URDF path, str
               * "xarm7_<robot_uid>_qpos": xArm7 joint angles, [8,] np.float32 np.ndarray
-            Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
-              <device_uid>, <robot_uid>, and <data_uid> must not be the same
-          Acceptable <data_uid> suffixes with their acceptable <data_formats>:
-            (data formats in brackets are optional, for example, pcd_color is optional but
+          Grouping can be specified with '|' in <data_uid> (e.g., "front_camera|cube")
+            <device_uid>, <robot_uid>, and <data_uid> must not be the same
+          Acceptable <data_uid> suffixes with their acceptable <data_format>:
+            (data types in brackets are optional, for example, pcd_color is optional but
             but without it the pcd_pts data will be displayed with the same color)
             * "_camera": PointCloud capture: ("_depth", "_intr", ["_color", "_pose"])
-                        For rs camera stream, "_pose" is in ROS convention
-                        For camera capture, "_pose" is in OpenCV convention
+                         For rs camera stream, "_pose" is in ROS convention
+                         For camera capture, "_pose" is in OpenCV convention
             * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
-                                    ("_xyzimg", ["_color", "_pose"])
+                                  ("_xyzimg", ["_color", "_pose"])
             * "*": Robot mesh: ("_urdf_path", "_qpos")
             * "_frame": Coordinate frame: ("_pose",)
             * "_bbox": bounding box pts: ("_bounds", ["_pose"])
             * "*": Robot gripper mesh / lineset: ("_gposes", "_gscores", "_gqvals")
-                    E.g., "viso3d_CGN_grasps|obj1_gposes"
-                    Also mounts "robot_gripper_urdf_path" to load gripper URDF.
-            * for example "pts_pcd, pts_color"
+                   E.g., "viso3d_CGN_grasps|obj1_gposes"
+                   Also mounts "robot_gripper_urdf_path" to load gripper URDF.
+            Example data names: "viso3d_cube_pcd_pts", "viso3d_cube_pcd_color".
 
           Acceptable visualization SharedObject <data_format>:
             * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
@@ -1247,7 +1248,9 @@ class O3DGUIVisualizer:
             and event.type == event.Type.BUTTON_DOWN
         ):  # CTRL + LEFT Down
 
-            def depth_callback(depth_image: o3d.geometry.Image, fuzzy_select_radius: int=5):
+            def depth_callback(
+                depth_image: o3d.geometry.Image, fuzzy_select_radius: int = 5
+            ):
                 # Coordinates are expressed in absolute coordinates of the
                 # window, but to dereference the image correctly we need them
                 # relative to the origin of the widget. Note that even if the
@@ -1261,9 +1264,12 @@ class O3DGUIVisualizer:
                 # Note that np.asarray() reverses the axes.
                 np_depth_image = np.asarray(depth_image)
                 depth = 1.0
-                for dx in range(-fuzzy_select_radius, fuzzy_select_radius+1):
-                    for dy in range(-fuzzy_select_radius, fuzzy_select_radius+1):
-                        if 0 <= x + dx < np_depth_image.shape[1] and 0 <= y + dy < np_depth_image.shape[0]:
+                for dx in range(-fuzzy_select_radius, fuzzy_select_radius + 1):
+                    for dy in range(-fuzzy_select_radius, fuzzy_select_radius + 1):
+                        if (
+                            0 <= x + dx < np_depth_image.shape[1]
+                            and 0 <= y + dy < np_depth_image.shape[0]
+                        ):
                             depth = min(depth, np_depth_image[y + dy, x + dx])
 
                 if depth == 1.0:  # clicked on nothing (i.e. the far plane)
@@ -1385,8 +1391,11 @@ class O3DGUIVisualizer:
             self.add_geometry(geometry_name, geometry)
 
     def add_geometry(
-        self, name: str, geometry: _o3d_geometry_type, show: bool = None,
-        reset_camera: bool = False
+        self,
+        name: str,
+        geometry: _o3d_geometry_type,
+        show: bool = None,
+        reset_camera: bool = False,
     ) -> bool:
         """
         Add a geometry to scene and update the _geometries_tree.
@@ -1499,8 +1508,11 @@ class O3DGUIVisualizer:
             node.cell.checkbox.checked = False
 
     def add_geometries(
-        self, geometry_dict: dict[str, _o3d_geometry_type], show: bool = None,
-        hide_others: bool = True, reset_camera: bool = False
+        self,
+        geometry_dict: dict[str, _o3d_geometry_type],
+        show: bool = None,
+        hide_others: bool = True,
+        reset_camera: bool = False,
     ):
         """Add multiple geometries (allow for computing update fps)
         :param geometry_dict: dictionary with format {name: Open3D geometry}
@@ -1521,7 +1533,10 @@ class O3DGUIVisualizer:
         self._fps_label.text = f"FPS: {fps:6.2f}"
 
     def _create_geometry_node(
-        self, name: str, parent_node: GeometryNode | None = None, content: _o3d_geometry_type = None
+        self,
+        name: str,
+        parent_node: GeometryNode | None = None,
+        content: _o3d_geometry_type = None,
     ) -> GeometryNode:
         """Create a GeometryNode and update GUI"""
         child_node = GeometryNode(name, parent=parent_node, content=content)
@@ -1623,10 +1638,18 @@ class O3DGUIVisualizer:
         self._on_camera_list(name, list(self.camera_poses.keys()).index(name))
 
     def find_geometry_with_point(self, point):
+        """
+        Find the name of the geometry that contains the query point
+        (Only support o3d.geometry.Geometry3D for now)
+        """
         for name, geometry in self.geometries.items():
-            if geometry.content and isinstance(geometry.content, o3d.geometry.Geometry3D):
+            if geometry.content and isinstance(
+                geometry.content, o3d.geometry.Geometry3D
+            ):
                 bbox = geometry.content.get_axis_aligned_bounding_box()
-                result = bbox.get_point_indices_within_bounding_box(o3d.utility.Vector3dVector([point]))
+                result = bbox.get_point_indices_within_bounding_box(
+                    o3d.utility.Vector3dVector([point])
+                )
                 if len(result):  # point is within the bounding box
                     return name
 
@@ -1841,25 +1864,30 @@ class O3DGUIVisualizer:
                 valid_suffixes = (
                     "_color",
                     "_depth",
+                    "_intr",
                     "_pose",
                     "_xyzimg",
                     "_pts",
+                    "_urdf_path",
                     "_qpos",
                     "_bounds",
                     "_gposes",
+                    "_gscores",
+                    "_gqvals",
                 )
 
                 so_data_names = [
                     p
                     for p in all_so_names
-                    if p.startswith(valid_prefixes)
-                    and p.endswith(valid_suffixes)
+                    if p.startswith(valid_prefixes) and p.endswith(valid_suffixes)
                 ]
 
                 if len(so_data_names) == 0:
-                    self.logger.warning("No valid data names found at /dev/shm. Must "
-                                        f"have prefix in {valid_prefixes} and "
-                                        f"suffix in {valid_suffixes}")
+                    self.logger.warning(
+                        "No valid shm data names found under /dev/shm. "  # noqa: G004
+                        f"The shm filenames must have prefix in {valid_prefixes} and "
+                        f"suffix in {valid_suffixes}"
+                    )
 
                 for so_data_name in so_data_names:
                     data_source, data_uid = so_data_name.split("_", 1)
