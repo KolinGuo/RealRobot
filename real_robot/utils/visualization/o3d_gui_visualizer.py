@@ -1248,29 +1248,16 @@ class O3DGUIVisualizer:
             and event.type == event.Type.BUTTON_DOWN
         ):  # CTRL + LEFT Down
 
-            def depth_callback(
-                depth_image: o3d.geometry.Image, fuzzy_select_radius: int = 5
-            ):
+            def depth_callback(depth_image: o3d.geometry.Image):
                 # Coordinates are expressed in absolute coordinates of the
                 # window, but to dereference the image correctly we need them
                 # relative to the origin of the widget. Note that even if the
                 # scene widget is the only thing in the window, if a menubar
                 # exists it also takes up space in the window (except on macOS)
-                # fuzzy_select_radius: radius of the fuzzy selection in pixels
                 x = event.x - self._scene.frame.x
                 y = event.y - self._scene.frame.y
-
-                # take the min depth values around the clicked point
                 # Note that np.asarray() reverses the axes.
-                np_depth_image = np.asarray(depth_image)
-                depth = 1.0
-                for dx in range(-fuzzy_select_radius, fuzzy_select_radius + 1):
-                    for dy in range(-fuzzy_select_radius, fuzzy_select_radius + 1):
-                        if (
-                            0 <= x + dx < np_depth_image.shape[1]
-                            and 0 <= y + dy < np_depth_image.shape[0]
-                        ):
-                            depth = min(depth, np_depth_image[y + dy, x + dx])
+                depth = np.asarray(depth_image)[y, x]
 
                 if depth == 1.0:  # clicked on nothing (i.e. the far plane)
                     text = ""
@@ -1280,11 +1267,6 @@ class O3DGUIVisualizer:
                         x, y, depth, self._scene.frame.width, self._scene.frame.height
                     ).flatten()
                     text = "({:.3f}, {:.3f}, {:.3f})".format(*world_xyz)
-                    # get the geometry name of the selected point
-                    geom_name = self.find_geometry_with_point(world_xyz)
-                    if geom_name is not None:
-                        text = f"{geom_name}: {text}"
-
                     self.picked_pts = [world_xyz]
 
                 # This is not called on the main thread, so we need to
