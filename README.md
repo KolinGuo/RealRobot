@@ -7,8 +7,14 @@ Runs camera capturing and visualization as separate processes to make it closer 
 
 ## Installation
 
+From PyPI
 ```bash
-python3 -m pip install -U git+https://github.com/KolinGuo/RealRobot.git
+python3 -m pip install -U real-robot
+```
+
+If you need to install the optional `xarm` dependency, you must install from GitHub repo
+```bash
+python3 -m pip install -U real-robot[xarm]@git+https://github.com/KolinGuo/RealRobot.git
 ```
 
 ---
