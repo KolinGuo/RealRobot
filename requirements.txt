@@ -1,2 +1,2 @@
 git+https://github.com/xArm-Developer/xArm-Python-SDK
-pyrealsense2
+pyrealsense2==2.54.2.5684

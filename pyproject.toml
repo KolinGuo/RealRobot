@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "real_robot"
 dynamic = ["version"]
 dependencies = [
-  "pyrealsense2",
+  "pyrealsense2==2.54.2.5684",
   "numpy<2.0",
   "gymnasium",
   "transforms3d",
