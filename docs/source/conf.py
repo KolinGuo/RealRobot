@@ -5,11 +5,20 @@
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+import os
+import re
 
 project = "real_robot"
 author = "Kolin Guo"
 copyright = f"2023-2024, {author}. All rights reserved."
-release = "0.1.0rc2"
+git_describe_ret = os.popen("git describe --abbrev=8 --tags --match v*").read().strip()
+if "-" in git_describe_ret:  # commit after a tag
+    release = "+git.".join(
+        re.findall("^v(.*)-[0-9]+-g(.*)", git_describe_ret)[0]
+    )  # tag-commithash
+else:
+    release = git_describe_ret[1:]
+version = release
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
