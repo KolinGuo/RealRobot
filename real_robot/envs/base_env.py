@@ -9,7 +9,6 @@ from typing import Any, Sequence, SupportsFloat, Union
 import gymnasium as gym
 import numpy as np
 import pyrealsense2 as rs
-from mani_skill2.envs.sapien_env import BaseEnv as MS2BaseEnv
 
 from ..agents import XArm7
 from ..sensors.camera import (
@@ -94,7 +93,13 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         """
         super().__init__(*args, **kwargs)
 
-        self._is_ms2_env = isinstance(self, MS2BaseEnv)
+        self._is_ms2_env = False
+        try:
+            from mani_skill2.envs.sapien_env import BaseEnv as MS2BaseEnv
+
+            self._is_ms2_env = isinstance(self, MS2BaseEnv)
+        except ModuleNotFoundError as e:
+            print(f"\x1b[1;33mWARNING: failted to import mani_skill2 {e}\x1b[0m")
 
         # Check if self._engine exists.
         # If exists, needs to wrap initialization call with
