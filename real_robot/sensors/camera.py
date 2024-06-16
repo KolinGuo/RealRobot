@@ -5,12 +5,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pyrealsense2 as rs
 from gymnasium import spaces
 from sapien import Pose
 
 from ..utils.camera import pose_CV_ROS, pose_ROS_CV
 from ..utils.multiprocessing import SharedObject, ctx, start_and_wait_for_process
-from ..utils.realsense import RSDevice
+from ..utils.realsense import (
+    RSDevice,
+    get_connected_rs_devices,
+    get_default_stream_config,
+)
 
 CALIB_CAMERA_POSE_DIR = Path(__file__).resolve().parents[1] / "assets/hec_camera_poses"
 CALIB_CAMERA_POSES = {
@@ -31,18 +36,14 @@ class CameraConfig:
         uid: str,
         device_sn: str | None = None,
         pose: Pose = pose_CV_ROS,
-        config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]] = (
-            848,
-            480,
-            30,
-        ),
+        config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]] | None = None,  # noqa: E501
         *,
         preset: str = "Default",
         color_option_kwargs={},
         depth_option_kwargs={},
         json_file: str | Path | None = None,
         parent_pose_so_name: str | None = None,
-    ):
+    ):  # fmt: skip
         """Camera configuration.
 
         :param uid: unique id of the camera
@@ -54,6 +55,7 @@ class CameraConfig:
                      parent link.
         :param config: camera stream config, can be a tuple of (width, height, fps)
                        or a dict with format {stream_type: (param1, param2, ...)}.
+                       If config is None, use default config realsense.get_default_config().
                        If config is a tuple, enables color & depth streams with config.
                        If config is a dict, enables streams given stream parameters.
                        Possible stream parameters format:
@@ -69,7 +71,7 @@ class CameraConfig:
         :param parent_pose_so_name: SharedObject name of camera's parent link pose
                                     in world frame. Defaults to None (camera has no
                                     mounting parent link).
-        """
+        """  # noqa: E501
         self.uid = uid
         self.device_sn = device_sn
         self.pose = pose
@@ -140,10 +142,21 @@ class Camera:
         self.uid = camera_cfg.uid
         self.device_sn = camera_cfg.device_sn
         self.local_pose = camera_cfg.pose
+
+        device = get_connected_rs_devices(
+            self.device_sn
+            if self.device_sn is not None
+            else get_connected_rs_devices()[0]
+        )
+        self.product_type = device.get_info(rs.camera_info.name).split()[-1]
+
         self.config = camera_cfg.config
         if isinstance(self.config, tuple):
             self.config = {"Color": self.config, "Depth": self.config}
+        elif self.config is None:
+            self.config = get_default_stream_config(self.product_type)
         self.config = dict(sorted(self.config.items()))  # sort config by stream_name
+
         self.parent_pose_so_name = camera_cfg.parent_pose_so_name
 
         self.record_bag_path = record_bag_path
@@ -202,6 +215,8 @@ class Camera:
             if obs_key == "depth":
                 self._camera_buffer["depth"] = (
                     so_data.fetch(lambda d: d[..., None].astype(np.float32)) / 1000.0
+                    if self.product_type != "L515"
+                    else 4000.0
                 )
             else:
                 self._camera_buffer[obs_key] = so_data.fetch()

@@ -345,6 +345,7 @@ class O3DGUIVisualizer:
             * RSDevice camera feeds have format "rs_<device_uid>_<data_format>"
               * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
               * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
+              * "rs_<device_uid>_depth_scale": depth image scale used by depth2xyz, float
               * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
               * "rs_<device_uid>_pose": camera pose in world frame (ROS convention)
                                         forward(x), left(y) and up(z), sapien.Pose
@@ -356,7 +357,7 @@ class O3DGUIVisualizer:
           Acceptable <data_uid> suffixes with their acceptable <data_format>:
             (data types in brackets are optional, for example, pcd_color is optional but
             but without it the pcd_pts data will be displayed with the same color)
-            * "_camera": PointCloud capture: ("_depth", "_intr", ["_color", "_pose"])
+            * "_camera": PointCloud capture: ("_depth", "_intr", ["_color", "_pose", "_depth_scale"])
                          For rs camera stream, "_pose" is in ROS convention
                          For camera capture, "_pose" is in OpenCV convention
             * "_pcd": PointCloud: ("_pts", ["_color", "_pose"]),
@@ -373,6 +374,7 @@ class O3DGUIVisualizer:
             * "_color": RGB color images, [H, W, 3] np.uint8 np.ndarray
                         or pts color, [N, 3] np.uint8 np.ndarray
             * "_depth": Depth images, [H, W] or [H, W, 1] np.uint16/np.floating np.ndarray
+            * "_depth_scale": depth image scale used by depth2xyz, float
             * "_intr": camera intrinsic matrix, [3, 3] np.floating np.ndarray
             * "_pose": object / camera pose, sapien.Pose
             * "_xyzimg": xyz image, [H, W, 3] np.floating np.ndarray
@@ -388,7 +390,7 @@ class O3DGUIVisualizer:
           Examples for some complete names: "viso3d_1_pcd_pts", "vis_front_camera_depth",
         :param stream_camera: whether to redraw camera stream when a new frame arrives
         :param stream_robot: whether to update robot mesh when a new robot state arrives
-        """
+        """  # noqa: E501
         self.logger = get_logger("O3DGUIVisualizer")
 
         # We need to initialize the application, which finds the necessary shaders
@@ -1746,13 +1748,16 @@ class O3DGUIVisualizer:
                     so_dict[so_data_name].fetch(lambda x: x / 255.0).reshape(-1, 3)
                 )
             depth_image = so_dict[f"rs_{camera_name}_depth"].fetch()
+            depth_scale = so_dict[f"rs_{camera_name}_depth_scale"].fetch()
             T_world_camROS = (
                 so_dict[f"rs_{camera_name}_pose"].fetch().to_transformation_matrix()
             )
 
             if pts_color is not None:
                 pcd.colors = Vector3dVector(pts_color)
-            pcd.points = Vector3dVector(depth2xyz(depth_image, K).reshape(-1, 3))
+            pcd.points = Vector3dVector(
+                depth2xyz(depth_image, K, depth_scale).reshape(-1, 3)
+            )
             pcd.transform(T_world_camROS @ T_ROS_CV)
             self.add_camera(
                 camera_name, *depth_image.shape[1::-1], K, T_world_camROS, fmt="ROS"
@@ -1895,12 +1900,15 @@ class O3DGUIVisualizer:
                         K = so_dict[f"{data_prefix}_intr"].fetch()
                         depth_image = so_dict[so_data_name].fetch()
 
+                        depth_scale = (
+                            1000.0 if depth_image.dtype == np.uint16 else 1.0,
+                        )
+                        # if depth_scale is provided
+                        if f"{so_data_name}_scale" in all_so_names:
+                            depth_scale = so_dict[f"{so_data_name}_scale"].fetch()
+
                         data_dict[data_uid].points = Vector3dVector(
-                            depth2xyz(
-                                depth_image,
-                                K,
-                                1000.0 if depth_image.dtype == np.uint16 else 1.0,
-                            ).reshape(-1, 3)
+                            depth2xyz(depth_image, K, depth_scale).reshape(-1, 3)
                         )
                         self.add_camera(camera_name, *depth_image.shape[1::-1], K)
                         redraw_geometry_uids.add(data_uid)  # redraw

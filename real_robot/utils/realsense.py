@@ -16,17 +16,19 @@ from .logger import get_logger
 from .multiprocessing import SharedObject, signal_process_ready
 
 # https://www.intelrealsense.com/compare-depth-cameras/
-SUPPORTED_RS_PRODUCTS = ("D415", "D435")
+SUPPORTED_RS_PRODUCTS = ("D415", "D435", "L515")
 
 RS_DEVICES = None  # {device_sn: rs.device}
 
 
-def check_rs_product_support(name: str) -> None:
+def check_rs_product_support(name: str) -> str:
     """Check if the RealSense device is supported. Print warning otherwise"""
-    if name.split()[-1] not in SUPPORTED_RS_PRODUCTS:
+    product_type = name.split()[-1]
+    if product_type not in SUPPORTED_RS_PRODUCTS:
         get_logger("realsense.py").warning(
             f'Only support {SUPPORTED_RS_PRODUCTS} currently, got "{name}"'
         )
+    return product_type
 
 
 def get_connected_rs_devices(
@@ -66,6 +68,25 @@ def get_connected_rs_devices(
         return [RS_DEVICES[sn] for sn in device_sn]
 
 
+def get_default_stream_config(
+    product_type: str,
+) -> tuple[int, int, int] | dict[str, int | tuple[int, int, int]]:
+    """
+    Get default sensor stream config (width, height, fps) depending on product_type
+
+    :param product_type: RS product type, one of SUPPORTED_RS_PRODUCTS
+    :return: default sensor stream config (acceptable by CameraConfig and RSDevice)
+    """
+    if product_type == "D415":
+        return 1280, 720, 30
+    elif product_type == "D435":
+        return 848, 480, 30
+    elif product_type == "L515":
+        return {"Depth": (640, 480, 30), "Color": (1280, 720, 30)}
+    else:
+        raise NotImplementedError(f"Unknown RealSensen {product_type=}")
+
+
 class RSDevice:
     """
     RealSense Device.
@@ -85,17 +106,16 @@ class RSDevice:
         rs.stream.color: rs.format.rgb8,
         rs.stream.depth: rs.format.z16,
         rs.stream.infrared: rs.format.y8,
+        rs.stream.confidence: rs.format.raw8,
+        rs.stream.accel: rs.format.motion_xyz32f,
+        rs.stream.gyro: rs.format.motion_xyz32f,
     }
 
     def __init__(
         self,
         device_sn: str | None = None,
         uid: str | None = None,
-        config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]] = (
-            848,
-            480,
-            30,
-        ),
+        config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]] | None = None,  # noqa: E501
         *,
         preset: str = "Default",
         color_option_kwargs={},
@@ -105,13 +125,14 @@ class RSDevice:
         run_as_process: bool = False,
         parent_pose_so_name: str | None = None,
         local_pose: Pose = pose_CV_ROS,
-    ):
+    ):  # fmt: skip
         """
         :param device_sn: realsense device serial number.
                           If None, use the only RSDevice connected.
         :param uid: unique camera id, e.g. "hand_camera", "front_camera"
         :param config: camera stream config, can be a tuple of (width, height, fps)
                        or a dict with format {stream_type: (param1, param2, ...)}.
+                       If config is None, use default config realsense.get_default_config().
                        If config is a tuple, enables color & depth streams with config.
                        If config is a dict, enables streams given stream parameters.
                        Possible stream parameters format:
@@ -139,6 +160,7 @@ class RSDevice:
             * "start_rs_<device_uid>": If True, starts the RSDevice; else, stops it.
             * "rs_<device_uid>_color": rgb color image, [H, W, 3] np.uint8 np.ndarray
             * "rs_<device_uid>_depth": depth image, [H, W] np.uint16 np.ndarray
+            * "rs_<device_uid>_depth_scale": depth image scale used by depth2xyz, float
             * "rs_<device_uid>_infrared_1": Left IR image, [H, W] np.uint8 np.ndarray
             * "rs_<device_uid>_infrared_2": Right IR image, [H, W] np.uint8 np.ndarray
             * "rs_<device_uid>_intr": intrinsic matrix, [3, 3] np.float64 np.ndarray
@@ -149,7 +171,7 @@ class RSDevice:
         :param local_pose: camera pose in world frame (ROS convention)
                            If parent_pose_so_name is not None, this is pose
                            relative to parent link.
-        """
+        """  # noqa: E501
         self.logger = get_logger("RSDevice")
 
         if device_sn is None:
@@ -167,7 +189,7 @@ class RSDevice:
             self.logger.warning(
                 f"Device {self!r} is connected with USB {self.usb_type}, not 3.2"
             )
-        check_rs_product_support(self.name)
+        self.product_type = check_rs_product_support(self.name)
         self.color_sensor = self.device.first_color_sensor()
         self.depth_sensor = self.device.first_depth_sensor()
         self._read_device_info()
@@ -180,8 +202,12 @@ class RSDevice:
                 self.record_bag_path /= f"rs_{self.uid}_{timestamp}.bag"
             self.record_bag_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.config = config
-        self.rs_config = self._create_rs_config(config)
+        self.config = (
+            config
+            if config is not None
+            else get_default_stream_config(self.product_type)
+        )
+        self.rs_config = self._create_rs_config(self.config)
         self.align = rs.align(rs.stream.color)
 
         self.pipeline = None
@@ -341,11 +367,12 @@ class RSDevice:
         json_file=None,
     ) -> None:
         """Configure sensor options (depth preset, color/depth sensor options, json)"""
-        # Load depth preset
-        if preset not in (presets := self.supported_depth_presets):
-            raise ValueError(f"Unknown {preset=}. Available presets: {presets}")
-        self.depth_sensor.set_option(rs.option.visual_preset, presets.index(preset))
-        self.logger.info(f'Loaded "{preset}" preset for {self!r}')
+        if self.product_type != "L515":
+            # Load depth preset
+            if preset not in (presets := self.supported_depth_presets):
+                raise ValueError(f"Unknown {preset=}. Available presets: {presets}")
+            self.depth_sensor.set_option(rs.option.visual_preset, presets.index(preset))
+            self.logger.info(f'Loaded "{preset}" preset for {self!r}')
 
         # Set sensor options
         for key, value in color_option_kwargs.items():
@@ -469,6 +496,11 @@ class RSDevice:
                 f"rs_{self.uid}_{stream_name.lower().replace(' ', '_')}",
                 data=np.zeros(shape, dtype=dtype),
             )
+            if stream_name == "Depth":
+                so_data_dict[f"{stream_name}_scale"] = SharedObject(
+                    f"rs_{self.uid}_{stream_name.lower().replace(' ', '_')}_scale",
+                    data=1000.0 if self.product_type != "L515" else 4000.0,
+                )
         if "Color" in so_data_dict or "Depth" in so_data_dict:  # intrinsics
             so_data_dict["Intrinsics"] = SharedObject(
                 f"rs_{self.uid}_intr", data=np.zeros((3, 3))
@@ -596,7 +628,9 @@ class RSDevice:
         rec_fw_ver = self.device.get_info(rs.camera_info.recommended_firmware_version)
         physical_port = self.device.get_info(rs.camera_info.physical_port)
         debug_op_code = self.device.get_info(rs.camera_info.debug_op_code)
-        advanced_mode = self.device.get_info(rs.camera_info.advanced_mode)
+        advanced_mode = "N/A"
+        if self.product_type != "L515":
+            advanced_mode = self.device.get_info(rs.camera_info.advanced_mode)
         product_id = self.device.get_info(rs.camera_info.product_id)
         camera_locked = self.device.get_info(rs.camera_info.camera_locked)
         product_line = self.device.get_info(rs.camera_info.product_line)
@@ -640,7 +674,14 @@ class RSDevice:
                     f"     @ {fps}Hz{' ' * (7 - len(str(fps)))}{format}"
                     for (width, height, fps) in params
                 ])
-            else:  # motion streams, params: [fps,]
+            elif isinstance(params[0], int):  # motion streams, params: [fps,]
+                stream_profiles += "\n".join([
+                    f"{tab}{stream_name}{tab} N/A"
+                    f"{' ' * (len('resolution') - 4)}"
+                    f"     @ {fps}Hz{' ' * (7 - len(str(fps)))}{format}"
+                    for fps in params
+                ])
+            else:
                 raise NotImplementedError(f"Not implemented for {stream_name=}")
             stream_profiles += "\n\n"
 
@@ -652,12 +693,12 @@ class RSDevice:
                 self._default_stream_formats[self.stream_name2type_idx[stream_name][0]]
             )[7:].upper()
 
-            for stream_cfg, intr in intr_dict.items():
-                intrinsics += (
-                    f' Intrinsic of "{stream_name}" / {stream_cfg} / {{{format}}}\n'
-                )
+            if isinstance(intr_dict, dict):  # video streams
+                for stream_cfg, intr in intr_dict.items():
+                    intrinsics += (
+                        f' Intrinsic of "{stream_name}" / {stream_cfg} / {{{format}}}\n'
+                    )
 
-                if isinstance(intr, rs.intrinsics):  # video streams, rs.intrinsics
                     dist_model_str = str(intr.model)[11:].replace("_", " ").title()
                     fovx = np.rad2deg(
                         np.arctan2(intr.ppx + 0.5, intr.fx)
@@ -695,8 +736,22 @@ class RSDevice:
                         f"  FOV (deg):    {fovx:.4f} x {fovy:.4f} ({fovd:.4f})\n"
                         f"  Intrinsic mat:\n    np.array({intr_mat_str})\n\n"
                     )
-                else:  # motion streams, rs.motion_device_intrinsic
-                    raise NotImplementedError(f"Not implemented for {stream_name=}")
+            elif isinstance(intr_dict, rs.motion_device_intrinsic):  # motion streams
+                intr_mat_str = np.array2string(
+                    np.asarray(intr_dict.data),
+                    precision=20,
+                    suppress_small=True,
+                    separator=", ",
+                    prefix="    np.array(",
+                )
+                intrinsics += (
+                    f'Motion Intrinsic of "{stream_name}" \t {format}\n'
+                    f"Bias Variances: {intr_dict.bias_variances}\n"
+                    f"Noise Variances: {intr_dict.noise_variances}\n"
+                    f"Sensitivity :\n    np.array({intr_mat_str})\n\n"
+                )
+            else:
+                raise NotImplementedError(f"Not implemented for {stream_name=}")
 
         # ----- Extrinsic Parameters ----- #
         extrinsics = "Extrinsic Parameters:\n"
