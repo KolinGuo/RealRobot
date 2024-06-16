@@ -1494,7 +1494,7 @@ class O3DGUIVisualizer:
         self,
         geometry_dict: dict[str, _o3d_geometry_type],
         show: bool = None,
-        hide_others: bool = True,
+        hide_others: bool = False,
         reset_camera: bool = False,
     ):
         """Add multiple geometries (allow for computing update fps)
