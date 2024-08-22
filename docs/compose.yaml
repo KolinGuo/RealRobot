@@ -1,0 +1,20 @@
+name: real_robot_docs
+
+services:
+  base:
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "../:/RealRobot"
+    working_dir: /RealRobot
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - >-
+        apt update && apt install -y libgl1 libglib2.0-0 libusb-1.0-0
+        && source /.venv/bin/activate
+        && python3 -m pip install -e .[xarm]
+        && python3 -m pip install -r ./docs/requirements.txt
+        && rm -rf ./docs/build
+        && sphinx-autobuild ./docs/source ./docs/build/html
+    network_mode: host
+    container_name: real_robot_docs
+    image: kolinguo/sphinx:22.04

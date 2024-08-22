@@ -4,10 +4,15 @@ build:
   os: "ubuntu-22.04"
   tools:
     python: "3.10"
+  apt_packages:
+    - libgl1
+    - libglib2.0-0
+    - libusb-1.0-0
   jobs:
     post_install:
       - python docs/get_wheel_artifact.py KolinGuo/RealRobot --py latest
       - pip install wheelhouse/real_robot*.whl
+      - pip install xArm-Python-SDK@git+https://github.com/KolinGuo/xArm-Python-SDK.git@custom
 
 python:
   install:

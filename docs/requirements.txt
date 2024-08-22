@@ -2,3 +2,7 @@ myst-parser
 furo
 sphinx-copybutton
 sphinxext-opengraph
+sphinx-autobuild
+sphinx-design
+sphinx-inline-tabs
+sphinx-last-updated-by-git
