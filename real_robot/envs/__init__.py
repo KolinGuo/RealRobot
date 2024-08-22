@@ -1,1 +1,1 @@
-from . import grasp_anything
+from .base_env import XArmBaseEnv
