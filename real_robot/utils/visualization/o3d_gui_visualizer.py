@@ -1850,16 +1850,12 @@ class O3DGUIVisualizer:
                 valid_suffixes = (
                     "_color",
                     "_depth",
-                    "_intr",
                     "_pose",
                     "_xyzimg",
                     "_pts",
-                    "_urdf_path",
                     "_qpos",
                     "_bounds",
                     "_gposes",
-                    "_gscores",
-                    "_gqvals",
                 )
 
                 so_data_names = [
