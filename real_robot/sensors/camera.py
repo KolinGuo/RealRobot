@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pyrealsense2 as rs
@@ -39,6 +39,7 @@ class CameraConfig:
         config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]] | None = None,  # noqa: E501
         *,
         preset: str = "Default",
+        align_to: Literal["Color", "Depth"] = "Color",
         color_option_kwargs={},
         depth_option_kwargs={},
         json_file: str | Path | None = None,
@@ -65,6 +66,7 @@ class CameraConfig:
                        {"Color": (848, 480, 30), "Depth": (848, 480, 30),
                         "Infrared 1": (848, 480, 30), "Acceleration": 250}
         :param preset: depth sensor presets
+        :param align_to: align camera streams to color or depth frame.
         :param color_option_kwargs: color sensor optional keywords
         :param depth_option_kwargs: depth sensor optional keywords
         :param json_file: path to a json file containing sensor configs
@@ -78,6 +80,7 @@ class CameraConfig:
         self.config = config
 
         self.preset = preset
+        self.align_to = align_to
         self.color_option_kwargs = color_option_kwargs
         self.depth_option_kwargs = depth_option_kwargs
         self.json_file = json_file
@@ -165,17 +168,18 @@ class Camera:
             target=RSDevice,
             name=f"RSDevice_{self.uid}",
             args=(self.device_sn, self.uid),
-            kwargs=dict(
-                config=self.config,
-                preset=camera_cfg.preset,
-                color_option_kwargs=camera_cfg.color_option_kwargs,
-                depth_option_kwargs=camera_cfg.depth_option_kwargs,
-                json_file=camera_cfg.json_file,
-                record_bag_path=record_bag_path,
-                run_as_process=True,
-                parent_pose_so_name=self.parent_pose_so_name,
-                local_pose=self.local_pose,
-            ),
+            kwargs={
+                "config": self.config,
+                "preset": camera_cfg.preset,
+                "align_to": camera_cfg.align_to,
+                "color_option_kwargs": camera_cfg.color_option_kwargs,
+                "depth_option_kwargs": camera_cfg.depth_option_kwargs,
+                "json_file": camera_cfg.json_file,
+                "record_bag_path": record_bag_path,
+                "run_as_process": True,
+                "parent_pose_so_name": self.parent_pose_so_name,
+                "local_pose": self.local_pose,
+            },
         )
         start_and_wait_for_process(self.device_proc, timeout=30)
 
@@ -281,11 +285,17 @@ class Camera:
             if isinstance(params, tuple):
                 W, H, _ = params
                 if stream_name == "Color":
-                    shape = (H, W, 3)
+                    shape = (
+                        self.config["Depth"][1::-1] + (3,)
+                        if "Depth" in self.config
+                        and self.camera_cfg.align_to == "Depth"
+                        else (H, W, 3)
+                    )
                 elif stream_name == "Depth":
                     shape = (
                         self.config["Color"][1::-1] + (1,)
                         if "Color" in self.config
+                        and self.camera_cfg.align_to == "Color"
                         else (H, W, 1)
                     )
                 else:

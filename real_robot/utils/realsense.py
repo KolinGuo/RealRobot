@@ -6,6 +6,7 @@ import json
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pyrealsense2 as rs
@@ -118,6 +119,7 @@ class RSDevice:
         config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]] | None = None,  # noqa: E501
         *,
         preset: str = "Default",
+        align_to: Literal["Color", "Depth"] = "Color",
         color_option_kwargs={},
         depth_option_kwargs={},
         json_file: str | Path | None = None,
@@ -144,6 +146,7 @@ class RSDevice:
         :param preset: depth sensor preset, available options:
                        ["Custom", "Default", "Hand", "High Accuracy",
                         "High Density", "Medium Density"].
+        :param align_to: align camera streams to color or depth frame.
         :param color_option_kwargs: color sensor options kwargs.
                                     Available options see self.supported_color_options
         :param depth_option_kwargs: depth sensor options kwargs.
@@ -208,7 +211,10 @@ class RSDevice:
             else get_default_stream_config(self.product_type)
         )
         self.rs_config = self._create_rs_config(self.config)
-        self.align = rs.align(rs.stream.color)
+        self.align = rs.align(
+            rs.stream.color if align_to == "Color" else rs.stream.depth
+        )
+        self.align_to = align_to
 
         self.pipeline = None
         self.pipeline_profile = None
@@ -345,10 +351,23 @@ class RSDevice:
                     rs_config.enable_stream(stream_type, stream_idx, stream_format, fps)
 
         # warning about rs.align
-        if "Depth" in self.config and "Color" not in self.config:
+        if (
+            "Depth" in self.config
+            and "Color" not in self.config
+            and self.align_to == "Color"
+        ):
             self.logger.warning(
                 "Color stream is not enabled. "
                 "Depth stream will not be aligned to Color frame"
+            )
+        elif (
+            "Color" in self.config
+            and "Depth" not in self.config
+            and self.align_to == "Depth"
+        ):
+            self.logger.warning(
+                "Depth stream is not enabled. "
+                "Color stream will not be aligned to Depth frame"
             )
 
         # Record camera streams as a rosbag file
@@ -486,8 +505,18 @@ class RSDevice:
             if isinstance(params, tuple):
                 W, H, _ = params
                 shape = (H, W, 3) if stream_name == "Color" else (H, W)
-                if stream_name == "Depth" and "Color" in self.config:  # rs.align
+                if (
+                    stream_name == "Depth"
+                    and "Color" in self.config
+                    and self.align_to == "Color"
+                ):  # rs.align
                     shape = self.config["Color"][1::-1]  # (H, W)
+                elif (
+                    stream_name == "Color"
+                    and "Depth" in self.config
+                    and self.align_to == "Depth"
+                ):  # rs.align
+                    shape = self.config["Depth"][1::-1] + (3,)  # (H, W, 3)
                 dtype = np.uint16 if stream_name == "Depth" else np.uint8
             else:
                 raise NotImplementedError(f"No support for {stream_name=} yet")
