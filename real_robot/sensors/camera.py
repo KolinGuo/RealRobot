@@ -217,11 +217,9 @@ class Camera:
 
         for obs_key, so_data in self.so_data_dict.items():
             if obs_key == "depth":
-                self._camera_buffer["depth"] = (
-                    so_data.fetch(lambda d: d[..., None].astype(np.float32)) / 1000.0
-                    if self.product_type != "L515"
-                    else 4000.0
-                )
+                self._camera_buffer["depth"] = so_data.fetch(
+                    lambda d: d[..., None].astype(np.float32)
+                ) / (1000.0 if self.product_type != "L515" else 4000.0)
             else:
                 self._camera_buffer[obs_key] = so_data.fetch()
         self._camera_pose = self.so_pose.fetch()
