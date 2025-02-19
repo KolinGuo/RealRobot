@@ -179,9 +179,9 @@ class RSDevice:
 
         if device_sn is None:
             device_sns = get_connected_rs_devices()
-            assert (
-                len(device_sns) == 1
-            ), f"Only 1 RSDevice should be connected, got S/Ns {device_sns}"
+            assert len(device_sns) == 1, (
+                f"Only 1 RSDevice should be connected, got S/Ns {device_sns}"
+            )
             device_sn = device_sns[0]
         self.device = get_connected_rs_devices(device_sn)
         self.name = self.device.get_info(rs.camera_info.name)
@@ -210,11 +210,11 @@ class RSDevice:
             if config is not None
             else get_default_stream_config(self.product_type)
         )
+        self.align_to = align_to
         self.rs_config = self._create_rs_config(self.config)
         self.align = rs.align(
             rs.stream.color if align_to == "Color" else rs.stream.depth
         )
-        self.align_to = align_to
 
         self.pipeline = None
         self.pipeline_profile = None
@@ -311,12 +311,12 @@ class RSDevice:
         rs_config.enable_device(self.serial_number)
 
         if isinstance(config, tuple):
-            assert (
-                config in self.supported_configs["Color"]
-            ), f"Not supported {config=} for Color stream"
-            assert (
-                config in self.supported_configs["Depth"]
-            ), f"Not supported {config=} for Depth stream"
+            assert config in self.supported_configs["Color"], (
+                f"Not supported {config=} for Color stream"
+            )
+            assert config in self.supported_configs["Depth"], (
+                f"Not supported {config=} for Depth stream"
+            )
             width, height, fps = config
             rs_config.enable_stream(
                 rs.stream.color,
