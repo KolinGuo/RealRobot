@@ -1,9 +1,8 @@
 # RealRobot
-Real robot interface to connect with ManiSkill2
+Real robot interface and utilities for asynchronous real-time deployment.  
+Previously developed to connect with [ManiSkill2](https://github.com/KolinGuo/ManiSkill2).
 
-Runs camera capturing and visualization as separate processes to make it closer to using ROS
-
-:exclamation: This repo is still under heavy development, so API might be changed without notice
+Runs camera capturing and visualization as separate processes to make it closer to using ROS.
 
 ## Installation
 
