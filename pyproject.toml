@@ -2,6 +2,11 @@
 requires = ["setuptools>=62.3.0", "setuptools-git-versioning<2"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+package-dir = { "real_robot" = "real_robot" }
+package-data = { "real_robot" = ["assets/**"] }
+exclude-package-data = { "*" = ["*.convex.stl"] }
+
 [project]
 name = "real_robot"
 dynamic = ["version"]
@@ -43,6 +48,9 @@ vis = [
   "open3d>=0.17.0", # for visualization
 ]
 vis_all = ["real_robot[vis]", "urchin"]
+xarm = [
+  "xArm-Python-SDK @ git+https://github.com/KolinGuo/xArm-Python-SDK.git@custom",
+]
 all = [
   "real_robot[vis_all]",
   "pyrealsense2==2.54.2.5684", # L515 support

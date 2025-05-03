@@ -24,7 +24,7 @@ jobs:
       - name: Strip optional dependency
         if: startsWith(github.ref, 'refs/tags/v') # if a tag is pushed
         run: |
-          sed -i '/^\s*"xarm"/ {N; N; d;}' setup.py
+          sed -i '/^\s*xarm/ {N; N; d;}' pyproject.toml
           sed -i '/^dirty_template/c\dirty_template = "{tag}"' pyproject.toml
       - name: Install pypa/build
         run: "python -m pip install build --user"
