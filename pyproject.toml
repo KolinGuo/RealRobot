@@ -15,7 +15,7 @@ requires-python = ">=3.8"
 authors = [{ name = "Kolin Guo", email = "guokolin@gmail.com" }]
 description = "Real robot interface and utilities for asynchronous real-time deployment."
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
 keywords = ["robotics", "sensor", "visualization", "control"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -24,7 +24,6 @@ classifiers = [
   "Intended Audience :: Education",
   "Intended Audience :: Other Audience",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
   "Natural Language :: English",
   "Framework :: Robot Framework :: Library",
   "Framework :: Robot Framework :: Tool",
