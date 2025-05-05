@@ -8,12 +8,18 @@ Runs camera capturing and visualization as separate processes to make it closer 
 
 From PyPI
 ```bash
-python3 -m pip install -U real-robot[all]
+python3 -m pip install -U real_robot
 ```
+
+For different functionalities, you can install the optional dependencies as follows:
+* `real_robot`: `SharedObject` support only, please only use submodule `real_robot.utils.multiprocessing`.
+* `real_robot[vis]`: support for most visualization, use submodule `real_robot.utils.visualization`.
+* `real_robot[vis_all]`: include support for URDF.
+* `real_robot[all]`: all optional dependencies (e.g., `pyrealsense2`, `sapien`, etc.).
 
 If you need to install the optional `xarm` dependency, you must install from GitHub repo
 ```bash
-python3 -m pip install -U real-robot[all,xarm]@git+https://github.com/KolinGuo/RealRobot.git
+python3 -m pip install -U real_robot[all,xarm]@git+https://github.com/KolinGuo/RealRobot.git
 ```
 
 ---
