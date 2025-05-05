@@ -11,7 +11,7 @@ exclude-package-data = { "*" = ["*.convex.stl"] }
 name = "real_robot"
 dynamic = ["version"]
 dependencies = ["numpy"]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 authors = [{ name = "Kolin Guo", email = "guokolin@gmail.com" }]
 description = "Real robot interface and utilities for asynchronous real-time deployment."
 readme = "README.md"
@@ -27,7 +27,6 @@ classifiers = [
   "Natural Language :: English",
   "Framework :: Robot Framework :: Library",
   "Framework :: Robot Framework :: Tool",
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
