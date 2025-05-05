@@ -46,14 +46,31 @@ from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Union
 
 import numpy as np
-from sapien import Pose
 
 from ..logger import get_logger
 
 try:
+    from sapien import Pose  # type: ignore
+except ModuleNotFoundError:
+    get_logger("SharedObject").warning(
+        "No sapien installed. Will not support sapien.Pose"
+    )
+
+    class Pose:
+        def __init__(self) -> None:
+            pass
+
+        def __setstate__(self, state) -> None:
+            pass
+
+        def __getstate__(self) -> tuple:
+            return ()
+
+
+try:
     import fcntl
 except ModuleNotFoundError as e:
-    print("Not supported on Windows")
+    get_logger("SharedObject").critical("Not supported on Windows")
     raise e
 
 
