@@ -229,7 +229,7 @@ class CV2Visualizer:
 
     def run_as_process(self):
         """Run CV2Visualizer as a separate process"""
-        self.logger.info(f"Running {self!r} as a separate process")
+        self.logger.info("Running %r as a separate process", self)
 
         # CV2Visualizer control
         so_joined = SharedObject("join_viscv2")
@@ -321,6 +321,7 @@ class CV2Visualizer:
             if so_draw.triggered:  # triggers redraw
                 # Sort names so they are ordered as color, depth, mask
                 all_so_names = sorted(os.listdir("/dev/shm"))  # get most updated list
+                color_image = None
                 images = []
                 for so_data_name in get_so_data_names(all_so_names):
                     # Fetch data or use captured RSDevice data
@@ -340,6 +341,11 @@ class CV2Visualizer:
 
                     # Visualize mask by overlaying to color_image and colorizing mask
                     if so_data_name.endswith("_mask"):
+                        if color_image is None:
+                            raise RuntimeError(
+                                "Cannot overlay mask to color_image because "
+                                "color_image is not found"
+                            )
                         vis_data[f"{so_data_name}_overlay"] = mask_overlay = draw_mask(
                             color_image, image
                         )
@@ -353,7 +359,7 @@ class CV2Visualizer:
 
             self.render()
 
-        self.logger.info(f"Process running {self!r} is joined")
+        self.logger.info("Process running %r is joined", self)
         # Unlink created SharedObject
         so_joined.unlink()
 

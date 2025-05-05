@@ -4,7 +4,18 @@ from typing import Optional
 
 import cv2
 import numpy as np
-from sapien import Pose
+
+from .logger import get_logger
+
+try:
+    from sapien import Pose  # type: ignore
+
+    SAPIEN_AVAILABLE = True
+except ModuleNotFoundError:
+    get_logger("camera.py").warning(
+        "No sapien installed. Will not have pose_CV_GL, etc."
+    )
+    SAPIEN_AVAILABLE = False
 
 # Convert between camera frame conventions
 #   OpenCV frame convention: right(x), down(y), forward(z)
@@ -14,21 +25,24 @@ from sapien import Pose
 T_CV_GL = np.array(
     [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]], dtype=np.float32
 )
-pose_CV_GL = Pose(T_CV_GL)
-pose_GL_CV = pose_CV_GL.inv()
-T_GL_CV = pose_GL_CV.to_transformation_matrix()
+if SAPIEN_AVAILABLE:
+    pose_CV_GL = Pose(T_CV_GL)  # type: ignore
+    pose_GL_CV = pose_CV_GL.inv()
+T_GL_CV = np.linalg.inv(T_CV_GL)
 T_CV_ROS = np.array(
     [[0, -1, 0, 0], [0, 0, -1, 0], [1, 0, 0, 0], [0, 0, 0, 1]], dtype=np.float32
 )
-pose_CV_ROS = Pose(T_CV_ROS)
-pose_ROS_CV = pose_CV_ROS.inv()
-T_ROS_CV = pose_ROS_CV.to_transformation_matrix()
+if SAPIEN_AVAILABLE:
+    pose_CV_ROS = Pose(T_CV_ROS)  # type: ignore
+    pose_ROS_CV = pose_CV_ROS.inv()
+T_ROS_CV = np.linalg.inv(T_CV_ROS)
 T_GL_ROS = np.array(
     [[0, -1, 0, 0], [0, 0, 1, 0], [-1, 0, 0, 0], [0, 0, 0, 1]], dtype=np.float32
 )
-pose_GL_ROS = Pose(T_GL_ROS)
-pose_ROS_GL = pose_GL_ROS.inv()
-T_ROS_GL = pose_ROS_GL.to_transformation_matrix()
+if SAPIEN_AVAILABLE:
+    pose_GL_ROS = Pose(T_GL_ROS)  # type: ignore
+    pose_ROS_GL = pose_GL_ROS.inv()
+T_ROS_GL = np.linalg.inv(T_GL_ROS)
 
 
 def depth2xyz(
@@ -52,9 +66,9 @@ def depth2xyz(
         cx, cy = intrinsics[0, 2], intrinsics[1, 2]
 
     if depth_image.ndim == 3:
-        assert (
-            depth_image.shape[-1] == 1
-        ), f"Wrong number of channels: {depth_image.shape}"
+        assert depth_image.shape[-1] == 1, (
+            f"Wrong number of channels: {depth_image.shape}"
+        )
         depth_image = depth_image[..., 0]
 
     height, width = depth_image.shape[:2]
@@ -169,10 +183,10 @@ def register_depth(
     :param depth_dilation: whether to dilate depth to avoid holes and occlusion errors.
     :return depth: aligned depth image, [H, W] np.uint16/np.floating np.ndarray
     """
-    depth = cv2.rgbd.registerDepth(
+    depth = cv2.rgbd.registerDepth(  # type: ignore
         k_depth,
         k_color,
-        dist_color,
+        dist_color,  # type: ignore
         T_color_depth,
         depth_unaligned,
         color_im_size,

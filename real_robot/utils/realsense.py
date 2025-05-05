@@ -34,7 +34,7 @@ def check_rs_product_support(name: str) -> str:
 
 def get_connected_rs_devices(
     device_sn: str | list[str] | None = None,
-) -> list[str] | rs.device | list[rs.device]:
+) -> list[str] | rs.device | list[rs.device]:  # type: ignore
     """Returns list of connected RealSense devices.
 
     :param device_sn: list of serial numbers of devices to get.
@@ -47,12 +47,12 @@ def get_connected_rs_devices(
 
     if RS_DEVICES is None:
         RS_DEVICES = {}
-        for d in rs.context().devices:
-            name = d.get_info(rs.camera_info.name)
+        for d in rs.context().devices:  # type: ignore
+            name = d.get_info(rs.camera_info.name)  # type: ignore
             if name.lower() != "platform camera":
-                serial = d.get_info(rs.camera_info.serial_number)
-                fw_version = d.get_info(rs.camera_info.firmware_version)
-                usb_type = d.get_info(rs.camera_info.usb_type_descriptor)
+                serial = d.get_info(rs.camera_info.serial_number)  # type: ignore
+                fw_version = d.get_info(rs.camera_info.firmware_version)  # type: ignore
+                usb_type = d.get_info(rs.camera_info.usb_type_descriptor)  # type: ignore
 
                 get_logger("realsense.py").info(
                     f"Found {name} (S/N: {serial} FW: {fw_version} on USB {usb_type})"
@@ -104,12 +104,12 @@ class RSDevice:
 
     # Default format for camera streams, {stream_type: stream_format}
     _default_stream_formats = {
-        rs.stream.color: rs.format.rgb8,
-        rs.stream.depth: rs.format.z16,
-        rs.stream.infrared: rs.format.y8,
-        rs.stream.confidence: rs.format.raw8,
-        rs.stream.accel: rs.format.motion_xyz32f,
-        rs.stream.gyro: rs.format.motion_xyz32f,
+        rs.stream.color: rs.format.rgb8,  # type: ignore
+        rs.stream.depth: rs.format.z16,  # type: ignore
+        rs.stream.infrared: rs.format.y8,  # type: ignore
+        rs.stream.confidence: rs.format.raw8,  # type: ignore
+        rs.stream.accel: rs.format.motion_xyz32f,  # type: ignore
+        rs.stream.gyro: rs.format.motion_xyz32f,  # type: ignore
     }
 
     def __init__(
@@ -120,8 +120,8 @@ class RSDevice:
         *,
         preset: str = "Default",
         align_to: Literal["Color", "Depth"] = "Color",
-        color_option_kwargs={},
-        depth_option_kwargs={},
+        color_option_kwargs=None,
+        depth_option_kwargs=None,
         json_file: str | Path | None = None,
         record_bag_path: str | Path | None = None,
         run_as_process: bool = False,
@@ -175,6 +175,11 @@ class RSDevice:
                            If parent_pose_so_name is not None, this is pose
                            relative to parent link.
         """  # noqa: E501
+        if color_option_kwargs is None:
+            color_option_kwargs = {}
+        if depth_option_kwargs is None:
+            depth_option_kwargs = {}
+
         self.logger = get_logger("RSDevice")
 
         if device_sn is None:
@@ -183,14 +188,14 @@ class RSDevice:
                 f"Only 1 RSDevice should be connected, got S/Ns {device_sns}"
             )
             device_sn = device_sns[0]
-        self.device = get_connected_rs_devices(device_sn)
-        self.name = self.device.get_info(rs.camera_info.name)
+        self.device: rs.device = get_connected_rs_devices(device_sn)  # type: ignore
+        self.name = self.device.get_info(rs.camera_info.name)  # type: ignore
         self.serial_number = device_sn
         self.uid = device_sn if uid is None else uid.replace(" ", "_")
-        self.usb_type = self.device.get_info(rs.camera_info.usb_type_descriptor)
+        self.usb_type = self.device.get_info(rs.camera_info.usb_type_descriptor)  # type: ignore
         if self.usb_type != "3.2":
             self.logger.warning(
-                f"Device {self!r} is connected with USB {self.usb_type}, not 3.2"
+                "Device %r is connected with USB %s, not 3.2", self, self.usb_type
             )
         self.product_type = check_rs_product_support(self.name)
         self.color_sensor = self.device.first_color_sensor()
@@ -205,18 +210,18 @@ class RSDevice:
                 self.record_bag_path /= f"rs_{self.uid}_{timestamp}.bag"
             self.record_bag_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.config = (
+        self.config: dict[str, tuple[int, int, int]] = (
             config
             if config is not None
             else get_default_stream_config(self.product_type)
-        )
+        )  # type: ignore
         self.align_to = align_to
-        self.rs_config = self._create_rs_config(self.config)
-        self.align = rs.align(
-            rs.stream.color if align_to == "Color" else rs.stream.depth
+        self.rs_config = self._create_rs_config(self.config)  # type: ignore
+        self.align = rs.align(  # type: ignore
+            rs.stream.color if align_to == "Color" else rs.stream.depth  # type: ignore
         )
 
-        self.pipeline = None
+        self.pipeline: rs.pipeline = None  # type: ignore
         self.pipeline_profile = None
         self.intrinsic_matrices = {}  # {stream_name: intrinsics}
         self.last_frame_num = None
@@ -305,9 +310,9 @@ class RSDevice:
 
     def _create_rs_config(
         self, config: tuple[int, int, int] | dict[str, int | tuple[int, int, int]]
-    ) -> rs.config:
+    ) -> rs.config:  # type: ignore
         """Create rs.config for rs.pipeline"""
-        rs_config = rs.config()
+        rs_config = rs.config()  # type: ignore
         rs_config.enable_device(self.serial_number)
 
         if isinstance(config, tuple):
@@ -319,17 +324,17 @@ class RSDevice:
             )
             width, height, fps = config
             rs_config.enable_stream(
-                rs.stream.color,
+                rs.stream.color,  # type: ignore
                 width,
                 height,
-                self._default_stream_formats[rs.stream.color],
+                self._default_stream_formats[rs.stream.color],  # type: ignore
                 fps,
             )
             rs_config.enable_stream(
-                rs.stream.depth,
+                rs.stream.depth,  # type: ignore
                 width,
                 height,
-                self._default_stream_formats[rs.stream.depth],
+                self._default_stream_formats[rs.stream.depth],  # type: ignore
                 fps,
             )
             self.config = {"Color": config, "Depth": config}
@@ -373,7 +378,7 @@ class RSDevice:
         # Record camera streams as a rosbag file
         if self.record_bag_path is not None:
             self.logger.info(
-                f'Enable recording {self!r} to file "{self.record_bag_path}"'
+                'Enable recording %r to file "%s"', self, self.record_bag_path
             )
             rs_config.enable_record_to_file(str(self.record_bag_path))
         return rs_config
@@ -381,43 +386,50 @@ class RSDevice:
     def _configure_sensor_options(
         self,
         preset="Default",
-        color_option_kwargs={},
-        depth_option_kwargs={},
+        color_option_kwargs=None,
+        depth_option_kwargs=None,
         json_file=None,
     ) -> None:
         """Configure sensor options (depth preset, color/depth sensor options, json)"""
+        if color_option_kwargs is None:
+            color_option_kwargs = {}
+        if depth_option_kwargs is None:
+            depth_option_kwargs = {}
+
         if self.product_type != "L515":
             # Load depth preset
             if preset not in (presets := self.supported_depth_presets):
                 raise ValueError(f"Unknown {preset=}. Available presets: {presets}")
-            self.depth_sensor.set_option(rs.option.visual_preset, presets.index(preset))
-            self.logger.info(f'Loaded "{preset}" preset for {self!r}')
+            self.depth_sensor.set_option(rs.option.visual_preset, presets.index(preset))  # type: ignore
+            self.logger.info('Loaded "%s" preset for %r', preset, self)
 
         # Set sensor options
         for key, value in color_option_kwargs.items():
             self.color_sensor.set_option(key, value)
-            self.logger.info(f'Setting Color option "{key}" to {value}')
+            self.logger.info('Setting Color option "%s" to %s', key, value)
         for key, value in depth_option_kwargs.items():
             self.depth_sensor.set_option(key, value)
-            self.logger.info(f'Setting Depth option "{key}" to {value}')
+            self.logger.info('Setting Depth option "%s" to %s', key, value)
 
         # Load json config
         if json_file is not None:
-            json_string = str(json.load(Path(json_file).open("r"))).replace("'", '"')
-            advanced_mode = rs.rs400_advanced_mode(self.device)
+            with Path(json_file).open("r") as f:
+                json_string = str(json.load(f)).replace("'", '"')
+            advanced_mode = rs.rs400_advanced_mode(self.device)  # type: ignore
             advanced_mode.load_json(json_string)
-            self.logger.info(f'Loaded json config from "{json_file}"')
+            self.logger.info('Loaded json config from "%s"', json_file)
 
     def start(self) -> bool:
         """Start the streaming pipeline"""
         if self.is_running:
             self.logger.warning(
-                f"Device {self!r} is already running. "
-                "Please call stop() before calling start() again"
+                "Device %r is already running. "
+                "Please call stop() before calling start() again",
+                self,
             )
             return False
 
-        self.pipeline = rs.pipeline()
+        self.pipeline = rs.pipeline()  # type: ignore
 
         try:
             self.pipeline_profile = self.pipeline.start(self.rs_config)
@@ -429,9 +441,9 @@ class RSDevice:
 
         # Log enabled streams
         streams = self.pipeline_profile.get_streams()
-        self.logger.info(f"Started device {self!r} with {len(streams)} streams")
+        self.logger.info("Started device %r with %d streams", self, len(streams))
         for i, stream in enumerate(streams):
-            self.logger.info(f"Stream {i + 1}: {stream}")
+            self.logger.info("Stream %d: %s", i + 1, stream)
 
         # Stores camera intrinsics
         frames = self.pipeline.wait_for_frames()
@@ -450,7 +462,7 @@ class RSDevice:
                 raise TypeError(f"Unknown stream {profile=}")
         return True
 
-    def wait_for_frames(self) -> dict[str, np.ndarray]:
+    def wait_for_frames(self) -> dict[str, np.ndarray] | None:
         """
         Wait until a new set of frames becomes available.
         Each enabled stream in the pipeline is time-synchronized.
@@ -461,7 +473,7 @@ class RSDevice:
             * "Infrared 1/2": infrared image, [H, W] np.uint8 array
         """
         if not self.is_running:
-            self.logger.error(f"Device {self!r} is not started")
+            self.logger.error("Device %r is not started", self)
             return None
 
         frames = self.pipeline.wait_for_frames()
@@ -479,7 +491,7 @@ class RSDevice:
     def stop(self) -> bool:
         """Stop the streaming pipeline"""
         if not self.is_running:
-            self.logger.warning(f"Device {self!r} is not running. Ignoring stop()")
+            self.logger.warning("Device %r is not running. Ignoring stop()", self)
             return False
 
         self.pipeline.stop()
@@ -487,12 +499,12 @@ class RSDevice:
         self.pipeline_profile = None
         self.intrinsic_matrices = {}  # {stream_name: intrinsics}
         self.last_frame_num = None
-        self.logger.info(f"Stopped device {self!r}")
+        self.logger.info("Stopped device %r", self)
         return True
 
     def run_as_process(self):
         """Run RSDevice as a separate process"""
-        self.logger.info(f"Running {self!r} as a separate process")
+        self.logger.info("Running %r as a separate process", self)
 
         # RSDevice control
         device_started = False
@@ -557,7 +569,7 @@ class RSDevice:
                 frames = self.pipeline.wait_for_frames()
                 # Fetch parent link pose and assign camera pose here for synchronization
                 if self.parent_pose_so_name is not None:  # dynamic camera pose
-                    so_pose.assign(so_parent_pose.fetch() * self.local_pose)
+                    so_pose.assign(so_parent_pose.fetch() * self.local_pose)  # type: ignore
                 frames = self.align.process(frames)  # align depth image to color frame
 
                 # TODO: it's not guaranteed that the depth frame is assigned last,
@@ -567,7 +579,7 @@ class RSDevice:
                         np.asarray(frame.data)
                     )
 
-        self.logger.info(f"Process running {self!r} is joined")
+        self.logger.info("Process running %r is joined", self)
         # Unlink created SharedObject
         so_joined.unlink()
         so_sync.unlink()
@@ -596,36 +608,37 @@ class RSDevice:
     @property
     def supported_depth_presets(self) -> list[str]:
         presets = []
-        max_val = int(self.depth_sensor.get_option_range(rs.option.visual_preset).max)
+        max_val = int(self.depth_sensor.get_option_range(rs.option.visual_preset).max)  # type: ignore
         for i in range(max_val + 1):
             preset = self.depth_sensor.get_option_value_description(
-                rs.option.visual_preset, i
+                rs.option.visual_preset,  # type: ignore
+                i,
             )
             presets.append(preset)
         return presets
 
     @property
-    def supported_color_options(self) -> dict[int, rs.option_range]:
+    def supported_color_options(self) -> dict[int, rs.option_range]:  # type: ignore
         options = {}
         for option in self.color_sensor.get_supported_options():
             try:
                 options[option] = self.color_sensor.get_option_range(option)
-            except RuntimeError:
+            except RuntimeError:  # noqa: PERF203
                 pass
         return options
 
     @property
-    def supported_depth_options(self) -> dict[int, rs.option_range]:
+    def supported_depth_options(self) -> dict[int, rs.option_range]:  # type: ignore
         options = {}
         for option in self.depth_sensor.get_supported_options():
             try:
                 options[option] = self.depth_sensor.get_option_range(option)
-            except RuntimeError:
+            except RuntimeError:  # noqa: PERF203
                 pass
         return options
 
     @staticmethod
-    def rs_intr2np(intrinsics: rs.intrinsics) -> np.ndarray:
+    def rs_intr2np(intrinsics: rs.intrinsics) -> np.ndarray:  # type: ignore
         """Converts rs.intrinsics to 3x3 np.ndaray"""
         intr = np.array([
             [intrinsics.fx, 0, intrinsics.ppx],
@@ -635,7 +648,7 @@ class RSDevice:
         return intr
 
     @staticmethod
-    def rs_extr2np(extrinsics: rs.extrinsics) -> np.ndarray:
+    def rs_extr2np(extrinsics: rs.extrinsics) -> np.ndarray:  # type: ignore
         """Converts rs.extrinsics to 4x4 np.ndaray"""
         extr = np.eye(4)
         extr[:3, :3] = np.asarray(extrinsics.rotation).reshape(3, 3).T
@@ -653,18 +666,18 @@ class RSDevice:
         tab = "    "
 
         # ----- Device Info ----- #
-        firmware_version = self.device.get_info(rs.camera_info.firmware_version)
-        rec_fw_ver = self.device.get_info(rs.camera_info.recommended_firmware_version)
-        physical_port = self.device.get_info(rs.camera_info.physical_port)
-        debug_op_code = self.device.get_info(rs.camera_info.debug_op_code)
+        firmware_version = self.device.get_info(rs.camera_info.firmware_version)  # type: ignore
+        rec_fw_ver = self.device.get_info(rs.camera_info.recommended_firmware_version)  # type: ignore
+        physical_port = self.device.get_info(rs.camera_info.physical_port)  # type: ignore
+        debug_op_code = self.device.get_info(rs.camera_info.debug_op_code)  # type: ignore
         advanced_mode = "N/A"
         if self.product_type != "L515":
-            advanced_mode = self.device.get_info(rs.camera_info.advanced_mode)
-        product_id = self.device.get_info(rs.camera_info.product_id)
-        camera_locked = self.device.get_info(rs.camera_info.camera_locked)
-        product_line = self.device.get_info(rs.camera_info.product_line)
-        asic_serial_number = self.device.get_info(rs.camera_info.asic_serial_number)
-        firmware_update_id = self.device.get_info(rs.camera_info.firmware_update_id)
+            advanced_mode = self.device.get_info(rs.camera_info.advanced_mode)  # type: ignore
+        product_id = self.device.get_info(rs.camera_info.product_id)  # type: ignore
+        camera_locked = self.device.get_info(rs.camera_info.camera_locked)  # type: ignore
+        product_line = self.device.get_info(rs.camera_info.product_line)  # type: ignore
+        asic_serial_number = self.device.get_info(rs.camera_info.asic_serial_number)  # type: ignore
+        firmware_update_id = self.device.get_info(rs.camera_info.firmware_update_id)  # type: ignore
         device_info = (
             "Device info:\n"
             f"{tab}Name                          : {tab}{self.name}\n"
@@ -699,7 +712,7 @@ class RSDevice:
             if isinstance(params[0], tuple):  # video streams, params: [(w, h, fps),]
                 stream_profiles += "\n".join([
                     f"{tab}{stream_name}{tab} {width}x{height}"
-                    f"{' ' * (len('resolution') - 2 - len(str(width)) - len(str(height)))}"
+                    f"{' ' * (len('resolution') - 2 - len(str(width)) - len(str(height)))}"  # noqa: E501
                     f"     @ {fps}Hz{' ' * (7 - len(str(fps)))}{format}"
                     for (width, height, fps) in params
                 ])
@@ -765,7 +778,10 @@ class RSDevice:
                         f"  FOV (deg):    {fovx:.4f} x {fovy:.4f} ({fovd:.4f})\n"
                         f"  Intrinsic mat:\n    np.array({intr_mat_str})\n\n"
                     )
-            elif isinstance(intr_dict, rs.motion_device_intrinsic):  # motion streams
+            elif isinstance(
+                intr_dict,
+                rs.motion_device_intrinsic,  # type: ignore
+            ):  # motion streams
                 intr_mat_str = np.array2string(
                     np.asarray(intr_dict.data),
                     precision=20,
@@ -848,7 +864,7 @@ class RealSenseAPI:
 
         devices = [RSDevice(sn, **kwargs) for sn in device_sn]
 
-        self.logger.info(f"Loading {len(devices)} devices")
+        self.logger.info("Loading %d devices", len(devices))
         return devices
 
     def enable_all_devices(self):

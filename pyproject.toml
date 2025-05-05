@@ -124,7 +124,7 @@ select = [
 ignore = [
   "B007",   # unused-loop-control-variable
   "B008",   # function-call-in-default-argument
-  "UP007",  # allow typing.Optional[int], instead of forcing int | None
+  "UP045",  # allow typing.Optional[int], instead of forcing int | None
   "EXE002", # ntfs has no executable bit
   "SIM105", # allow try-except-pass blocks
 ]

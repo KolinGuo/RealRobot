@@ -1,7 +1,8 @@
+# ruff: noqa: UP007
 from __future__ import annotations
 
 import time
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import open3d as o3d
@@ -14,9 +15,10 @@ from .o3d_gui_visualizer import O3DGUIVisualizer
 from .utils import colorize_mask, draw_mask
 
 try:
-    from pynput.keyboard import Key, KeyCode, Listener
+    from pynput.keyboard import KeyCode, Listener
 except ImportError as e:
-    get_logger("visualizer.py").warning(f"ImportError: {e}")
+    get_logger("visualizer.py").error(f"Need pynput to pause synchronous render: {e}")
+    raise e
 
 
 pause_render = False
@@ -39,26 +41,26 @@ class Visualizer:
         :param stream_robot: whether to update robot mesh when a new robot state arrives
         """
         if run_as_process:
-            self.cv2vis_proc = ctx.Process(
+            self.cv2vis_proc = ctx.Process(  # type: ignore
                 target=CV2Visualizer,
                 name="CV2Visualizer",
                 args=(),
-                kwargs=dict(
-                    run_as_process=True,
-                    stream_camera=stream_camera,
-                ),
+                kwargs={
+                    "run_as_process": True,
+                    "stream_camera": stream_camera,
+                },
             )
             start_and_wait_for_process(self.cv2vis_proc, timeout=30)
 
-            self.o3dvis_proc = ctx.Process(
+            self.o3dvis_proc = ctx.Process(  # type: ignore
                 target=O3DGUIVisualizer,
                 name="O3DGUIVisualizer",
                 args=(),
-                kwargs=dict(
-                    run_as_process=True,
-                    stream_camera=stream_camera,
-                    stream_robot=stream_robot,
-                ),
+                kwargs={
+                    "run_as_process": True,
+                    "stream_camera": stream_camera,
+                    "stream_robot": stream_robot,
+                },
             )
             start_and_wait_for_process(self.o3dvis_proc, timeout=30)
 
@@ -77,7 +79,10 @@ class Visualizer:
 
         self.run_as_process = run_as_process
 
-    def reset(self, obs_dict={}):
+    def reset(self, obs_dict: Optional[dict] = None):
+        if obs_dict is None:
+            obs_dict = {}
+
         if self.run_as_process:
             self.so_reset.trigger()  # triggers reset
             time.sleep(1e-3)  # sleep a while to wait for visualizer to finish reset
@@ -93,7 +98,7 @@ class Visualizer:
             self.show_obs(obs_dict)
             self.render()
 
-    def _show_obs_async(self, obs_dict: dict[str, Union[SharedObject._object_types]]):
+    def _show_obs_async(self, obs_dict: dict[str, Union[SharedObject._object_types]]):  # type: ignore
         """Render observations
         :param obs_dict: dict, {so_data_name: obs_data}
                          See CV2Visualizer.__init__.__doc__ and
@@ -130,6 +135,10 @@ class Visualizer:
             if not isinstance(obs_data, list):
                 obs_name, obs_data = [obs_name], [obs_data]
             else:
+                assert camera_names is not None, (
+                    "Need camera_names when obs_data is a "
+                    "list of np.ndarray from multiple cameras"
+                )
                 # Prepend camera_name to obs_name
                 obs_name = [f"{cam_name}/{obs_name}" for cam_name in camera_names]
 
@@ -142,14 +151,14 @@ class Visualizer:
                 elif "mask" in name:  # mask images
                     if len(color_images) > 0:
                         images[name + "_overlay"] = draw_mask(color_images[i], obs)
-                    images[name] = colorize_mask(obs)
+                    images[name] = colorize_mask(obs)  # type: ignore
                 elif "xyz_image" in name:  # xyz_image
                     colors = None
                     if len(color_images) > 0:
                         colors = color_images[i].reshape(-1, 3) / 255.0
-                    o3d_geometries[name] = np2pcd(obs.reshape(-1, 3), colors)
+                    o3d_geometries[name] = np2pcd(obs.reshape(-1, 3), colors)  # type: ignore
                 elif "points" in name or "pts" in name:  # point clouds
-                    o3d_geometries[name] = np2pcd(obs.reshape(-1, 3))
+                    o3d_geometries[name] = np2pcd(obs.reshape(-1, 3))  # type: ignore
                 elif "bbox" in name:  # bounding boxes
                     assert isinstance(
                         obs,
@@ -160,9 +169,9 @@ class Visualizer:
                     ), f"Not a bbox: {type(obs) = }"
                     o3d_geometries[name] = obs
                 elif "mesh" in name:  # TriangleMesh
-                    assert isinstance(
-                        obs, o3d.geometry.TriangleMesh
-                    ), f"Not a mesh: {type(obs) = }"
+                    assert isinstance(obs, o3d.geometry.TriangleMesh), (
+                        f"Not a mesh: {type(obs) = }"
+                    )
                     o3d_geometries[name] = obs
                 else:
                     raise NotImplementedError(f"Unknown object {name = }")

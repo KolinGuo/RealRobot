@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import os
 import time
+from typing import Optional
 
 from .shared_object import SharedObject
 
@@ -15,7 +16,9 @@ class SharedObjectDefaultDict(dict):
         return so
 
 
-def start_and_wait_for_process(process: mp.Process, *, timeout: float = None) -> None:
+def start_and_wait_for_process(
+    process: mp.Process, *, timeout: Optional[float] = None
+) -> None:
     """Start and wait for process to be ready (finishes initialization)
     When the waiting process is ready, it should trigger SharedObject "proc_<pid>_ready"
 

@@ -36,6 +36,7 @@ Usage Notes:
     >>> so.fetch()[..., 0]  # Slice only
     >>> so.fetch(lambda x: x[..., 0].copy()) + 1  # Slice and apply operation
 """
+# ruff: noqa: UP007
 
 from __future__ import annotations
 
@@ -159,14 +160,14 @@ class SharedObject:
         17,  # int
         17,  # float
         37,  # sapien.Pose
-        _get_bytes_size.__func__,  # str
-        _get_bytes_size.__func__,  # bytes
+        _get_bytes_size.__func__,  # str # type: ignore
+        _get_bytes_size.__func__,  # bytes # type: ignore
         lambda array, ndim: array.nbytes + ndim * 8 + 18,  # ndarray
     )
 
     @staticmethod
     def _fetch_metas(shm: SharedMemory) -> tuple:
-        nbytes = shm._size
+        nbytes = shm._size  # type: ignore
         mtime, object_type_idx = struct.unpack_from("QB", shm.buf, offset=0)
         np_metas = ()
         if object_type_idx == 7:  # np.ndarray
@@ -254,14 +255,14 @@ class SharedObject:
             return data_buf_ro.copy()
 
     _fetch_objects = (
-        _fetch_None.__func__,
-        _fetch_bool.__func__,
-        _fetch_int.__func__,
-        _fetch_float.__func__,
-        _fetch_pose.__func__,
-        _fetch_str.__func__,
-        _fetch_bytes.__func__,
-        _fetch_ndarray.__func__,
+        _fetch_None.__func__,  # type: ignore
+        _fetch_bool.__func__,  # type: ignore
+        _fetch_int.__func__,  # type: ignore
+        _fetch_float.__func__,  # type: ignore
+        _fetch_pose.__func__,  # type: ignore
+        _fetch_str.__func__,  # type: ignore
+        _fetch_bytes.__func__,  # type: ignore
+        _fetch_ndarray.__func__,  # type: ignore
     )
 
     @staticmethod
@@ -299,14 +300,14 @@ class SharedObject:
         data_buf[:] = data
 
     _assign_objects = (
-        _assign_None.__func__,
-        _assign_bool.__func__,
-        _assign_int.__func__,
-        _assign_float.__func__,
-        _assign_pose.__func__,
-        _assign_bytes.__func__,
-        _assign_bytes.__func__,
-        _assign_ndarray.__func__,
+        _assign_None.__func__,  # type: ignore
+        _assign_bool.__func__,  # type: ignore
+        _assign_int.__func__,  # type: ignore
+        _assign_float.__func__,  # type: ignore
+        _assign_pose.__func__,  # type: ignore
+        _assign_bytes.__func__,  # type: ignore
+        _assign_bytes.__func__,  # type: ignore
+        _assign_ndarray.__func__,  # type: ignore
     )
     _np_dtypes = (
         np.bool_,
@@ -327,7 +328,7 @@ class SharedObject:
         np.complex256,
     )
 
-    def __init__(self, name: str, *, data: Union[_object_types] = None, init_size=100):
+    def __init__(self, name: str, *, data: Union[_object_types] = None, init_size=100):  # type: ignore
         """
         Examples:
             # Mounts SharedMemory "test" if exists,
@@ -356,8 +357,8 @@ class SharedObject:
             self.shm = SharedMemory(name, create=True, size=nbytes)
             created = True
         self.name = name
-        self._readers_lock = ReadersLock(self.shm._fd)
-        self._writer_lock = WriterLock(self.shm._fd)
+        self._readers_lock = ReadersLock(self.shm._fd)  # type: ignore
+        self._writer_lock = WriterLock(self.shm._fd)  # type: ignore
 
         if created:
             self.nbytes = nbytes
@@ -399,7 +400,7 @@ class SharedObject:
                 )
             self._assign(data, object_type_idx, nbytes, np_metas)
 
-    def _preprocess_data(self, data: Union[_object_types]) -> tuple:
+    def _preprocess_data(self, data: Union[_object_types]) -> tuple:  # type: ignore
         """Preprocess object data and return useful informations
 
         :return data: processed data. Only changed for str (=> encoded bytes)
@@ -409,8 +410,8 @@ class SharedObject:
         """
         try:
             object_type_idx = self._object_types.index(type(data))
-        except ValueError:
-            raise TypeError(f"Not supported object_type: {type(data)}")
+        except ValueError as e:
+            raise TypeError(f"Not supported object_type: {type(data)}") from e
 
         # Get shared memory size in bytes
         np_metas = ()
@@ -424,8 +425,8 @@ class SharedObject:
         elif object_type_idx == 7:  # np.ndarray
             try:
                 np_dtype_idx = self._np_dtypes.index(data.dtype)
-            except ValueError:
-                raise TypeError(f"Not supported numpy dtype: {data.dtype}")
+            except ValueError as e:
+                raise TypeError(f"Not supported numpy dtype: {data.dtype}") from e
             data_ndim = data.ndim
             np_metas = (np_dtype_idx, data_ndim, data.shape)
 
@@ -458,7 +459,7 @@ class SharedObject:
         self.mtime = mtime
         return modified
 
-    def fetch(self, fn: _fetch_fn_type = None) -> Any:
+    def fetch(self, fn: _fetch_fn_type = None) -> Any:  # type: ignore
         """
         Fetch a copy of data from SharedMemory (protected by readers lock)
         See SharedObject._fetch_ndarray() for best practices of fn with np.ndarray
@@ -480,7 +481,7 @@ class SharedObject:
         self._readers_lock.release()
         return data
 
-    def trigger(self) -> "SharedObject":
+    def trigger(self) -> SharedObject:
         """Trigger by modifying object mtime (protected by writer lock)"""
         self._writer_lock.acquire()
         # Update mtime
@@ -488,13 +489,13 @@ class SharedObject:
         self._writer_lock.release()
         return self
 
-    def assign(self, data: Union[_object_types]) -> "SharedObject":
+    def assign(self, data: Union[_object_types]) -> SharedObject:  # type: ignore
         """Assign data to SharedMemory (protected by writer lock)"""
         return self._assign(*self._preprocess_data(data))
 
     def _assign(
         self, data, object_type_idx: int, nbytes: int, np_metas: tuple
-    ) -> "SharedObject":
+    ) -> SharedObject:
         """Inner function for assigning data (protected by writer lock)
         For SharedObject, object_type_idx, nbytes, and np_metas cannot be modified
         """
@@ -561,7 +562,9 @@ class SharedDynamicObject(SharedObject):
 
     @staticmethod
     def _fetch_metas(shm: SharedMemory) -> tuple:
-        nbytes = shm._mmap.size()  # _mmap size will be updated by os.ftruncate()
+        nbytes = (
+            shm._mmap.size()  # type: ignore
+        )  # _mmap size will be updated by os.ftruncate()
         mtime, object_type_idx = struct.unpack_from("QB", shm.buf, offset=0)
         np_metas = ()
         if object_type_idx == 7:  # np.ndarray
@@ -571,7 +574,7 @@ class SharedDynamicObject(SharedObject):
     def __init__(self, *args, **kwargs):
         raise NotImplementedError("Implementation not complete")
 
-    def fetch(self, fn: SharedObject._fetch_fn_type = None) -> Any:
+    def fetch(self, fn: SharedObject._fetch_fn_type = None) -> Any:  # type: ignore
         """Fetch a copy of data from SharedMemory (protected by readers lock)
         :param fn: function to apply on data, e.g., lambda x: x + 1.
         :return data: a copy of data read from SharedMemory
@@ -588,12 +591,12 @@ class SharedDynamicObject(SharedObject):
         self._readers_lock.release()
         return data
 
-    def assign(self, data: Union[SharedObject._object_types], reallocate=False) -> None:
+    def assign(self, data: Union[SharedObject._object_types], reallocate=False) -> None:  # type: ignore
         """Assign data to SharedMemory (protected by writer lock)
         :param reallocate: whether to force reallocation
         """
         # Check object type
-        data, object_type_idx, nbytes, np_metas = self._preprocess_data(data)
+        data, object_type_idx, nbytes, np_metas = self._preprocess_data(data)  # noqa: F841
 
         self._writer_lock.acquire()
         # Fetch shm info

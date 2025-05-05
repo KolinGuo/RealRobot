@@ -22,7 +22,7 @@ def merge_dicts(ds: Sequence[dict], asarray=False):
             ret[k].append(d[k])
     ret = dict(ret)
     # Sanity check (length)
-    assert len(set(len(v) for v in ret.values())) == 1, "Keys are not same."
+    assert len({len(v) for v in ret.values()}) == 1, "Keys are not same."
     if asarray:
         ret = {k: np.concatenate(v) for k, v in ret.items()}
     return ret
@@ -65,15 +65,15 @@ def convert_observation_to_space(observation, prefix=""):
         if np.issubdtype(dtype, np.floating):
             low, high = -np.inf, np.inf
         space = spaces.Box(low, high, shape=shape, dtype=dtype)
-    elif isinstance(observation, (float, np.float32, np.float64)):
+    elif isinstance(observation, (float, np.float32, np.float64)):  # type: ignore
         get_logger("common").debug(f"The observation ({prefix}) is a (float) scalar")
         space = spaces.Box(-np.inf, np.inf, shape=[1], dtype=np.float32)
-    elif isinstance(observation, (int, np.int32, np.int64)):
+    elif isinstance(observation, (int, np.int32, np.int64)):  # type: ignore
         get_logger("common").debug(f"The observation ({prefix}) is a (integer) scalar")
-        space = spaces.Box(-np.inf, np.inf, shape=[1], dtype=int)
+        space = spaces.Box(-np.inf, np.inf, shape=[1], dtype=int)  # type: ignore
     elif isinstance(observation, (bool, np.bool_)):
         get_logger("common").debug(f"The observation ({prefix}) is a (bool) scalar")
-        space = spaces.Box(0, 1, shape=[1], dtype=np.bool_)
+        space = spaces.Box(0, 1, shape=[1], dtype=np.bool_)  # type: ignore
     else:
         raise NotImplementedError(type(observation), observation)
 
@@ -122,10 +122,10 @@ def flatten_state_dict(state_dict: dict) -> np.ndarray:
                 state = None
         elif isinstance(value, (tuple, list)):
             state = None if len(value) == 0 else value
-        elif isinstance(value, (bool, np.bool_, int, np.int32, np.int64)):
+        elif isinstance(value, (bool, np.bool_, int, np.int32, np.int64)):  # type: ignore
             # x = np.array(1) > 0 is np.bool_ instead of ndarray
             state = int(value)
-        elif isinstance(value, (float, np.float32, np.float64)):
+        elif isinstance(value, (float, np.float32, np.float64)):  # type: ignore
             state = np.float32(value)
         elif isinstance(value, np.ndarray):
             if value.ndim > 2:
@@ -134,7 +134,7 @@ def flatten_state_dict(state_dict: dict) -> np.ndarray:
                 )
             state = value if value.size > 0 else None
         else:
-            raise TypeError("Unsupported type: {}".format(type(value)))
+            raise TypeError(f"Unsupported type: {type(value)}")
         if state is not None:
             states.append(state)
     if len(states) == 0:
@@ -145,7 +145,7 @@ def flatten_state_dict(state_dict: dict) -> np.ndarray:
 
 def flatten_dict_keys(d: dict, prefix=""):
     """Flatten a dict by expanding its keys recursively."""
-    out = dict()
+    out = {}
     for k, v in d.items():
         if isinstance(v, dict):
             out.update(flatten_dict_keys(v, prefix + k + "/"))

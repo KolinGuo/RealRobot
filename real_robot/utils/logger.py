@@ -60,7 +60,7 @@ class ColorFormatter(logging.Formatter):
         if "timer" in record.name.lower() and record.levelno == logging.INFO:
             return self._color_styles["cyan"].format(record)
 
-        return self._color_styles[self.LEVEL_COLORS.get(record.levelno)].format(record)
+        return self._color_styles[self.LEVEL_COLORS.get(record.levelno)].format(record)  # type: ignore
 
 
 def get_logger(
@@ -139,7 +139,7 @@ def get_logger(
 
     logger.handlers = []
 
-    logger.addHandler(_default_file_handler)
+    logger.addHandler(_default_file_handler)  # type: ignore
     for handler in handlers:
         if isinstance(handler, logging.FileHandler):
             handler.setFormatter(file_formatter)

@@ -7,10 +7,19 @@ from typing import Literal, Optional, TypeVar, Union
 
 import numpy as np
 import open3d as o3d
-import open3d.visualization.rendering as rendering
-from urchin import URDF
+import open3d.visualization.rendering as rendering  # type: ignore
 
-from real_robot.utils.logger import get_logger
+from ..logger import get_logger
+
+try:
+    from urchin import URDF
+
+    URCHIN_AVAILABLE = True
+except ModuleNotFoundError:
+    get_logger("o3d_utils.py").warning(
+        "No urchin installed. Will not support load_urdf_geometries"
+    )
+    URCHIN_AVAILABLE = False
 
 _N = TypeVar("_N", bound=int)
 
@@ -18,7 +27,7 @@ _N = TypeVar("_N", bound=int)
 def np2pcd(
     points: np.ndarray[tuple[_N, Literal[3]], np.dtype[np.floating]]
     | o3d.geometry.PointCloud,
-    colors: Optional[np.ndarray[tuple[_N, Literal[3]], np.dtype[np.floating]]] = None,
+    colors: Optional[np.ndarray[tuple[_N, Literal[3]], np.dtype[np.floating]]] = None,  # type: ignore
     normals: Optional[np.ndarray[tuple[_N, Literal[3]], np.dtype[np.floating]]] = None,
 ) -> o3d.geometry.PointCloud:
     """Convert numpy array to open3d PointCloud."""
@@ -27,7 +36,7 @@ def np2pcd(
     pc = o3d.geometry.PointCloud()
     pc.points = o3d.utility.Vector3dVector(points.copy())
     if colors is not None:
-        colors = np.array(colors)
+        colors: np.ndarray = np.array(colors)  # type: ignore
         if colors.ndim == 2:
             assert len(colors) == len(points)
         elif colors.ndim == 1:
@@ -49,7 +58,7 @@ O3D_GEOMETRIES = (
 ANY_O3D_GEOMETRY = Union[O3D_GEOMETRIES]
 
 
-def transform_geometry(geometry: ANY_O3D_GEOMETRY, T: np.ndarray) -> ANY_O3D_GEOMETRY:
+def transform_geometry(geometry: ANY_O3D_GEOMETRY, T: np.ndarray) -> ANY_O3D_GEOMETRY:  # type: ignore
     """Apply transformation to o3d geometry, always returns a copy
 
     :param T: transformation matrix, [4, 4] np.floating np.ndarray
@@ -75,9 +84,9 @@ def transform_geometry(geometry: ANY_O3D_GEOMETRY, T: np.ndarray) -> ANY_O3D_GEO
 O3D_GEOMETRY_LIST = Union[tuple(list[t] for t in O3D_GEOMETRIES)]
 
 
-def merge_geometries(geometries: O3D_GEOMETRY_LIST) -> ANY_O3D_GEOMETRY:
+def merge_geometries(geometries: O3D_GEOMETRY_LIST) -> ANY_O3D_GEOMETRY:  # type: ignore
     """Merge a list of o3d geometries, must be of same type"""
-    geometry_types = set([type(geometry) for geometry in geometries])
+    geometry_types = {type(geometry) for geometry in geometries}
     assert len(geometry_types) == 1, f"Not the same geometry type: {geometry_types = }"
 
     merged_geometry = next(iter(geometry_types))()
@@ -148,6 +157,7 @@ def convert_mesh_format(mesh_path: str | Path, export_suffix=".glb") -> str:
         import trimesh
     except ImportError as e:
         get_logger("real_robot").critical("Failed to import trimesh: %s", e)
+        raise e
 
     mesh_format = Path(mesh_path).suffix[1:].lower()
     assert (
@@ -202,72 +212,75 @@ def load_geometry(
     return None
 
 
-def load_urdf_geometries(
-    urdf_path: str | Path,
-    *,
-    skip_links: Optional[list[str]] = None,
-    qpos: Optional[np.ndarray] = None,
-    base_pose: np.ndarray = np.eye(4),
-    return_pose: bool = False,
-    merge: bool = False,
-    logger=get_logger("real_robot"),
-) -> tuple[
-    URDF,
-    dict[
-        str,
-        tuple[rendering.TriangleMeshModel, np.ndarray] | rendering.TriangleMeshModel,
-    ]
-    | rendering.TriangleMeshModel,
-]:
-    """Load a robot geometries from a URDF file
+if URCHIN_AVAILABLE:
 
-    :param urdf_path: path to a URDF file.
-    :param skip_links: names of links to skip loading.
-    :param qpos: robot joint positions. If None, all joints are at zero positions.
-    :param base_pose: T_world_urdfbase pose, [4, 4] np.floating np.ndarray
-    :param return_pose: Whether to return the geometries pose in world frame
-                        instead of applying the pose transformation to the geometries.
-    :param merge: Whether to merge the geometries into a single
-                  rendering.TriangleMeshModel.
-    """
-    urdf_path = Path(urdf_path).resolve()
-    geometry_dir = urdf_path.parent
+    def load_urdf_geometries(
+        urdf_path: str | Path,
+        *,
+        skip_links: Optional[list[str]] = None,
+        qpos: Optional[np.ndarray] = None,
+        base_pose: np.ndarray = np.eye(4),
+        return_pose: bool = False,
+        merge: bool = False,
+        logger=get_logger("real_robot"),
+    ) -> tuple[
+        URDF,
+        dict[
+            str,
+            tuple[rendering.TriangleMeshModel, np.ndarray]
+            | rendering.TriangleMeshModel,
+        ]
+        | rendering.TriangleMeshModel,
+    ]:
+        """Load a robot geometries from a URDF file
 
-    robot: URDF = URDF.load(urdf_path, lazy_load_meshes=True)
+        :param urdf_path: path to a URDF file.
+        :param skip_links: names of links to skip loading.
+        :param qpos: robot joint positions. If None, all joints are at zero positions.
+        :param base_pose: T_world_urdfbase pose, [4, 4] np.floating np.ndarray
+        :param return_pose: Whether to return the geometries pose in world frame
+                            instead of applying the pose transformation to the geometries.
+        :param merge: Whether to merge the geometries into a single
+                    rendering.TriangleMeshModel.
+        """  # noqa: E501
+        urdf_path = Path(urdf_path).resolve()
+        geometry_dir = urdf_path.parent
 
-    # Filter based on skip_links
-    link_names = [link.name for link in robot.links]
-    if skip_links is not None:
-        link_names = [name for name in link_names if name not in skip_links]
+        robot: URDF = URDF.load(urdf_path, lazy_load_meshes=True)  # type: ignore
 
-    # Load URDF geometries
-    urdf_geometries = {}  # {geometry_name: rendering.TriangleMeshModel}
-    for link in robot.link_fk(links=link_names):
-        n_visuals = len(link.visuals)
-        for i, visual in enumerate(link.visuals):
-            geo_name = link.name if n_visuals == 1 else f"{link.name}_{i}"
-            urdf_geometries[geo_name] = load_geometry(
-                f"{geometry_dir}/{visual.geometry.mesh.filename}",
-                logger=logger,
+        # Filter based on skip_links
+        link_names = [link.name for link in robot.links]
+        if skip_links is not None:
+            link_names = [name for name in link_names if name not in skip_links]
+
+        # Load URDF geometries
+        urdf_geometries = {}  # {geometry_name: rendering.TriangleMeshModel}
+        for link in robot.link_fk(links=link_names):
+            n_visuals = len(link.visuals)
+            for i, visual in enumerate(link.visuals):
+                geo_name = link.name if n_visuals == 1 else f"{link.name}_{i}"
+                urdf_geometries[geo_name] = load_geometry(
+                    f"{geometry_dir}/{visual.geometry.mesh.filename}",
+                    logger=logger,
+                )
+
+        if qpos is None:
+            qpos = np.zeros(len(robot.actuated_joints))
+
+        # Apply the pose transformation when merging the geometries
+        if merge:
+            return_pose = False
+        for (geometry_name, geometry), T_base_geom in zip(
+            urdf_geometries.items(),
+            robot.visual_geometry_fk(qpos, links=link_names).values(),
+        ):
+            urdf_geometries[geometry_name] = (
+                (geometry, base_pose @ T_base_geom)
+                if return_pose
+                else transform_geometry(geometry, base_pose @ T_base_geom)
             )
 
-    if qpos is None:
-        qpos = np.zeros(len(robot.actuated_joints))
-
-    # Apply the pose transformation when merging the geometries
-    if merge:
-        return_pose = False
-    for (geometry_name, geometry), T_base_geom in zip(
-        urdf_geometries.items(),
-        robot.visual_geometry_fk(qpos, links=link_names).values(),
-    ):
-        urdf_geometries[geometry_name] = (
-            (geometry, base_pose @ T_base_geom)
-            if return_pose
-            else transform_geometry(geometry, base_pose @ T_base_geom)
-        )
-
-    if merge:
-        return robot, merge_geometries(urdf_geometries.values())
-    else:
-        return robot, urdf_geometries
+        if merge:
+            return robot, merge_geometries(urdf_geometries.values())
+        else:
+            return robot, urdf_geometries

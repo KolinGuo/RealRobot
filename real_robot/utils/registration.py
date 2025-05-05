@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from functools import partial
-from typing import Type
+from typing import Optional
 
 import gymnasium as gym
 from gymnasium.envs.registration import EnvSpec as GymEnvSpec
@@ -20,9 +20,9 @@ class EnvSpec:
     def __init__(
         self,
         uid: str,
-        cls: Type[XArmBaseEnv],
+        cls: type[XArmBaseEnv],
         max_episode_steps=None,
-        default_kwargs: dict = None,
+        default_kwargs: Optional[dict] = None,
     ):
         """A specification for a real_robot environment."""
         self.uid = uid
@@ -52,7 +52,7 @@ REGISTERED_ENVS: dict[str, EnvSpec] = {}
 
 def register(
     name: str,
-    cls: Type[XArmBaseEnv],
+    cls: type[XArmBaseEnv],
     max_episode_steps: int | None = None,
     default_kwargs: dict | None = None,
 ):
@@ -77,7 +77,7 @@ def make(env_id, as_gym=True, enable_segmentation=False, **kwargs):
         **kwargs: Keyword arguments to pass to the environment.
     """
     if env_id not in REGISTERED_ENVS:
-        raise KeyError("Env {} not found in registry".format(env_id))
+        raise KeyError(f"Env {env_id} not found in registry")
     env_spec = REGISTERED_ENVS[env_id]
 
     # Dispatch observation mode
@@ -109,7 +109,7 @@ def make(env_id, as_gym=True, enable_segmentation=False, **kwargs):
 
     # Set observation mode on the wrapper
     if isinstance(env, gym.Wrapper):
-        env.obs_mode = obs_mode
+        env.obs_mode = obs_mode  # type: ignore
 
     # Compatible with gym.make
     if as_gym:

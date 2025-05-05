@@ -4,6 +4,7 @@ import glob
 import os
 import platform
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -11,9 +12,9 @@ from typing import Optional
 
 import numpy as np
 import open3d as o3d
-import open3d.visualization.gui as gui
-import open3d.visualization.rendering as rendering
-from open3d.utility import Vector3dVector
+import open3d.visualization.gui as gui  # type: ignore
+import open3d.visualization.rendering as rendering  # type: ignore
+from open3d.utility import Vector3dVector  # type: ignore
 
 from ..camera import T_CV_GL, T_GL_CV, T_ROS_CV, T_ROS_GL, depth2xyz
 from ..lib3d.o3d_utils import load_geometry, load_urdf_geometries
@@ -28,7 +29,7 @@ from .gripper_utils import XArmGripper
 isMacOS = platform.system() == "Darwin"
 
 _o3d_geometry_type = (
-    "o3d.geometry.Geometry3D | o3d.t.geometry.Geometry | rendering.TriangleMeshModel"
+    o3d.geometry.Geometry3D | o3d.t.geometry.Geometry | rendering.TriangleMeshModel
 )
 
 
@@ -38,7 +39,7 @@ class O3DGeometryDefaultDict(dict):
     Used in O3DGUIVisualizer.run_as_process()
     """
 
-    def __missing__(self, name: str) -> _o3d_geometry_type:
+    def __missing__(self, name: str) -> _o3d_geometry_type:  # type: ignore
         if name.endswith("_pcd"):
             geometry = self[name] = o3d.geometry.PointCloud()
         elif name.endswith("_frame"):
@@ -256,9 +257,9 @@ class GeometryNode:
 
     name: str
     id: int = -1
-    parent: "GeometryNode" = None
-    children: list["GeometryNode"] = field(default_factory=list)
-    geometry_data: _o3d_geometry_type = None
+    parent: GeometryNode | None = None
+    children: list[GeometryNode] = field(default_factory=list)
+    geometry_data: _o3d_geometry_type = None  # type: ignore
     cell: gui.Widget = None
     # Material settings values
     mat_changed: bool = False
@@ -276,7 +277,7 @@ class GeometryNode:
             # return self.name.removeprefix(self.parent.name + '/')
             return (
                 self.name[len(prefix) :]
-                if self.name.startswith((prefix := self.parent.name + "/"))
+                if self.name.startswith(prefix := self.parent.name + "/")
                 else self.name
             )
         return self.name
@@ -284,7 +285,7 @@ class GeometryNode:
     def __repr__(self) -> str:
         return (
             f"<{self.__class__.__name__}: '{self.name}' (id={self.id}), "
-            f"parent='{self.parent.name}', "
+            f"parent='{self.parent.name if self.parent else None}', "
             f"children={[f'{c.name}' for c in self.children]}>"
         )
 
@@ -398,7 +399,9 @@ class O3DGUIVisualizer:
         gui.Application.instance.initialize()
 
         self.window_name = window_name
-        self.window = gui.Application.instance.create_window(window_name, *window_size)
+        self.window: gui.Window = gui.Application.instance.create_window(
+            window_name, *window_size
+        )
         self.paused = False
         self.single_step = False
         self.not_closed = True
@@ -771,7 +774,7 @@ class O3DGUIVisualizer:
                 # what we call it. This is the application menu, and it is
                 # where the About..., Preferences..., and Quit menu items
                 # typically go.
-                menu.add_menu("Example", app_menu)
+                menu.add_menu("Example", app_menu)  # type: ignore
                 menu.add_menu("File", file_menu)
                 menu.add_menu("Panels", panels_menu)
                 # Don't include help menu unless it has something more than
@@ -929,7 +932,7 @@ class O3DGUIVisualizer:
         """Callback function when _single_step_button is clicked"""
         self.single_step = True
 
-    def update_render_info(self, text: str, color=[1.0, 1.0, 1.0]):
+    def update_render_info(self, text: str, color: Sequence[float] = [1.0, 1.0, 1.0]):
         self._render_info.text = text
         self._render_info.text_color = gui.Color(*color)
         self.window.post_redraw()  # force redraw
@@ -1018,7 +1021,7 @@ class O3DGUIVisualizer:
         self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
         self._apply_settings()
 
-    def _on_sun_dir(self, sun_dir: np.ndarray):
+    def _on_sun_dir(self, sun_dir: list[float]):
         self.settings.sun_dir = sun_dir
         self._profiles.selected_text = Settings.CUSTOM_PROFILE_NAME
         self._apply_settings()
@@ -1059,7 +1062,7 @@ class O3DGUIVisualizer:
     def _on_material_reset(self):
         """Callback function when _material_reset_button is clicked"""
         # Reset to default material settings
-        self._update_material_from_node(GeometryNode)
+        self._update_material_from_node(GeometryNode(""))
         # Update selected geometries using self.settings.material
         self._update_selected_geometry_material(reset=True)
 
@@ -1115,7 +1118,7 @@ class O3DGUIVisualizer:
         # If a GeometryNode is toggled on,
         #   toggle on all its parent nodes
         if show:
-            while (node := node.parent) is not None:
+            while (node := node.parent) is not None:  # type: ignore
                 node.cell.checkbox.checked = True
 
     def _on_geometry_tree(self, new_item_id: int):
@@ -1378,8 +1381,8 @@ class O3DGUIVisualizer:
     def add_geometry(
         self,
         name: str,
-        geometry: _o3d_geometry_type,
-        show: bool = None,
+        geometry: _o3d_geometry_type,  # type: ignore
+        show: Optional[bool] = None,
         reset_camera: bool = False,
     ) -> bool:
         """
@@ -1393,7 +1396,7 @@ class O3DGUIVisualizer:
         :reset_camera: whether to reset camera view to fit all geometries
         :return success: whether geometry is successfully added
         """
-        name = name.split("/")
+        name = name.split("/")  # type: ignore
         # group_names can be [], ["g1"], ["g1", "g1/g2"]
         group_names = ["/".join(name[:i]) for i in range(1, len(name))]
         name = "/".join(name)
@@ -1410,11 +1413,12 @@ class O3DGUIVisualizer:
 
         # Add geometry to scene
         # Remove geometry with the same name
+        T_world_obj = np.eye(4)
         if name in self.geometries:
             T_world_obj = self._scene.scene.get_geometry_transform(name)
             self._scene.scene.remove_geometry(name)
+        unlit_line_geometry = False
         try:
-            unlit_line_geometry = False
             if isinstance(geometry, rendering.TriangleMeshModel):
                 self._scene.scene.add_model(name, geometry)
             elif isinstance(
@@ -1439,11 +1443,11 @@ class O3DGUIVisualizer:
         # NOTE: sometimes scene.add_geometry will fail with no warning/error
         # E.g., when adding an empty pointcloud: o3d.geometry.PointCloud()
         if not self._scene.scene.has_geometry(name):
-            self.logger.warning(f"Failed to add geometry {name}: {geometry}")
+            self.logger.warning("Failed to add geometry %s: %s", name, geometry)
             # Remove geometry node if exists
             # because geometry is already removed from scene
             if name in self.geometries:
-                self.logger.warning(f"Removing geometry {name} from scene")
+                self.logger.warning("Removing geometry %s from scene", name)
                 self.remove_geometry(name)
             return False
 
@@ -1492,8 +1496,8 @@ class O3DGUIVisualizer:
 
     def add_geometries(
         self,
-        geometry_dict: dict[str, _o3d_geometry_type],
-        show: bool = None,
+        geometry_dict: dict[str, _o3d_geometry_type],  # type: ignore
+        show: Optional[bool] = None,
         hide_others: bool = False,
         reset_camera: bool = False,
     ):
@@ -1519,7 +1523,7 @@ class O3DGUIVisualizer:
         self,
         name: str,
         parent_node: GeometryNode | None = None,
-        geometry_data: _o3d_geometry_type = None,
+        geometry_data: _o3d_geometry_type = None,  # type: ignore
     ) -> GeometryNode:
         """Create a GeometryNode and update GUI"""
         child_node = GeometryNode(name, parent=parent_node, geometry_data=geometry_data)
@@ -1554,7 +1558,7 @@ class O3DGUIVisualizer:
         elif name in self.geometry_groups:
             self._remove_geometry_node(self.geometry_groups[name])
         else:
-            self.logger.error(f"No geometry or geometry group with {name = }")
+            self.logger.error("No geometry or geometry group with name = %s", name)
 
     def _remove_geometry_node(self, node: GeometryNode):
         """Remove a GeometryNode and its children, update GUI and scene.
@@ -1569,6 +1573,9 @@ class O3DGUIVisualizer:
 
         while len(unvisited_nodes) > 0:  # for all children nodes
             n = unvisited_nodes.pop()
+            assert n.parent is not None, (
+                f"n={n!r} is root_geometry_node={self.root_geometry_node!r}"
+            )
             n.parent.children.remove(n)
             self.id_to_geometry_nodes.pop(n.id)
             # Remove an item and all its children from _geometry_tree
@@ -1584,9 +1591,12 @@ class O3DGUIVisualizer:
         # If a parent group node has no children, remove it
         while (
             node is not self.root_geometry_node
-            and (node := node.parent) is not self.root_geometry_node
+            and (node := node.parent) is not self.root_geometry_node  # type: ignore
             and len(node.children) == 0
         ):
+            assert node.parent is not None, (
+                f"node={node!r} is root_geometry_node={self.root_geometry_node!r}"
+            )
             node.parent.children.remove(node)
             self.geometry_groups.pop(node.name)
             self.id_to_geometry_nodes.pop(node.id)
@@ -1675,7 +1685,7 @@ class O3DGUIVisualizer:
         width: int,
         height: int,
         K: np.ndarray,
-        T: np.ndarray = None,
+        T: Optional[np.ndarray] = None,
         fmt: str = "GL",
     ):
         """Add a camera to view from (OpenGL convention)
@@ -1727,7 +1737,7 @@ class O3DGUIVisualizer:
         """Run O3DGUIVisualizer as a separate process"""
         # TODO: size-variable pointcloud support is not implemented yet,
         #       Need support for size-variable np.ndarray in SharedObject
-        self.logger.info(f"Running {self!r} as a separate process")
+        self.logger.info("Running %r as a separate process", self)
 
         # O3DGUIVisualizer control
         so_joined = SharedObject("join_viso3d")
@@ -1760,10 +1770,16 @@ class O3DGUIVisualizer:
             )
             pcd.transform(T_world_camROS @ T_ROS_CV)
             self.add_camera(
-                camera_name, *depth_image.shape[1::-1], K, T_world_camROS, fmt="ROS"
+                camera_name,
+                *depth_image.shape[1::-1],
+                K,  # type: ignore
+                T_world_camROS,  # type: ignore
+                fmt="ROS",
             )
 
-        def init_urdf_geometries(robot_name: str, *, urdf_so_name: str = None):
+        def init_urdf_geometries(
+            robot_name: str, *, urdf_so_name: Optional[str] = None
+        ):
             """Initialize robot geometries by reading from URDF
             and adding all meshes to visualizer
             :param urdf_so_name: name of SharedObject containing URDF path
@@ -1896,9 +1912,7 @@ class O3DGUIVisualizer:
                         K = so_dict[f"{data_prefix}_intr"].fetch()
                         depth_image = so_dict[so_data_name].fetch()
 
-                        depth_scale = (
-                            1000.0 if depth_image.dtype == np.uint16 else 1.0,
-                        )
+                        depth_scale = 1000.0 if depth_image.dtype == np.uint16 else 1.0
                         # if depth_scale is provided
                         if f"{so_data_name}_scale" in all_so_names:
                             depth_scale = so_dict[f"{so_data_name}_scale"].fetch()
@@ -1906,7 +1920,7 @@ class O3DGUIVisualizer:
                         data_dict[data_uid].points = Vector3dVector(
                             depth2xyz(depth_image, K, depth_scale).reshape(-1, 3)
                         )
-                        self.add_camera(camera_name, *depth_image.shape[1::-1], K)
+                        self.add_camera(camera_name, *depth_image.shape[1::-1], K)  # type: ignore
                         redraw_geometry_uids.add(data_uid)  # redraw
                     elif data_fmt == "pose":  # object / camera pose
                         T = so_dict[so_data_name].fetch().to_transformation_matrix()
@@ -1916,7 +1930,9 @@ class O3DGUIVisualizer:
                         if data_uid not in self.geometries:  # add for the first time
                             self.add_geometry(data_uid, data_dict[data_uid])
                         if not self._scene.scene.has_geometry(data_uid):
-                            self.logger.error(f"Geometry {data_uid=} is not in scene")
+                            self.logger.error(
+                                "Geometry data_uid=%s is not in scene", data_uid
+                            )
                         # NOTE: it's also possible to rescale coord frames
                         # with set_geometry_transform (maybe add another slider?)
                         self._scene.scene.set_geometry_transform(data_uid, T)
@@ -1971,7 +1987,7 @@ class O3DGUIVisualizer:
 
             self.render()
 
-        self.logger.info(f"Process running {self!r} is joined")
+        self.logger.info("Process running %r is joined", self)
         # Unlink created SharedObject
         so_joined.unlink()
 
