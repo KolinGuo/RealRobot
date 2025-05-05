@@ -45,6 +45,7 @@ vis = [
   "Pillow",
   "scipy>=1.10.0",
   "open3d>=0.17.0", # for visualization
+  "pynput",         # monitor keyboard event
 ]
 vis_all = ["real_robot[vis]", "urchin"]
 xarm = [
@@ -55,7 +56,6 @@ all = [
   "pyrealsense2==2.54.2.5684", # L515 support
   "gymnasium",
   "transforms3d",
-  "pynput",                    # monitor keyboard event
   "opencv-contrib-python",     # cv2.rgbd.registerDepth()
   "sapien~=3.0.0.dev",         # for sapien.Pose and simsense
 ]
