@@ -9,16 +9,14 @@ import numpy as np
 import open3d as o3d
 import open3d.visualization.rendering as rendering  # type: ignore
 
-from ..logger import get_logger
+from real_robot import LOGGER
 
 try:
     from urchin import URDF
 
     URCHIN_AVAILABLE = True
 except ModuleNotFoundError:
-    get_logger("o3d_utils.py").warning(
-        "No urchin installed. Will not support load_urdf_geometries"
-    )
+    LOGGER.warning("No urchin installed. Will not support load_urdf_geometries")
     URCHIN_AVAILABLE = False
 
 _N = TypeVar("_N", bound=int)
@@ -156,7 +154,7 @@ def convert_mesh_format(mesh_path: str | Path, export_suffix=".glb") -> str:
     try:
         import trimesh
     except ImportError as e:
-        get_logger("real_robot").critical("Failed to import trimesh: %s", e)
+        LOGGER.critical("Failed to import trimesh: {}", e)
         raise e
 
     mesh_format = Path(mesh_path).suffix[1:].lower()
@@ -179,7 +177,7 @@ O3D_MESH_FORMATS = ("ply", "stl", "obj", "off", "gltf", "glb")
 
 
 def load_geometry(
-    path: str | Path, *, logger=get_logger("real_robot")
+    path: str | Path,
 ) -> rendering.TriangleMeshModel | o3d.geometry.PointCloud | None:
     """Load a geometry from file as an Open3D geometry
 
@@ -196,7 +194,7 @@ def load_geometry(
     if geometry_type & o3d.io.CONTAINS_TRIANGLES:
         return o3d.io.read_triangle_model(str(path))
 
-    logger.debug("%s appears to be a point cloud", path)
+    LOGGER.debug("{} appears to be a point cloud", path)
     cloud = None
     try:
         cloud = o3d.io.read_point_cloud(str(path))
@@ -208,7 +206,7 @@ def load_geometry(
         cloud.normalize_normals()
         return cloud
 
-    logger.error("Failed to read points from %s", path)
+    LOGGER.error("Failed to read points from {}", path)
     return None
 
 
@@ -222,7 +220,6 @@ if URCHIN_AVAILABLE:
         base_pose: np.ndarray = np.eye(4),
         return_pose: bool = False,
         merge: bool = False,
-        logger=get_logger("real_robot"),
     ) -> tuple[
         URDF,
         dict[
@@ -260,8 +257,7 @@ if URCHIN_AVAILABLE:
             for i, visual in enumerate(link.visuals):
                 geo_name = link.name if n_visuals == 1 else f"{link.name}_{i}"
                 urdf_geometries[geo_name] = load_geometry(
-                    f"{geometry_dir}/{visual.geometry.mesh.filename}",
-                    logger=logger,
+                    f"{geometry_dir}/{visual.geometry.mesh.filename}"
                 )
 
         if qpos is None:

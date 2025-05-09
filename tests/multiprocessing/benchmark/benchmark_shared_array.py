@@ -1,7 +1,5 @@
 import ctypes
 import multiprocessing as mp
-import os
-import tempfile
 import time
 from contextlib import AbstractContextManager
 from multiprocessing.shared_memory import SharedMemory
@@ -9,12 +7,7 @@ from time import perf_counter
 
 import numpy as np
 
-from real_robot.utils.logger import get_logger
-
-os.environ["REAL_ROBOT_LOG_DIR"] = tempfile.TemporaryDirectory().name
-_logger = get_logger(
-    "Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
-)
+from real_robot import LOGGER
 
 
 class RuntimeTimer(AbstractContextManager):
@@ -31,7 +24,7 @@ class RuntimeTimer(AbstractContextManager):
     def __exit__(self, exc_type, exc_value, traceback):
         if self.enabled:
             self.elapsed_time = perf_counter() - self.start_time
-            _logger.info(f"{self.description}: Took {self.elapsed_time:.3f} seconds")
+            LOGGER.info("{}: Took {:.3f} seconds", self.description, self.elapsed_time)
 
 
 """1. Shared via manager_dict"""
@@ -78,8 +71,11 @@ def test_shared_via_manager_dict(ctx, data, n_iters=3, n_updates=5):
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(
-        f"manager_dict: {total_time = :.6f} {update_time = :.6f} {setup_time = :.6f}"
+    LOGGER.info(
+        "manager_dict: total_time = {:.6f} update_time = {:.6f} setup_time = {:.6f}",
+        total_time,
+        update_time,
+        setup_time,
     )
 
 
@@ -128,8 +124,11 @@ def test_shared_via_ctype_array(ctx, data: np.ndarray, n_iters=3, n_updates=5):
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(
-        f"ctype_array: {total_time = :.6f} {update_time = :.6f} {setup_time = :.6f}"
+    LOGGER.info(
+        "ctype_array: total_time = {:.6f} update_time = {:.6f} setup_time = {:.6f}",
+        total_time,
+        update_time,
+        setup_time,
     )
 
 
@@ -183,8 +182,11 @@ def test_shared_via_ctype_rawarray(ctx, data: np.ndarray, n_iters=3, n_updates=5
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(
-        f"ctype_rawarray: {total_time = :.6f} {update_time = :.6f} {setup_time = :.6f}"
+    LOGGER.info(
+        "ctype_rawarray: total_time = {:.6f} update_time = {:.6f} setup_time = {:.6f}",
+        total_time,
+        update_time,
+        setup_time,
     )
 
 
@@ -238,8 +240,11 @@ def test_shared_via_sharedmemory(ctx, data: np.ndarray, n_iters=3, n_updates=5):
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(
-        f"SharedMemory: {total_time = :.6f} {update_time = :.6f} {setup_time = :.6f}"
+    LOGGER.info(
+        "SharedMemory: total_time = {:.6f} update_time = {:.6f} setup_time = {:.6f}",
+        total_time,
+        update_time,
+        setup_time,
     )
 
 
@@ -296,9 +301,11 @@ def test_shared_via_memmap_file(ctx, data: np.ndarray, n_iters=3, n_updates=5):
 
     update_time = np.mean(update_times)
     setup_time = total_time - np.sum(update_times)
-    _logger.info(
-        f"MemoryMappedFile: {total_time = :.6f} {update_time = :.6f} "
-        f"{setup_time = :.6f}"
+    LOGGER.info(
+        "MemoryMappedFile: total_time = {:.6f} update_time = {:.6f} setup_time = {:.6f}",
+        total_time,
+        update_time,
+        setup_time,
     )
 
 

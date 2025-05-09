@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import random
 import string
-import tempfile
 import uuid
 from time import perf_counter
 from typing import Union
@@ -14,13 +12,9 @@ import numpy as np
 from sapien import Pose
 from transforms3d.euler import euler2quat
 
-from real_robot.utils.logger import get_logger
+from real_robot import LOGGER
 from real_robot.utils.multiprocessing import SharedObject, ctx
 
-os.environ["REAL_ROBOT_LOG_DIR"] = tempfile.TemporaryDirectory().name
-_logger = get_logger(
-    "Timer", fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
-)
 NDARRAY_NBYTES_LIMIT = 20 * 1024**2  # 20 MiB
 
 
@@ -1110,7 +1104,7 @@ class TestMultiProcess:
 
             so_joined.assign(True)
             procs[i].join()
-        _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
+        LOGGER.info("test: Took {:.3f} seconds", perf_counter() - start_time)
 
         print(results, flush=True)
         assert not np.any(np.array(results) % data.size), results
@@ -1152,7 +1146,7 @@ class TestMultiProcess:
 
             so_joined.assign(True)
             [proc.join() for proc in procs[5 * i : 5 * (i + 1)]]
-        _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
+        LOGGER.info("test: Took {:.3f} seconds", perf_counter() - start_time)
 
         print(results, flush=True)
         assert not np.any(np.array(results) % data.size), results
@@ -1210,7 +1204,7 @@ class TestMultiProcess:
 
             so_joined.assign(True)
             procs[i].join()
-        _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
+        LOGGER.info("test: Took {:.3f} seconds", perf_counter() - start_time)
 
         print(results, flush=True)
         assert not np.any(np.array(results) % data.size), results
@@ -1248,7 +1242,7 @@ class TestMultiProcess:
 
             so_joined.assign(True)
             [proc.join() for proc in procs[5 * i : 5 * (i + 1)]]
-        _logger.info(f"test: Took {perf_counter() - start_time:.3f} seconds")
+        LOGGER.info("test: Took {:.3f} seconds", perf_counter() - start_time)
 
         print(results, flush=True)
         assert not np.any(np.array(results) % data.size), results

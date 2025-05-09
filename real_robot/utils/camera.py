@@ -5,16 +5,14 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from .logger import get_logger
+from real_robot import LOGGER
 
 try:
     from sapien import Pose  # type: ignore
 
     SAPIEN_AVAILABLE = True
 except ModuleNotFoundError:
-    get_logger("camera.py").warning(
-        "No sapien installed. Will not have pose_CV_GL, etc."
-    )
+    LOGGER.warning("No sapien installed. Will not have pose_CV_GL, etc.")
     SAPIEN_AVAILABLE = False
 
 # Convert between camera frame conventions

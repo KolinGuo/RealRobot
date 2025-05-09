@@ -12,8 +12,9 @@ import numpy as np
 import pyrealsense2 as rs
 from sapien import Pose
 
+from real_robot import LOGGER
+
 from .camera import pose_CV_ROS
-from .logger import get_logger
 from .multiprocessing import SharedObject, signal_process_ready
 
 # https://www.intelrealsense.com/compare-depth-cameras/
@@ -26,8 +27,8 @@ def check_rs_product_support(name: str) -> str:
     """Check if the RealSense device is supported. Print warning otherwise"""
     product_type = name.split()[-1]
     if product_type not in SUPPORTED_RS_PRODUCTS:
-        get_logger("realsense.py").warning(
-            f'Only support {SUPPORTED_RS_PRODUCTS} currently, got "{name}"'
+        LOGGER.warning(
+            'Only support {} currently, got "{}"', SUPPORTED_RS_PRODUCTS, name
         )
     return product_type
 
@@ -54,12 +55,16 @@ def get_connected_rs_devices(
                 fw_version = d.get_info(rs.camera_info.firmware_version)  # type: ignore
                 usb_type = d.get_info(rs.camera_info.usb_type_descriptor)  # type: ignore
 
-                get_logger("realsense.py").info(
-                    f"Found {name} (S/N: {serial} FW: {fw_version} on USB {usb_type})"
+                LOGGER.info(
+                    "Found {} (S/N: {} FW: {} on USB {})",
+                    name,
+                    serial,
+                    fw_version,
+                    usb_type,
                 )
                 check_rs_product_support(name)
                 RS_DEVICES[serial] = d
-        get_logger("realsense.py").info(f"Found {len(RS_DEVICES)} devices")
+        LOGGER.info("Found {} devices", len(RS_DEVICES))
 
     if device_sn is None:
         return list(RS_DEVICES.keys())
@@ -180,8 +185,6 @@ class RSDevice:
         if depth_option_kwargs is None:
             depth_option_kwargs = {}
 
-        self.logger = get_logger("RSDevice")
-
         if device_sn is None:
             device_sns = get_connected_rs_devices()
             assert len(device_sns) == 1, (
@@ -194,8 +197,8 @@ class RSDevice:
         self.uid = device_sn if uid is None else uid.replace(" ", "_")
         self.usb_type = self.device.get_info(rs.camera_info.usb_type_descriptor)  # type: ignore
         if self.usb_type != "3.2":
-            self.logger.warning(
-                "Device %r is connected with USB %s, not 3.2", self, self.usb_type
+            LOGGER.warning(
+                "Device {!r} is connected with USB {}, not 3.2", self, self.usb_type
             )
         self.product_type = check_rs_product_support(self.name)
         self.color_sensor = self.device.first_color_sensor()
@@ -361,7 +364,7 @@ class RSDevice:
             and "Color" not in self.config
             and self.align_to == "Color"
         ):
-            self.logger.warning(
+            LOGGER.warning(
                 "Color stream is not enabled. "
                 "Depth stream will not be aligned to Color frame"
             )
@@ -370,15 +373,15 @@ class RSDevice:
             and "Depth" not in self.config
             and self.align_to == "Depth"
         ):
-            self.logger.warning(
+            LOGGER.warning(
                 "Depth stream is not enabled. "
                 "Color stream will not be aligned to Depth frame"
             )
 
         # Record camera streams as a rosbag file
         if self.record_bag_path is not None:
-            self.logger.info(
-                'Enable recording %r to file "%s"', self, self.record_bag_path
+            LOGGER.info(
+                'Enable recording {!r} to file "{}"', self, self.record_bag_path
             )
             rs_config.enable_record_to_file(str(self.record_bag_path))
         return rs_config
@@ -401,15 +404,15 @@ class RSDevice:
             if preset not in (presets := self.supported_depth_presets):
                 raise ValueError(f"Unknown {preset=}. Available presets: {presets}")
             self.depth_sensor.set_option(rs.option.visual_preset, presets.index(preset))  # type: ignore
-            self.logger.info('Loaded "%s" preset for %r', preset, self)
+            LOGGER.info('Loaded "{}" preset for {!r}', preset, self)
 
         # Set sensor options
         for key, value in color_option_kwargs.items():
             self.color_sensor.set_option(key, value)
-            self.logger.info('Setting Color option "%s" to %s', key, value)
+            LOGGER.info('Setting Color option "{}" to {}', key, value)
         for key, value in depth_option_kwargs.items():
             self.depth_sensor.set_option(key, value)
-            self.logger.info('Setting Depth option "%s" to %s', key, value)
+            LOGGER.info('Setting Depth option "{}" to {}', key, value)
 
         # Load json config
         if json_file is not None:
@@ -417,13 +420,13 @@ class RSDevice:
                 json_string = str(json.load(f)).replace("'", '"')
             advanced_mode = rs.rs400_advanced_mode(self.device)  # type: ignore
             advanced_mode.load_json(json_string)
-            self.logger.info('Loaded json config from "%s"', json_file)
+            LOGGER.info('Loaded json config from "{}"', json_file)
 
     def start(self) -> bool:
         """Start the streaming pipeline"""
         if self.is_running:
-            self.logger.warning(
-                "Device %r is already running. "
+            LOGGER.warning(
+                "Device {!r} is already running. "
                 "Please call stop() before calling start() again",
                 self,
             )
@@ -441,9 +444,9 @@ class RSDevice:
 
         # Log enabled streams
         streams = self.pipeline_profile.get_streams()
-        self.logger.info("Started device %r with %d streams", self, len(streams))
+        LOGGER.info("Started device {!r} with {} streams", self, len(streams))
         for i, stream in enumerate(streams):
-            self.logger.info("Stream %d: %s", i + 1, stream)
+            LOGGER.info("Stream {}: {}", i + 1, stream)
 
         # Stores camera intrinsics
         frames = self.pipeline.wait_for_frames()
@@ -473,13 +476,13 @@ class RSDevice:
             * "Infrared 1/2": infrared image, [H, W] np.uint8 array
         """
         if not self.is_running:
-            self.logger.error("Device %r is not started", self)
+            LOGGER.error("Device {!r} is not started", self)
             return None
 
         frames = self.pipeline.wait_for_frames()
         frames = self.align.process(frames)
         self.last_frame_num = frames.get_frame_number()
-        # self.logger.info(f"Received frame #{self.last_frame_num}")
+        # LOGGER.info("Received frame #{}", self.last_frame_num)
 
         # Need to copy() so the device can release the frame from its internal memory
         ret_frames = {
@@ -491,7 +494,7 @@ class RSDevice:
     def stop(self) -> bool:
         """Stop the streaming pipeline"""
         if not self.is_running:
-            self.logger.warning("Device %r is not running. Ignoring stop()", self)
+            LOGGER.warning("Device {!r} is not running. Ignoring stop()", self)
             return False
 
         self.pipeline.stop()
@@ -499,12 +502,12 @@ class RSDevice:
         self.pipeline_profile = None
         self.intrinsic_matrices = {}  # {stream_name: intrinsics}
         self.last_frame_num = None
-        self.logger.info("Stopped device %r", self)
+        LOGGER.info("Stopped device {!r}", self)
         return True
 
     def run_as_process(self):
         """Run RSDevice as a separate process"""
-        self.logger.info("Running %r as a separate process", self)
+        LOGGER.info("Running {!r} as a separate process", self)
 
         # RSDevice control
         device_started = False
@@ -579,7 +582,7 @@ class RSDevice:
                         np.asarray(frame.data)
                     )
 
-        self.logger.info("Process running %r is joined", self)
+        LOGGER.info("Process running {!r} is joined", self)
         # Unlink created SharedObject
         so_joined.unlink()
         so_sync.unlink()
@@ -843,8 +846,6 @@ class RealSenseAPI:
     """This API should only be used for testing, use sensors.Camera instead"""
 
     def __init__(self, **kwargs):
-        self.logger = get_logger("RealSenseAPI")
-
         self._connected_devices = self._load_connected_devices(**kwargs)
         self._enabled_devices = []
 
@@ -864,7 +865,7 @@ class RealSenseAPI:
 
         devices = [RSDevice(sn, **kwargs) for sn in device_sn]
 
-        self.logger.info("Loading %d devices", len(devices))
+        LOGGER.info("Loading {} devices", len(devices))
         return devices
 
     def enable_all_devices(self):

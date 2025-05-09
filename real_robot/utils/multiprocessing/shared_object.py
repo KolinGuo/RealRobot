@@ -48,14 +48,12 @@ from typing import Any, Union
 
 import numpy as np
 
-from ..logger import get_logger
+from real_robot import LOGGER
 
 try:
     from sapien import Pose  # type: ignore
 except ModuleNotFoundError:
-    get_logger("SharedObject").warning(
-        "No sapien installed. Will not support sapien.Pose"
-    )
+    LOGGER.warning("No sapien installed. Will not support sapien.Pose")
 
     class Pose:
         def __init__(self) -> None:
@@ -71,7 +69,7 @@ except ModuleNotFoundError:
 try:
     import fcntl
 except ModuleNotFoundError as e:
-    get_logger("SharedObject").critical("Not supported on Windows")
+    LOGGER.critical("Not supported on Windows: failed to import fcntl")
     raise e
 
 
@@ -246,7 +244,7 @@ class SharedObject:
             if not isinstance(data, np.ndarray) or data.flags.owndata:
                 return data
             else:
-                get_logger("SharedObject").warning(
+                LOGGER.warning(
                     "Fetching ndarray with fn that does not trigger a copy "
                     "induces an extra copy. Consider changing to improve performance."
                 )
@@ -395,9 +393,7 @@ class SharedObject:
         # fill data
         if data is not None:
             if not created:
-                get_logger("SharedObject").warning(
-                    f"Implicitly overwriting data of {self!r}"
-                )
+                LOGGER.warning("Implicitly overwriting data of {!r}", self)
             self._assign(data, object_type_idx, nbytes, np_metas)
 
     def _preprocess_data(self, data: Union[_object_types]) -> tuple:  # type: ignore

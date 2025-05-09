@@ -1,4 +1,5 @@
-"""xArm7 Agent Interface
+"""
+xArm7 Agent Interface
 Check user manual at https://www.ufactory.cc/download/
 """
 
@@ -17,10 +18,10 @@ from transforms3d.quaternions import axangle2quat
 from urchin import URDF
 from xarm.wrapper import XArmAPI
 
-from .. import ASSET_DIR
+from real_robot import ASSET_DIR, LOGGER
+
 from ..sensors.camera import CameraConfig
 from ..utils.common import clip_and_scale_action, vectorize_pose
-from ..utils.logger import get_logger
 from ..utils.multiprocessing import SharedObject, signal_process_ready
 
 # TODO: remove return code from all functions, add return code checks
@@ -84,7 +85,6 @@ class XArm7:
             * "xarm7_real_qf": xArm7 joint torques, [8,] np.float32 np.ndarray
             * "xarm7_real_tcp_pose": tcp pose in world frame (unit: m), sapien.Pose
         """
-        self.logger = get_logger("XArm7")
         self.ip = ip
         self.arm = XArmAPI(ip)
 
@@ -253,7 +253,9 @@ class XArm7:
         # [-1, 1] => [-10, 850]
         gripper_pos = clip_and_scale_action(action[-1], self.gripper_limits)
 
-        self.logger.info(f"Setting {tgt_tcp_pose = }, {gripper_pos = }")
+        LOGGER.info(
+            "Setting tgt_tcp_pose = {}, gripper_pos = {}", tgt_tcp_pose, gripper_pos
+        )
         return tgt_tcp_pose, gripper_pos
 
     def set_action(
@@ -291,7 +293,7 @@ class XArm7:
             error_code, warn_code = self.arm.get_err_warn_code()
             # if error_code in [35]:  # 35: Safety Boundary Limit
             #     self.clean_warning_error()
-            self.logger.error(f"ErrorCode: {error_code}, need to manually clean it")
+            LOGGER.error("ErrorCode: {}, need to manually clean it", error_code)
             self.arm.get_err_warn_code(show=True)
             _ = input("Press enter after cleaning error")
 
@@ -537,7 +539,7 @@ class XArm7:
         ret[0] = self.arm._arm._check_code(ret[0])
         for v in ret[1:]:
             if not math.isfinite(v):
-                self.logger.critical(f"Return value not finite: {ret[1:]=}")
+                LOGGER.critical("Return value not finite: ret[1:]={}", ret[1:])
 
         xyzrpy = np.asarray(ret[1:], dtype=np.float32)
         pose_base_tcp = Pose(
@@ -591,7 +593,7 @@ class XArm7:
 
     def run_as_process(self):
         """Run XArm7 as a separate process"""
-        self.logger.info(f"Running {self!r} as a separate process")
+        LOGGER.info("Running {!r} as a separate process", self)
 
         # XArm7 control
         so_joined = SharedObject("join_xarm7_real")
@@ -645,7 +647,7 @@ class XArm7:
                 )
                 so_tcp_pose.assign(pose_world_tcp)
 
-        self.logger.info(f"Process running {self!r} is joined")
+        LOGGER.info("Process running {!r} is joined", self)
         # Unlink created SharedObject
         so_joined.unlink()
         so_sync.unlink()

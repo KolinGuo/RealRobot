@@ -16,9 +16,10 @@ import open3d.visualization.gui as gui  # type: ignore
 import open3d.visualization.rendering as rendering  # type: ignore
 from open3d.utility import Vector3dVector  # type: ignore
 
+from real_robot import LOGGER
+
 from ..camera import T_CV_GL, T_GL_CV, T_ROS_CV, T_ROS_GL, depth2xyz
 from ..lib3d.o3d_utils import load_geometry, load_urdf_geometries
-from ..logger import get_logger
 from ..multiprocessing import (
     SharedObject,
     SharedObjectDefaultDict,
@@ -392,8 +393,6 @@ class O3DGUIVisualizer:
         :param stream_camera: whether to redraw camera stream when a new frame arrives
         :param stream_robot: whether to update robot mesh when a new robot state arrives
         """  # noqa: E501
-        self.logger = get_logger("O3DGUIVisualizer")
-
         # We need to initialize the application, which finds the necessary shaders
         # for rendering and prepares the cross-platform window abstraction.
         gui.Application.instance.initialize()
@@ -1325,11 +1324,7 @@ class O3DGUIVisualizer:
         :param base_pose: T_world_urdfbase pose, [4, 4] np.floating np.ndarray
         """
         robot, urdf_geometries = load_urdf_geometries(
-            urdf_path,
-            qpos=qpos,
-            base_pose=base_pose,
-            return_pose=True,
-            logger=self.logger,
+            urdf_path, qpos=qpos, base_pose=base_pose, return_pose=True
         )
         robot_name = robot.name if robot_name is None else robot_name
 
@@ -1374,7 +1369,7 @@ class O3DGUIVisualizer:
                      Geometry and geometry group with same names can coexist.
         """
         geometry_name = Path(path).stem if name is None else name
-        geometry = load_geometry(path, logger=self.logger)
+        geometry = load_geometry(path)
         if geometry is not None:
             self.add_geometry(geometry_name, geometry)
 
@@ -1437,17 +1432,17 @@ class O3DGUIVisualizer:
                 geometry, (o3d.geometry.Geometry3D, o3d.t.geometry.Geometry)
             ):
                 self._scene.scene.add_geometry(name, geometry, self.settings.material)
-        except Exception as e:
-            self.logger.error(e)
+        except Exception:
+            LOGGER.exception("Error adding geometry: {}", name)
 
         # NOTE: sometimes scene.add_geometry will fail with no warning/error
         # E.g., when adding an empty pointcloud: o3d.geometry.PointCloud()
         if not self._scene.scene.has_geometry(name):
-            self.logger.warning("Failed to add geometry %s: %s", name, geometry)
+            LOGGER.warning("Failed to add geometry {}: {}", name, geometry)
             # Remove geometry node if exists
             # because geometry is already removed from scene
             if name in self.geometries:
-                self.logger.warning("Removing geometry %s from scene", name)
+                LOGGER.warning("Removing geometry {} from scene", name)
                 self.remove_geometry(name)
             return False
 
@@ -1558,7 +1553,7 @@ class O3DGUIVisualizer:
         elif name in self.geometry_groups:
             self._remove_geometry_node(self.geometry_groups[name])
         else:
-            self.logger.error("No geometry or geometry group with name = %s", name)
+            LOGGER.error("No geometry or geometry group with name = {}", name)
 
     def _remove_geometry_node(self, node: GeometryNode):
         """Remove a GeometryNode and its children, update GUI and scene.
@@ -1737,7 +1732,7 @@ class O3DGUIVisualizer:
         """Run O3DGUIVisualizer as a separate process"""
         # TODO: size-variable pointcloud support is not implemented yet,
         #       Need support for size-variable np.ndarray in SharedObject
-        self.logger.info("Running %r as a separate process", self)
+        LOGGER.info("Running {!r} as a separate process", self)
 
         # O3DGUIVisualizer control
         so_joined = SharedObject("join_viso3d")
@@ -1881,10 +1876,11 @@ class O3DGUIVisualizer:
                 ]
 
                 if len(so_data_names) == 0:
-                    self.logger.warning(
-                        "No valid shm data names found under /dev/shm. "  # noqa: G004
-                        f"The shm filenames must have prefix in {valid_prefixes} and "
-                        f"suffix in {valid_suffixes}"
+                    LOGGER.warning(
+                        "No valid shm data names found under /dev/shm. "
+                        "The shm filenames must have prefix in {} and suffix in {}",
+                        valid_prefixes,
+                        valid_suffixes,
                     )
 
                 for so_data_name in so_data_names:
@@ -1930,8 +1926,8 @@ class O3DGUIVisualizer:
                         if data_uid not in self.geometries:  # add for the first time
                             self.add_geometry(data_uid, data_dict[data_uid])
                         if not self._scene.scene.has_geometry(data_uid):
-                            self.logger.error(
-                                "Geometry data_uid=%s is not in scene", data_uid
+                            LOGGER.error(
+                                "Geometry data_uid={} is not in scene", data_uid
                             )
                         # NOTE: it's also possible to rescale coord frames
                         # with set_geometry_transform (maybe add another slider?)
@@ -1987,7 +1983,7 @@ class O3DGUIVisualizer:
 
             self.render()
 
-        self.logger.info("Process running %r is joined", self)
+        LOGGER.info("Process running {!r} is joined", self)
         # Unlink created SharedObject
         so_joined.unlink()
 

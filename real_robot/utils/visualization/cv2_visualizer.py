@@ -12,7 +12,8 @@ from typing import Any, Optional
 import cv2
 import numpy as np
 
-from ..logger import get_logger
+from real_robot import LOGGER
+
 from ..multiprocessing import (
     SharedObject,
     SharedObjectDefaultDict,
@@ -87,8 +88,6 @@ class CV2Visualizer:
           * "_mask": Object mask images, [H, W] bool/np.uint8 np.ndarray
         :param stream_camera: whether to redraw camera stream when a new frame arrives
         """
-        self.logger = get_logger("CV2Visualizer")
-
         self.window_name = window_name
         self.last_timestamp_ns = time.time_ns()
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -229,7 +228,7 @@ class CV2Visualizer:
 
     def run_as_process(self):
         """Run CV2Visualizer as a separate process"""
-        self.logger.info("Running %r as a separate process", self)
+        LOGGER.info("Running {!r} as a separate process", self)
 
         # CV2Visualizer control
         so_joined = SharedObject("join_viscv2")
@@ -259,7 +258,7 @@ class CV2Visualizer:
                 ))
             ]
             if len(valid_names) == 0:
-                self.logger.warning(
+                LOGGER.warning(
                     "No valid shm data names found under /dev/shm. The shm filenames "
                     "must have prefix in ['rs_', 'vis_', 'viscv2_'] and "
                     "suffix in ['_color', '_depth', '_mask']"
@@ -359,7 +358,7 @@ class CV2Visualizer:
 
             self.render()
 
-        self.logger.info("Process running %r is joined", self)
+        LOGGER.info("Process running {!r} is joined", self)
         # Unlink created SharedObject
         so_joined.unlink()
 
@@ -468,7 +467,7 @@ class CV2Visualizer:
             if image_idx_mask.any():
                 return int(np.flatnonzero(image_idx_mask))
             else:
-                self.logger.warning("No selection, please move mouse to select")
+                LOGGER.warning("No selection, please move mouse to select")
                 return None
 
         if len(self.images) == 1:  # when there is only one image, skip selection
@@ -630,7 +629,7 @@ class CV2Visualizer:
                     (image_bounds[:, 0] <= self._mouse_pos).all()
                     and (self._mouse_pos < image_bounds[:, 1]).all()
                 ):
-                    self.logger.warning("Drawn points outside image bounds, ignoring")
+                    LOGGER.warning("Drawn points outside image bounds, ignoring")
                     return
                 self.points = np.vstack([self.points, self._mouse_pos])
                 self.point_labels = np.hstack([
@@ -651,7 +650,7 @@ class CV2Visualizer:
         This happens when the user adds/removes any drawing.
         """
         if self.selected_image_idx is None:
-            self.logger.error("No image selected, please select image first")
+            LOGGER.error("No image selected, please select image first")
             return
 
         cv2.setWindowTitle(self.window_name, "Busy updating drawings...")

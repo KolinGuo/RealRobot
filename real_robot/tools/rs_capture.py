@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import pyrealsense2 as rs
 
+from real_robot import LOGGER
 from real_robot.sensors.camera import Camera, CameraConfig
-from real_robot.utils.logger import get_logger
 from real_robot.utils.multiprocessing import (
     SharedObject,
     ctx,
@@ -17,7 +17,7 @@ from real_robot.utils.visualization import CV2Visualizer
 try:
     from pynput import keyboard
 except ImportError as e:
-    get_logger("rs_capture.py").warning(f"ImportError: {e}")
+    LOGGER.critical("ImportError: {}", e)
     raise e
 
 if __name__ == "__main__":

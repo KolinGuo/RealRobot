@@ -24,7 +24,6 @@ from ..utils.common import (
     flatten_state_dict,
     vectorize_pose,
 )
-from ..utils.logger import get_logger
 from ..utils.multiprocessing import SharedObject, ctx, start_and_wait_for_process
 from ..utils.visualization import Visualizer
 
@@ -138,7 +137,6 @@ class XArmBaseEnv(gym.Env[np.ndarray | dict, np.ndarray]):
         self.logdir = Path(logdir) / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.logdir.mkdir(parents=True, exist_ok=False)
         os.environ["REAL_ROBOT_LOG_DIR"] = str(self.logdir)
-        get_logger(log_file=self.logdir / "3rd_party.log")  # root logger log file
         self.record_camera = record_camera
 
         # Configure agent and cameras

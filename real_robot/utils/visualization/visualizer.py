@@ -7,8 +7,9 @@ from typing import Any, Optional, Union
 import numpy as np
 import open3d as o3d
 
+from real_robot import LOGGER
+
 from ..lib3d import np2pcd
-from ..logger import get_logger
 from ..multiprocessing import SharedObject, ctx, start_and_wait_for_process
 from .cv2_visualizer import CV2Visualizer
 from .o3d_gui_visualizer import O3DGUIVisualizer
@@ -17,7 +18,7 @@ from .utils import colorize_mask, draw_mask
 try:
     from pynput.keyboard import KeyCode, Listener
 except ImportError as e:
-    get_logger("visualizer.py").error(f"Need pynput to pause synchronous render: {e}")
+    LOGGER.critical("Need pynput to pause synchronous render: {}", e)
     raise e
 
 

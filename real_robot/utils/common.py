@@ -7,7 +7,7 @@ import numpy as np
 from gymnasium import spaces
 from sapien import Pose
 
-from .logger import get_logger
+from real_robot import LOGGER
 
 
 # -------------------------------------------------------------------------- #
@@ -66,13 +66,13 @@ def convert_observation_to_space(observation, prefix=""):
             low, high = -np.inf, np.inf
         space = spaces.Box(low, high, shape=shape, dtype=dtype)
     elif isinstance(observation, (float, np.float32, np.float64)):  # type: ignore
-        get_logger("common").debug(f"The observation ({prefix}) is a (float) scalar")
+        LOGGER.debug("The observation ({}) is a (float) scalar", prefix)
         space = spaces.Box(-np.inf, np.inf, shape=[1], dtype=np.float32)
     elif isinstance(observation, (int, np.int32, np.int64)):  # type: ignore
-        get_logger("common").debug(f"The observation ({prefix}) is a (integer) scalar")
+        LOGGER.debug("The observation ({}) is a (integer) scalar", prefix)
         space = spaces.Box(-np.inf, np.inf, shape=[1], dtype=int)  # type: ignore
     elif isinstance(observation, (bool, np.bool_)):
-        get_logger("common").debug(f"The observation ({prefix}) is a (bool) scalar")
+        LOGGER.debug("The observation ({}) is a (bool) scalar", prefix)
         space = spaces.Box(0, 1, shape=[1], dtype=np.bool_)  # type: ignore
     else:
         raise NotImplementedError(type(observation), observation)
