@@ -1,155 +1,147 @@
-import logging
-import multiprocessing as mp
 import os
 import sys
-from copy import deepcopy
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-_registry = []
-_format = (
-    "[%(asctime)s] [%(name)s] [%(filename)s:%(lineno)d] [%(levelname)s] %(message)s"
-)
-_log_dir = Path(
+from loguru import logger
+
+# Default _log_path is /tmp/logs/<package_name>/<date_time>.log
+# You can overwrite with '<PACKAGE_NAME>_LOG_PATH' environment variable
+_package = __package__.partition(".")[0]  # type: ignore
+_env_name = f"{_package.upper()}_LOG_PATH"
+_log_path = Path(
     os.getenv(
-        "REAL_ROBOT_LOG_DIR",
-        Path.home() / f"real_robot_logs/{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        _env_name,
+        f"/tmp/logs/{_package}/{datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
     )
 )
-_current_pid = -1
-_default_file_handler = None
+_log_path.parent.mkdir(parents=True, exist_ok=True)
 
 
-class ColorFormatter(logging.Formatter):
-    grey = "\x1b[37m"
-    cyan = "\x1b[36m"
-    green = "\x1b[32m"
-    yellow = "\x1b[33m"
-    red = "\x1b[31m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-
-    LEVEL_COLORS = {
-        logging.DEBUG: "grey",
-        logging.INFO: "green",
-        logging.WARNING: "yellow",
-        logging.ERROR: "red",
-        logging.CRITICAL: "bold_red",
-    }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._color_styles = {
-            "grey": self.duplicate_style(self._style, self.grey),
-            "cyan": self.duplicate_style(self._style, self.cyan),
-            "green": self.duplicate_style(self._style, self.green),
-            "yellow": self.duplicate_style(self._style, self.yellow),
-            "red": self.duplicate_style(self._style, self.red),
-            "bold_red": self.duplicate_style(self._style, self.bold_red),
-        }
-
-    @staticmethod
-    def duplicate_style(style, ansi_color_str):
-        style = deepcopy(style)
-        style._fmt = ansi_color_str + style._fmt + ColorFormatter.reset
-        return style
-
-    def formatMessage(self, record):
-        # Special color for timer info logs
-        if "timer" in record.name.lower() and record.levelno == logging.INFO:
-            return self._color_styles["cyan"].format(record)
-
-        return self._color_styles[self.LEVEL_COLORS.get(record.levelno)].format(record)  # type: ignore
-
-
-def get_logger(
-    name=None,
-    *,
-    fmt=_format,
-    datefmt=None,
-    with_stream=True,
-    stdout=False,
-    log_file=None,
-    log_level=logging.INFO,
-    log_file_level=logging.NOTSET,
-) -> logging.Logger:
+def _get_logging_format(
+    detailed: bool = False, process: bool = True, thread: bool = False
+) -> str:
     """
-    Initialize a logger by name and add to registry.
-    By default, it will add a FileHandler to
+    Returns the desired logging format.
 
-    * _log_dir / "master.log" for main process
-    * _log_dir / "<proc_name>_<proc_pid>.log" for child processes
-
-    If logger is in _registry, that logger is directly returned
-    If logger is a child of a logger in _registry, its kwargs are ignored and
-    will use its parent's kwargs
-
-    :param name: Logger name. If not specified, get the root logger
-    :param fmt: stream logging format, default is logger._format
-    :param date_fmt: date (asctime) logging format, default is '%Y-%m-%d %H:%M:%S,uuu'
-    :param with_stream: whether to add StreamHandler for terminal output
-    :param stdout: StreamHandler outputs to sys.stdout or sys.stderr
-    :param log_file: log filename. If specified, a FileHandler will be added.
-    :param log_level: logger StreamHandler logging level.
-    :param log_file_level: logger FileHandler logging level.
-    :return logger: logging.Logger, the expected logger.
+    :param detailed: Include more detailed information for file logging.
+    :param process: Include the process info in the log output.
+    :param thread: Include the thread info in the log output.
+    :return: The desired logging format string.
     """
-    # Initialize for a new process
-    global _registry, _log_dir, _current_pid, _default_file_handler
-    if _current_pid != os.getpid():  # this is a new process
-        _registry = []
-        _current_pid = os.getpid()
-        _log_dir = Path(os.getenv("REAL_ROBOT_LOG_DIR", _log_dir))
-        _log_dir.mkdir(parents=True, exist_ok=True)
-        # Create default FileHandler
-        if mp.parent_process() is None:  # main process
-            _default_log_file = _log_dir / "master.log"
-        else:  # child process
-            cur_proc = mp.current_process()
-            _default_log_file = _log_dir / f"{cur_proc.name}_{cur_proc.pid}.log"
-        _default_file_handler = logging.FileHandler(_default_log_file)
-        _default_file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt=datefmt))
-        _default_file_handler.setLevel(log_file_level)
+    if detailed:
+        log_format = (
+            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+            "<level>{level: <8}</level> | "
+        )
+    else:
+        log_format = (
+            "<green>{time:MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | "
+        )
 
-    if len(_registry) == 0:
-        logging.basicConfig(format=_format, level=logging.NOTSET, handlers=[])
+    if process:
+        log_format += (
+            "<yellow>{process.name} (pid={process.id})</yellow> | "
+            if detailed
+            else "<yellow>{process.name}</yellow> | "
+        )
 
-    logger = logging.getLogger(name)
-    # e.g., logger "a" is initialized, then logger "a.b" will skip the initialization
-    #   since it is a child of "a".
-    for _logger in _registry:
-        if (
-            logger is _logger
-            or name is not None
-            and name.startswith(_logger.name + ".")
-        ):
-            return logger
+    if thread:
+        log_format += (
+            "<yellow>{thread.name} (tid={thread.id})</yellow> | "
+            if detailed
+            else "<yellow>{thread.name}</yellow> | "
+        )
 
-    logger.propagate = False  # allow propergate to root logger
-    handlers = []
+    log_format += (
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+        "<level>{message}</level>"
+    )
+    return log_format
 
-    if with_stream and name is not None:  # no stream for root logger
-        handlers.append(logging.StreamHandler(sys.stdout if stdout else sys.stderr))
-    if log_file is not None:
-        handlers.append(logging.FileHandler(log_file))
 
-    color_formatter = ColorFormatter(fmt=fmt, datefmt=datefmt)
-    file_formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
+class Logger:
+    """
+    A logger for packages that need to use loguru without disrupting the global config.
+    All logs of this package should use an instance of this Logger.
 
-    logger.handlers = []
+    You can overwrite default file sink log level ("DEBUG")
+      with '<PACKAGE_NAME>_LOG_LEVEL' environment variable.
+    Available levels = [
+        "TRACE" (5), "DEBUG" (10), "INFO" (20), "SUCCESS" (25), "WARNING" (30),
+        "ERROR" (40), "CRITICAL" (50)
+    ]
 
-    logger.addHandler(_default_file_handler)  # type: ignore
-    for handler in handlers:
-        if isinstance(handler, logging.FileHandler):
-            handler.setFormatter(file_formatter)
-            handler.setLevel(log_file_level)
-            logger.addHandler(handler)
-        else:
-            handler.setFormatter(color_formatter)
-            handler.setLevel(log_level)
-            logger.addHandler(handler)
+    Logging methods:
+        LOGGER.trace()
+              .debug()
+              .info()
+              .success()
+              .warning()
+              .error()
+              .critical()
+              .log(level,)
+    Log ERROR while also capturing exception:
+        try:
+            ...
+        except Exception:
+            LOGGER.exception()
+    """
 
-    # logger.setLevel(log_level)
-    _registry.append(logger)
-    return logger
+    def __init__(self):
+        self.handler_ids = []
+
+        # Add a file sink for this library
+        self.handler_ids.append(
+            logger.add(
+                _log_path,
+                level=os.getenv(f"{_package.upper()}_LOG_LEVEL", "DEBUG"),
+                format=_get_logging_format(detailed=True, process=True, thread=False),
+                filter=lambda record: record["extra"].get("__package__") == _package,
+                backtrace=True,
+                diagnose=True,
+                enqueue=True,  # This is crucial for multiprocessing!
+            )
+        )
+
+        # Add a stderr sink for this library
+        self.handler_ids.append(
+            logger.add(
+                sys.stderr,
+                level="INFO",
+                format=_get_logging_format(detailed=False, process=True, thread=False),
+                filter=lambda record: record["extra"].get("__package__") == _package,
+                backtrace=True,
+                diagnose=True,
+                enqueue=True,  # This is crucial for multiprocessing!
+            )
+        )
+
+        # Create a contextualized logger for this library
+        self._logger = logger.bind(__package__=_package)
+
+    def __getattr__(self, name):
+        """Delegate all logging methods to the bound logger."""
+        return getattr(self._logger, name)
+
+    def cleanup(self):
+        """Remove all handlers added by this library."""
+        for handler_id in self.handler_ids:
+            logger.remove(handler_id)
+        self.handler_ids = []
+
+    @contextmanager
+    def catch(self, *args, **kwargs):
+        """Delegate the catch context manager to the internal logger."""
+        with self._logger.catch(*args, **kwargs):
+            yield
+
+    def __del__(self):
+        """On deletion, remove all handlers and wait for the logger to finish dumping"""
+        try:
+            self.cleanup()
+            self._logger.complete()
+        except Exception:
+            # Avoid exceptions during garbage collection
+            pass

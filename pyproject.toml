@@ -10,7 +10,7 @@ exclude-package-data = { "*" = ["*.convex.stl"] }
 [project]
 name = "real_robot"
 dynamic = ["version"]
-dependencies = ["numpy"]
+dependencies = ["numpy", "loguru>=0.7.3"]
 requires-python = ">=3.9"
 authors = [{ name = "Kolin Guo", email = "guokolin@gmail.com" }]
 description = "Real robot interface and utilities for asynchronous real-time deployment."
