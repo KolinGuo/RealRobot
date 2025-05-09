@@ -20,15 +20,15 @@ def demo_stream_obs():
     visualizer.show_obs({
         # "viso3d_saved_camera|captured_pcd_color": rgb_frame,
         # "viso3d_saved_camera|captured_pcd_pts": pts_camera,
-        # "viso3d_saved_camera|captured_pcd_pose": Pose.from_transformation_matrix(T_world_camCV),
+        # "viso3d_saved_camera|captured_pcd_pose": Pose(T_world_camCV),
         # "viso3d_saved_camera|captured_pcd_color": rgb_frame,
         # "viso3d_saved_camera|captured_pcd_xyzimg": xyz_image,
-        # "viso3d_saved_camera|captured_pcd_pose": Pose.from_transformation_matrix(T_world_camCV),
+        # "viso3d_saved_camera|captured_pcd_pose": Pose(T_world_camCV),
         "vis_saved_camera_color": rgb_frame,
         "vis_saved_camera_depth": depth_frame,
         "vis_saved_camera_intr": K,
         "vis_saved_camera_mask": mask,
-        "vis_saved_camera_pose": Pose.from_transformation_matrix(T_world_camCV),
+        "vis_saved_camera_pose": Pose(T_world_camCV),
         # Gripper Pose
         "robot_gripper_urdf_path": (
             f"{ASSET_DIR}/descriptions/xarm_floating_pris_finger_d435.urdf"
@@ -52,15 +52,15 @@ def demo_sync_obs():
     visualizer.show_obs({
         # "viso3d_saved_camera|captured_pcd_color": rgb_frame,
         # "viso3d_saved_camera|captured_pcd_pts": pts_camera,
-        # "viso3d_saved_camera|captured_pcd_pose": Pose.from_transformation_matrix(T_world_camCV),
+        # "viso3d_saved_camera|captured_pcd_pose": Pose(T_world_camCV),
         # "viso3d_saved_camera|captured_pcd_color": rgb_frame,
         # "viso3d_saved_camera|captured_pcd_xyzimg": xyz_image,
-        # "viso3d_saved_camera|captured_pcd_pose": Pose.from_transformation_matrix(T_world_camCV),
+        # "viso3d_saved_camera|captured_pcd_pose": Pose(T_world_camCV),
         "vis_saved_camera_color": rgb_frame,
         "vis_saved_camera_depth": depth_frame,
         "vis_saved_camera_intr": K,
         "vis_saved_camera_mask": mask,
-        "vis_saved_camera_pose": Pose.from_transformation_matrix(T_world_camCV),
+        "vis_saved_camera_pose": Pose(T_world_camCV),
         # Gripper Pose
         "robot_gripper_urdf_path": (
             f"{ASSET_DIR}/descriptions/xarm_floating_pris_finger_d435.urdf"
@@ -82,7 +82,7 @@ def demo_sync_obs():
 if __name__ == "__main__":
     cur_dir = Path(__file__).resolve().parent
     os.environ["REAL_ROBOT_LOG_DIR"] = str(
-        cur_dir / f'logs/{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        cur_dir / f"logs/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     )
     data_dir = cur_dir / "data/20230822_164823_cse_pink_mug_front"
 
