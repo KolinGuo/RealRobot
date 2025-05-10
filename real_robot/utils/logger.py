@@ -4,10 +4,46 @@ Consolidates multiprocessing/multithreading logs into a single log file.
 
 Customize its behaviors with these environment variables:
   * logging file path: <PACKAGE_NAME>_LOG_PATH="/tmp/logs/your_log.log"
-  * logging level: <PACKAGE_NAME>_LOG_LEVEL="TRACE"
+  * logging level (for stderr only, default=INFO): <PACKAGE_NAME>_LOG="TRACE"
+  * logging level (for file sink only, default=DEBUG): <PACKAGE_NAME>_FILE_LOG="TRACE"
 
-Careful optimization is done to make it run as fast as possible
-version 0.0.1
+Usage:
+  * Copy this file into your package (e.g., <package_name>/utils/logger.py)
+  * Add the following lines to your __init__.py:
+        ```python3
+        from <package_name>.utils.logger import Logger
+
+        LOGGER = Logger()
+        ```
+  * In anywhere of your package, import and use as follows:
+        ```python3
+        from <package_name> import LOGGER
+
+        LOGGER.info("Hello, world!")
+        ```
+
+Quick start reference:
+  * Logging methods:
+        LOGGER.trace("This is a {} from class {!r} __repr__()", "trace message", Class)
+              .debug()
+              .info()
+              .success()
+              .warning()
+              .error()
+              .critical()
+              .log(level, "This is {:.4f}", np.pi)
+  * Log ERROR while also capturing exception:
+        try:
+            ...
+        except Exception:
+            LOGGER.exception("This is an {}", "exception message")
+
+  * Available logging levels = [
+        "TRACE" (5), "DEBUG" (10), "INFO" (20), "SUCCESS" (25), "WARNING" (30),
+        "ERROR" (40), "CRITICAL" (50)
+    ]
+
+version 0.1.0
 
 Written by Kolin Guo
 """
@@ -83,28 +119,6 @@ class Logger:
     """
     A logger for packages that need to use loguru without disrupting the global config.
     All logs of this package should use an instance of this Logger.
-
-    You can overwrite default file sink log level ("DEBUG")
-      with '<PACKAGE_NAME>_LOG_LEVEL' environment variable.
-    Available levels = [
-        "TRACE" (5), "DEBUG" (10), "INFO" (20), "SUCCESS" (25), "WARNING" (30),
-        "ERROR" (40), "CRITICAL" (50)
-    ]
-
-    Logging methods:
-        LOGGER.trace()
-              .debug()
-              .info()
-              .success()
-              .warning()
-              .error()
-              .critical()
-              .log(level,)
-    Log ERROR while also capturing exception:
-        try:
-            ...
-        except Exception:
-            LOGGER.exception()
     """
 
     def __init__(self):
@@ -131,7 +145,7 @@ class Logger:
         self.new_handler_ids.append(
             logger.add(
                 _log_path,
-                level=os.getenv(f"{_package.upper()}_LOG_LEVEL", "DEBUG"),
+                level=os.getenv(f"{_package.upper()}_FILE_LOG", "DEBUG"),
                 format=_get_logging_format(detailed=True, process=True, thread=False),
                 filter=lambda record: record["extra"].get("__package__") == _package,
                 backtrace=True,
@@ -144,7 +158,7 @@ class Logger:
         self.new_handler_ids.append(
             logger.add(
                 sys.stderr,
-                level="INFO",
+                level=os.getenv(f"{_package.upper()}_LOG", "INFO"),
                 format=_get_logging_format(detailed=False, process=True, thread=False),
                 filter=lambda record: record["extra"].get("__package__") == _package,
                 backtrace=True,
