@@ -1,9 +1,12 @@
+import functools
 import os
 import sys
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
+import loguru
 from loguru import logger
 
 # Default _log_path is /tmp/logs/<package_name>/<date_time>.log
@@ -90,10 +93,27 @@ class Logger:
     """
 
     def __init__(self):
-        self.handler_ids = []
+        self.new_handler_ids = []
 
+        # ----- Filter this project's logs from existing stdout/stderr handlers ----- #
+        self.std_handler_orig_filter = {}  # {handler_id: filter}
+        # For all handlers of the singleton logger
+        for handler_id, handler in logger._core.handlers.items():  # type: ignore
+            # If the handler is a stdout/stderr stream sink
+            if isinstance(handler._sink, loguru._simple_sinks.StreamSink) and (  # type: ignore
+                handler._sink._stream is sys.stderr
+                or handler._sink._stream is sys.stdout
+            ):
+                # Save its original filter
+                self.std_handler_orig_filter[handler_id] = handler._filter
+
+                handler._filter = functools.partial(
+                    self.new_filter_fn, old_filter_fn=handler._filter
+                )
+
+        # ----- Add handlers for this project's logs ----- #
         # Add a file sink for this library
-        self.handler_ids.append(
+        self.new_handler_ids.append(
             logger.add(
                 _log_path,
                 level=os.getenv(f"{_package.upper()}_LOG_LEVEL", "DEBUG"),
@@ -106,7 +126,7 @@ class Logger:
         )
 
         # Add a stderr sink for this library
-        self.handler_ids.append(
+        self.new_handler_ids.append(
             logger.add(
                 sys.stderr,
                 level="INFO",
@@ -121,15 +141,39 @@ class Logger:
         # Create a contextualized logger for this library
         self._logger = logger.bind(__package__=_package)
 
+    @staticmethod
+    def new_filter_fn(record: dict, old_filter_fn: Callable | None) -> bool:
+        """New log filter function for existing handlers"""
+        # Skip our package's logs in the handler
+        if record["extra"].get("__package__") == _package:
+            return False
+        # Apply the original filter for other logs (if there was one)
+        if callable(old_filter_fn):
+            return old_filter_fn(record)
+        return True
+
     def __getattr__(self, name):
         """Delegate all logging methods to the bound logger."""
         return getattr(self._logger, name)
 
     def cleanup(self):
-        """Remove all handlers added by this library."""
-        for handler_id in self.handler_ids:
+        """
+        Remove all handlers added by this library.
+        Restore previous filter functions for stdout/stderr handlers.
+        """
+        for handler_id in self.new_handler_ids:
             logger.remove(handler_id)
-        self.handler_ids = []
+        self.new_handler_ids = []
+
+        # ----- Restore previous filter functions for stdout/stderr handlers ----- #
+        for handler_id, handler in logger._core.handlers.items():  # type: ignore
+            # If the handler is a stdout/stderr stream sink
+            if isinstance(handler._sink, loguru._simple_sinks.StreamSink) and (  # type: ignore
+                handler._sink._stream is sys.stderr
+                or handler._sink._stream is sys.stdout
+            ):
+                handler._filter = self.std_handler_orig_filter[handler_id]
+        self.std_handler_orig_filter = {}  # {handler_id: filter}
 
     @contextmanager
     def catch(self, *args, **kwargs):
