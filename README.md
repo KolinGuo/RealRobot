@@ -27,6 +27,39 @@ python3 -m pip install -U real_robot[all,xarm]@git+https://github.com/KolinGuo/R
 Calibrated camera poses are stored in [real_robot/assets/hec_camera_poses/](real_robot/assets/hec_camera_poses) and
 loaded in [real_robot/sensors/camera.py](real_robot/sensors/camera.py).
 
+## `SharedObject` Notes
+* When using `real_robot.utils.multiprocessing.SharedObject`, you might encounter the
+following `UserWarning` when `Ctrl-C` your program:
+  ```bash
+  /usr/lib/python3.12/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 10 leaked shared_memory objects to clean up at shutdown
+    warnings.warn('resource_tracker: There appear to be %d '
+  ```
+  This is because of the undefined order of processes (main and child processes) shutdown.
+  You can safely ignore it as long as there's no any shared memory object that's created by you
+  under `/dev/shm` left.
+
+* If you see warning log messages similar to the following
+  ```bash
+  Implicitly overwriting data of <SharedObject: name=start_rs_front_camera, data_type=<class 'bool'>, nbytes=10>
+  ```
+  this can mean one of the following:
+  * the shared_memory objects created by previous processes are not properly cleaned up.  
+    Run
+    ```bash
+    find /dev/shm -user $USER -exec rm -v {} \;
+    ```
+    to clean them all up.
+  * there's a bug in your usage of `SharedObject`.  
+    By design, `SharedObject` cannot mutate its data type (and data size) after created.  
+    So you should first create a new `SharedObject` in process A with
+    `SharedObject("test", data=np.ones(10))` to initialize it.  
+    Then in process B, you can create it with `SharedObject("test")` and then use the
+    `.fetch()`/`.assign()` methods.  
+    The warning will appear if the order is reversed.  
+    To control the order, you can use the helper methods
+    `start_and_wait_for_process()` and `signal_process_ready()` under
+    `real_robot.utils.multiprocessing` to synchronize the processes.
+
 ## Helpful Tools
 
 * Capture Color/Depth/IR images from RS camera, do
