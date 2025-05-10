@@ -1,3 +1,17 @@
+"""
+Loguru-based project-specific logger.
+Consolidates multiprocessing/multithreading logs into a single log file.
+
+Customize its behaviors with these environment variables:
+  * logging file path: <PACKAGE_NAME>_LOG_PATH="/tmp/logs/your_log.log"
+  * logging level: <PACKAGE_NAME>_LOG_LEVEL="TRACE"
+
+Careful optimization is done to make it run as fast as possible
+version 0.0.1
+
+Written by Kolin Guo
+"""
+
 import functools
 import os
 import sys
@@ -19,6 +33,7 @@ _log_path = Path(
         f"/tmp/logs/{_package}/{datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
     )
 )
+os.environ[_env_name] = str(_log_path)  # set env variable to consolidates logs
 _log_path.parent.mkdir(parents=True, exist_ok=True)
 
 
