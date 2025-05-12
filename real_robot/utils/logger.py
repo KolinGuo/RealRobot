@@ -43,7 +43,7 @@ Quick start reference:
         "ERROR" (40), "CRITICAL" (50)
     ]
 
-version 0.1.0
+version 0.1.1
 
 Written by Kolin Guo
 """
@@ -145,7 +145,7 @@ class Logger:
         self.new_handler_ids.append(
             logger.add(
                 _log_path,
-                level=os.getenv(f"{_package.upper()}_FILE_LOG", "DEBUG"),
+                level=os.getenv(f"{_package.upper()}_FILE_LOG", "DEBUG").upper(),
                 format=_get_logging_format(detailed=True, process=True, thread=False),
                 filter=lambda record: record["extra"].get("__package__") == _package,
                 backtrace=True,
@@ -158,7 +158,7 @@ class Logger:
         self.new_handler_ids.append(
             logger.add(
                 sys.stderr,
-                level=os.getenv(f"{_package.upper()}_LOG", "INFO"),
+                level=os.getenv(f"{_package.upper()}_LOG", "INFO").upper(),
                 format=_get_logging_format(detailed=False, process=True, thread=False),
                 filter=lambda record: record["extra"].get("__package__") == _package,
                 backtrace=True,
