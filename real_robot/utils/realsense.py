@@ -15,7 +15,7 @@ from sapien import Pose
 from real_robot import LOGGER
 
 from .camera import pose_CV_ROS
-from .multiprocessing import SharedObject, signal_process_ready
+from .multiprocessing import SharedObject, ctx, signal_process_ready
 
 # https://www.intelrealsense.com/compare-depth-cameras/
 SUPPORTED_RS_PRODUCTS = ("D415", "D435", "L515")
@@ -508,6 +508,9 @@ class RSDevice:
     def run_as_process(self):
         """Run RSDevice as a separate process"""
         LOGGER.info("Running {!r} as a separate process", self)
+
+        if ctx.parent_process() is None:
+            raise RuntimeError(f"{self!r} has no parent process when run_as_process")
 
         # RSDevice control
         device_started = False
