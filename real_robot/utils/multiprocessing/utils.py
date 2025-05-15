@@ -1,7 +1,8 @@
 import multiprocessing as mp
 import os
 import time
-from typing import Optional
+
+from real_robot import LOGGER
 
 from .shared_object import SharedObject
 
@@ -16,30 +17,31 @@ class SharedObjectDefaultDict(dict):
         return so
 
 
-def start_and_wait_for_process(
-    process: mp.Process, *, timeout: Optional[float] = None
-) -> None:
-    """Start and wait for process to be ready (finishes initialization)
+def start_and_wait_for_process(process: mp.Process, *, timeout: float = 30) -> None:
+    """Start and wait for a child process to be ready (finishes initialization)
     When the waiting process is ready, it should trigger SharedObject "proc_<pid>_ready"
 
     :param process: mp.Process
     :param timeout: If process is not ready after timeout seconds, raise a TimeoutError
-                    If timeout is None, wait indefinitely
     """
     # TODO: should this be written using mp.Pipe?
     process.start()
     so_ready = SharedObject(f"proc_{process.pid}_ready")
 
-    start_time = time.time()
+    start_time = time.perf_counter()
     while not so_ready.triggered:
-        if timeout is not None and time.time() - start_time > timeout:
+        if time.perf_counter() - start_time > timeout:
             raise TimeoutError(
                 f"Process {process.name} did not become ready within {timeout=} seconds"
             )
+        LOGGER.trace(f"Sleep to wait for signal from <{process.name}>")
+        time.sleep(1.0)
 
 
 def signal_process_ready() -> None:
-    """When called, signals that the current process is ready
-    by triggering SharedObject "proc_<pid>_ready"
+    """
+    When called, signals that the current child process is ready
+        by triggering SharedObject "proc_<pid>_ready"
     """
     SharedObject(f"proc_{os.getpid()}_ready").trigger().unlink()
+    LOGGER.trace(f"[Signal] Process {os.getpid()} is ready")
