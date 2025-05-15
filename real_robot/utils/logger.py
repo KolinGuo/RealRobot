@@ -5,6 +5,8 @@ Consolidates multiprocessing/multithreading logs into a single log file.
 Customize its behaviors with these environment variables:
   * logging file path: <PACKAGE_NAME>_LOG_PATH="/tmp/logs/your_log.log"
   * logging level (for stderr only, default=INFO): <PACKAGE_NAME>_LOG="TRACE"
+    * If <PACKAGE_NAME>_LOG="TRACE", set <PACKAGE_NAME>_FILE_LOG="TRACE" as well
+      unless <PACKAGE_NAME>_FILE_LOG is explicitly set.
   * logging level (for file sink only, default=DEBUG): <PACKAGE_NAME>_FILE_LOG="TRACE"
 
 Usage:
@@ -43,7 +45,7 @@ Quick start reference:
         "ERROR" (40), "CRITICAL" (50)
     ]
 
-version 0.1.1
+version 0.1.2
 
 Written by Kolin Guo
 """
@@ -141,11 +143,15 @@ class Logger:
                 )
 
         # ----- Add handlers for this project's logs ----- #
+        log_level = os.getenv(f"{_package.upper()}_LOG", "INFO").upper()
+        file_log_level = os.getenv(
+            f"{_package.upper()}_FILE_LOG", "TRACE" if log_level == "TRACE" else "DEBUG"
+        ).upper()
         # Add a file sink for this library
         self.new_handler_ids.append(
             logger.add(
                 _log_path,
-                level=os.getenv(f"{_package.upper()}_FILE_LOG", "DEBUG").upper(),
+                level=file_log_level,
                 format=_get_logging_format(detailed=True, process=True, thread=False),
                 filter=lambda record: record["extra"].get("__package__") == _package,
                 backtrace=True,
@@ -158,7 +164,7 @@ class Logger:
         self.new_handler_ids.append(
             logger.add(
                 sys.stderr,
-                level=os.getenv(f"{_package.upper()}_LOG", "INFO").upper(),
+                level=log_level,
                 format=_get_logging_format(detailed=False, process=True, thread=False),
                 filter=lambda record: record["extra"].get("__package__") == _package,
                 backtrace=True,
