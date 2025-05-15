@@ -164,7 +164,7 @@ class Camera:
 
         self.record_bag_path = record_bag_path
 
-        self.device_proc = ctx.Process(
+        self.device_proc = ctx.Process(  # type: ignore
             target=RSDevice,
             name=f"RSDevice_{self.uid}",
             args=(self.device_sn, self.uid),
