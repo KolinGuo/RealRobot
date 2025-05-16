@@ -45,7 +45,7 @@ Quick start reference:
         "ERROR" (40), "CRITICAL" (50)
     ]
 
-version 0.1.2
+version 0.1.3
 
 Written by Kolin Guo
 """
@@ -56,6 +56,7 @@ import sys
 from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime
+from importlib.metadata import version
 from pathlib import Path
 
 import loguru
@@ -175,6 +176,9 @@ class Logger:
 
         # Create a contextualized logger for this library
         self._logger = logger.bind(__package__=_package)
+
+        # Log a debug message of current package version
+        self.debug('Package "{}" version "{}"', _package, version(_package))
 
     @staticmethod
     def new_filter_fn(record: dict, old_filter_fn: Callable | None) -> bool:
