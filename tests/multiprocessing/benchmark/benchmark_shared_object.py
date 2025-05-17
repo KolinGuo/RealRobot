@@ -87,7 +87,7 @@ def benchmark_object_create(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -115,7 +115,7 @@ def benchmark_object_fetch(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -146,7 +146,7 @@ def benchmark_object_assign(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -175,7 +175,7 @@ def benchmark_object_create_ref(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -203,7 +203,7 @@ def benchmark_object_modified(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -231,7 +231,7 @@ def benchmark_object_triggered(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -259,7 +259,7 @@ def benchmark_object_trigger(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -337,7 +337,7 @@ def benchmark_object_2_proc_fetch_assign(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -393,7 +393,7 @@ def benchmark_object_5_proc_fetch_assign(
         out_str = f"{SharedObject._object_types[object_type_idx]} ({dtype=} {shape=}): "
     else:
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
-    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9 :.4g} seconds")
+    print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
     return np.mean(times_ns), np.std(times_ns)
 
@@ -647,7 +647,7 @@ if __name__ == "__main__":
         results_table.add_row(
             [SharedObject._object_types[idx] if isinstance(idx, int) else idx]
             + [
-                f"{mean_ns/1e9:.6g} \xb1 {std_ns/1e9:.2g}"
+                f"{mean_ns / 1e9:.6g} \xb1 {std_ns / 1e9:.2g}"
                 for mean_ns, std_ns in res_dict.values()
             ]
         )
@@ -715,7 +715,7 @@ if __name__ == "__main__":
             compare_str += (
                 f"{down_arrow_str} " if mean_ns < prev_mean_ns else f" {up_arrow_str} "
             )
-            compare_str += f"({(mean_ns - prev_mean_ns)/1e9:.4g}), "
+            compare_str += f"({(mean_ns - prev_mean_ns) / 1e9:.4g}), "
 
             # Confidence level
             conf_level = compute_conf_level(
