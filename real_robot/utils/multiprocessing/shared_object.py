@@ -131,6 +131,7 @@ class SharedObject:
       For `NoneType`, data area is ignored.
       For `bool`, 1 byte data.
       For `int` / `float`, 8 bytes data.
+      For `complex`, 16 bytes data.
       For `sapien.Pose`, 7*4 = 28 bytes data ([xyz, wxyz], float32).
       For `str` / `bytes`, (N + 1) bytes data, N is str / bytes length,
       1 is for termination.
@@ -142,8 +143,18 @@ class SharedObject:
       - D bytes: array data buffer
     """
 
-    # object_type_idx:     0          1     2     3     4     5     6        7
-    _object_types = (None.__class__, bool, int, float, Pose, str, bytes, np.ndarray)
+    # object_type_idx:
+    _object_types = (
+        None.__class__,  # 0
+        bool,  # 1
+        int,  # 2
+        float,  # 3
+        complex,  # 4
+        Pose,  # 5
+        str,  # 6
+        bytes,  # 7
+        np.ndarray,  # 8
+    )
 
     @staticmethod
     def _get_bytes_size(enc_str: bytes, init_size: int) -> int:
@@ -157,6 +168,7 @@ class SharedObject:
         10,  # bool
         17,  # int
         17,  # float
+        25,  # complex
         37,  # sapien.Pose
         _get_bytes_size.__func__,  # str # type: ignore
         _get_bytes_size.__func__,  # bytes # type: ignore
@@ -168,7 +180,7 @@ class SharedObject:
         nbytes = shm._size  # type: ignore
         mtime, object_type_idx = struct.unpack_from("QB", shm.buf, offset=0)
         np_metas = ()
-        if object_type_idx == 7:  # np.ndarray
+        if object_type_idx == 8:  # np.ndarray
             np_metas = SharedObject._fetch_np_metas(shm.buf)
         return nbytes, mtime, object_type_idx, np_metas
 
@@ -196,6 +208,11 @@ class SharedObject:
     @staticmethod
     def _fetch_float(buf, fn: Callable[[float], Any] | None, *args) -> Any:
         v = struct.unpack_from("d", buf, offset=9)[0]
+        return v if fn is None else fn(v)
+
+    @staticmethod
+    def _fetch_complex(buf, fn: Callable[[complex], Any] | None, *args) -> Any:
+        v = complex(*struct.unpack_from("2d", buf, offset=9))
         return v if fn is None else fn(v)
 
     @staticmethod
@@ -257,6 +274,7 @@ class SharedObject:
         _fetch_bool.__func__,  # type: ignore
         _fetch_int.__func__,  # type: ignore
         _fetch_float.__func__,  # type: ignore
+        _fetch_complex.__func__,  # type: ignore
         _fetch_pose.__func__,  # type: ignore
         _fetch_str.__func__,  # type: ignore
         _fetch_bytes.__func__,  # type: ignore
@@ -286,6 +304,10 @@ class SharedObject:
         struct.pack_into("d", buf, 9, data)
 
     @staticmethod
+    def _assign_complex(buf, data: complex, *args):
+        struct.pack_into("2d", buf, 9, data.real, data.imag)
+
+    @staticmethod
     def _assign_pose(buf, pose: Pose, *args):
         struct.pack_into("7f", buf, 9, *pose.__getstate__())
 
@@ -302,6 +324,7 @@ class SharedObject:
         _assign_bool.__func__,  # type: ignore
         _assign_int.__func__,  # type: ignore
         _assign_float.__func__,  # type: ignore
+        _assign_complex.__func__,  # type: ignore
         _assign_pose.__func__,  # type: ignore
         _assign_bytes.__func__,  # type: ignore
         _assign_bytes.__func__,  # type: ignore
@@ -366,7 +389,7 @@ class SharedObject:
             # Assign object_type, np_metas to init object meta info
             self._writer_lock.acquire()
             self.shm.buf[8] = object_type_idx
-            if object_type_idx == 7:  # np.ndarray
+            if object_type_idx == 8:  # np.ndarray
                 self._assign_np_metas(self.shm.buf, *np_metas)
             self._writer_lock.release()
         else:
@@ -378,7 +401,7 @@ class SharedObject:
 
         # Create np.ndarray here to save frequent np.ndarray construction
         self.np_ndarray, self.np_ndarray_ro = None, None
-        if self.object_type_idx == 7:  # np.ndarray
+        if self.object_type_idx == 8:  # np.ndarray
             np_dtype_idx, data_ndim, data_shape = self.np_metas
             self.np_ndarray = np.ndarray(
                 data_shape,
@@ -411,14 +434,14 @@ class SharedObject:
 
         # Get shared memory size in bytes
         np_metas = ()
-        if object_type_idx <= 4:  # NoneType, bool, int, float, sapien.Pose
+        if object_type_idx <= 5:  # NoneType, bool, int, float, sapien.Pose
             nbytes = self._object_sizes[object_type_idx]
-        elif object_type_idx == 5:  # str
+        elif object_type_idx == 6:  # str
             data = data.encode(_encoding)  # encode strings into bytes
             nbytes = self._object_sizes[object_type_idx](data, self.init_size)
-        elif object_type_idx == 6:  # bytes
+        elif object_type_idx == 7:  # bytes
             nbytes = self._object_sizes[object_type_idx](data, self.init_size)
-        elif object_type_idx == 7:  # np.ndarray
+        elif object_type_idx == 8:  # np.ndarray
             try:
                 np_dtype_idx = self._np_dtypes.index(data.dtype)
             except ValueError as e:
@@ -563,7 +586,7 @@ class SharedDynamicObject(SharedObject):
         )  # _mmap size will be updated by os.ftruncate()
         mtime, object_type_idx = struct.unpack_from("QB", shm.buf, offset=0)
         np_metas = ()
-        if object_type_idx == 7:  # np.ndarray
+        if object_type_idx == 8:  # np.ndarray
             np_metas = SharedObject._fetch_np_metas(shm.buf)
         return nbytes, mtime, object_type_idx, np_metas
 
