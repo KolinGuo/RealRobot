@@ -49,18 +49,27 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
             if bool(random.randrange(2))
             else random.uniform(-1e307, 1e308)
         )
-    elif object_type_idx == 4:  # sapien.Pose
+    elif object_type_idx == 4:  # complex
+        return complex(
+            random.uniform(-100, 100)
+            if bool(random.randrange(2))
+            else random.uniform(-1e307, 1e308),
+            random.uniform(-100, 100)
+            if bool(random.randrange(2))
+            else random.uniform(-1e307, 1e308),
+        )
+    elif object_type_idx == 5:  # sapien.Pose
         return Pose(
             p=np.random.uniform(-10, 10, size=3),
             q=euler2quat(*np.random.uniform([0, 0, 0], [np.pi * 2, np.pi, np.pi * 2])),
         )
-    elif object_type_idx == 5:  # str
+    elif object_type_idx == 6:  # str
         str_len = random.randrange(51)
         return "".join(random.choices(string.printable, k=str_len))
-    elif object_type_idx == 6:  # bytes
+    elif object_type_idx == 7:  # bytes
         bytes_len = random.randrange(51)
         return random.randbytes(bytes_len)
-    elif object_type_idx == 7:  # np.ndarray
+    elif object_type_idx == 8:  # np.ndarray
         size = NDARRAY_NBYTES_LIMIT + 1
         while size > NDARRAY_NBYTES_LIMIT:
             ndim = random.randint(1, 5)
@@ -79,17 +88,17 @@ def check_object_equal(obj1: SharedObject, obj2: SharedObject, data=None):
 
     if obj1.object_type_idx == 0:  # None.__class__
         assert obj1.fetch() is None and obj2.fetch() is None
-    elif obj1.object_type_idx in [1, 2, 3, 5, 6]:  # bool, int, float, str, bytes
+    elif obj1.object_type_idx in [1, 2, 3, 4, 6, 7]:  # bool, int, float, str, bytes
         assert obj1.fetch() == obj2.fetch()
         if data is not None:
             assert obj1.fetch() == data
-    elif obj1.object_type_idx == 4:  # sapien.Pose
+    elif obj1.object_type_idx == 5:  # sapien.Pose
         np.testing.assert_equal(
             obj1.fetch().__getstate__(), obj2.fetch().__getstate__()
         )
         if data is not None:
             np.testing.assert_equal(obj1.fetch().__getstate__(), data.__getstate__())
-    elif obj1.object_type_idx == 7:  # np.ndarray
+    elif obj1.object_type_idx == 8:  # np.ndarray
         np.testing.assert_equal(obj1.fetch(), obj2.fetch())
         if data is not None:
             np.testing.assert_equal(obj1.fetch(), data)
@@ -129,6 +138,13 @@ class TestCreate:
 
         for _ in range(500):
             data = random.uniform(-1e307, 1e308)
+            so = SharedObject(uuid.uuid4().hex, data=data)
+            assert so.fetch() == data
+            assert not so.modified
+
+    def test_complex(self):
+        for _ in range(1000):
+            data = create_random_object(object_type_idx=4)
             so = SharedObject(uuid.uuid4().hex, data=data)
             assert so.fetch() == data
             assert not so.modified
@@ -241,6 +257,18 @@ class TestFetch:
 
     def test_float(self):
         data = random.uniform(-100000, 100000)
+        so = SharedObject(uuid.uuid4().hex, data=data)
+
+        v = random.randint(-100, 100)
+        assert so.fetch(lambda x: x + v) == data + v
+        assert so.fetch(lambda x: x * v) == data * v
+        v = random.uniform(-100, 100)
+        assert so.fetch(lambda x: x + v) == data + v
+        assert so.fetch(lambda x: x * v) == data * v
+        assert so.fetch() == data
+
+    def test_complex(self):
+        data = create_random_object(object_type_idx=4)
         so = SharedObject(uuid.uuid4().hex, data=data)
 
         v = random.randint(-100, 100)
