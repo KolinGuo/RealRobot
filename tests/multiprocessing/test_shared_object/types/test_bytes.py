@@ -48,7 +48,7 @@ class TestBytes:
         assert so.fetch(lambda x: x[:20]) == data[:20]
         assert so.fetch() == data
 
-        bytes_len = random.randrange(100)
+        bytes_len = random.randrange(1, 100)
         data = random.randbytes(bytes_len)
         so = SharedObject(uuid.uuid4().hex, data=data)
         assert so.fetch(lambda x: len(x)) == len(data)

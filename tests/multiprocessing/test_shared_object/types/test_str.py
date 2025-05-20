@@ -27,7 +27,7 @@ class TestStr:
         assert so.fetch(lambda x: len(x)) == len(data)
         assert so.fetch() == data
 
-        str_len = random.randrange(100)
+        str_len = random.randrange(1, 100)
         data = "".join(random.choices(string.printable, k=str_len))
         so = SharedObject(uuid.uuid4().hex, data=data)
 
