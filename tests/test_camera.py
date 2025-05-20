@@ -3,6 +3,10 @@
 from time import perf_counter_ns
 
 import numpy as np
+import pytest
+
+pytest.importorskip("pyrealsense2")
+pytest.importorskip("sapien")
 import pyrealsense2 as rs
 from sapien import Pose
 
@@ -40,7 +44,7 @@ class TestCameraFPS:
                 Pose(),
                 (width, height, fps),
                 preset="High Accuracy",
-                depth_option_kwargs={rs.option.exposure: 1500},
+                depth_option_kwargs={rs.option.exposure: 1500},  # type: ignore
             )
             camera = Camera(camera_cfg)
 
@@ -52,7 +56,7 @@ class TestCameraFPS:
                 images = camera.get_images()
             elapsed_ns = perf_counter_ns() - start_time_ns
 
-            rgb, depth = images["rgb"], images["depth"]
+            rgb, depth = images["rgb"], images["depth"]  # type: ignore
             assert rgb.shape == (height, width, 3), rgb.shape
             assert rgb.dtype == np.uint8, rgb.dtype
             assert depth.shape == (height, width, 1), depth.shape
@@ -60,9 +64,9 @@ class TestCameraFPS:
 
             elapsed = elapsed_ns / n_iters / 1e9
             iter_max_time = 1.0 / fps + 300e-6
-            assert (
-                elapsed <= iter_max_time
-            ), f"{elapsed:.4g} > {iter_max_time} for {(width, height, fps)}"
+            assert elapsed <= iter_max_time, (
+                f"{elapsed:.4g} > {iter_max_time} for {(width, height, fps)}"
+            )
             print(f"{elapsed = :.6g} {iter_max_time = :.6g} {(width, height, fps)}")
             del camera
 
@@ -76,9 +80,9 @@ class TestCameraFPS:
                 Pose(),
                 (width, height, fps),
                 preset="High Accuracy",
-                depth_option_kwargs={rs.option.exposure: 1500},
+                depth_option_kwargs={rs.option.exposure: 1500},  # type: ignore
             )
-            camera = Camera(camera_cfg, record_bag=True, bag_path="/tmp")
+            camera = Camera(camera_cfg, record_bag_path="/tmp")
 
             n_iters = fps * 5
             start_time_ns = perf_counter_ns()
@@ -88,7 +92,7 @@ class TestCameraFPS:
                 images = camera.get_images()
             elapsed_ns = perf_counter_ns() - start_time_ns
 
-            rgb, depth = images["rgb"], images["depth"]
+            rgb, depth = images["rgb"], images["depth"]  # type: ignore
             assert rgb.shape == (height, width, 3), rgb.shape
             assert rgb.dtype == np.uint8, rgb.dtype
             assert depth.shape == (height, width, 1), depth.shape
@@ -96,9 +100,9 @@ class TestCameraFPS:
 
             elapsed = elapsed_ns / n_iters / 1e9
             iter_max_time = 1.0 / fps + 300e-6
-            assert (
-                elapsed <= iter_max_time
-            ), f"{elapsed:.4g} > {iter_max_time} for {(width, height, fps)}"
+            assert elapsed <= iter_max_time, (
+                f"{elapsed:.4g} > {iter_max_time} for {(width, height, fps)}"
+            )
             print(f"{elapsed = :.6g} {iter_max_time = :.6g} {(width, height, fps)}")
             del camera
 
