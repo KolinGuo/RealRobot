@@ -22,6 +22,12 @@ If you need to install the optional `xarm` dependency, you must install from Git
 python3 -m pip install -U real_robot[all,xarm]@git+https://github.com/KolinGuo/RealRobot.git
 ```
 
+Run unittests with
+```bash
+python3 -m pip install -U pytest
+python3 -m pytest [--collect-only]
+```
+
 ---
 
 Calibrated camera poses are stored in [real_robot/assets/hec_camera_poses/](real_robot/assets/hec_camera_poses) and
