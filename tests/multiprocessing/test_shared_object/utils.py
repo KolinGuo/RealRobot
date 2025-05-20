@@ -69,6 +69,9 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
     elif object_type_idx == SharedObject._object_types.index(bytes):  # bytes
         bytes_len = random.randrange(51)
         return random.randbytes(bytes_len)
+    elif object_type_idx == SharedObject._object_types.index(bytearray):  # bytearray
+        bytes_len = random.randrange(51)
+        return bytearray(random.randbytes(bytes_len))
     elif object_type_idx == SharedObject._object_types.index(np.ndarray):  # np.ndarray
         size = NDARRAY_NBYTES_LIMIT + 1
         while size > NDARRAY_NBYTES_LIMIT:
@@ -95,6 +98,7 @@ def check_object_equal(obj1: SharedObject, obj2: SharedObject, data=None):
         SharedObject._object_types.index(complex),
         SharedObject._object_types.index(str),
         SharedObject._object_types.index(bytes),
+        SharedObject._object_types.index(bytearray),
     ]:
         assert obj1.fetch() == obj2.fetch()
         if data is not None:
