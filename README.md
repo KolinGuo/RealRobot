@@ -82,6 +82,20 @@ following `UserWarning` when `Ctrl-C` your program:
   python3 -m real_robot.tools.convert_rosbag_to_frames <bag_path>
   ```
 
+## TODO
+- Add type support for `SharedObject`
+  - [x] `complex`
+  - [x] `bytearray`
+  - [ ] `tuple`
+  - [ ] `list`
+  - [ ] `set`
+  - [ ] `dict`
+- [ ] Add string length? A 8-bytes length of strings is `2**(8*8-1)-1 = 8 exa bytes`, which should be enough.
+- [ ] Ensure compound data types works with recursive compound structure
+- [ ] Add prefixes for all `SharedMemory` created.
+- [ ] Proper clean up zombie `SharedMemory` before or after multiprocessing code
+
+
 ## Notes
 
 To fix an unindexed rosbag recorded from `RSDevice`, do

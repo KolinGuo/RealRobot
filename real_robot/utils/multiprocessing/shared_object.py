@@ -141,6 +141,11 @@ class SharedObject:
       - 8 bytes: array ndim, stored as 'Q'
       - (K * 8) bytes: array shape for each dimension, stored as 'Q'
       - D bytes: array data buffer
+
+      For compound data types (`tuple` / `list` / `set` / `dict`),
+      the buffer is organized as follows:
+
+      -
     """
 
     # object_type_idx:
@@ -155,6 +160,10 @@ class SharedObject:
         bytes,  # 7
         bytearray,  # 8
         np.ndarray,  # 9
+        tuple,  # 10
+        list,  # 11
+        set,  # 12
+        dict,  # 13
     )
 
     @staticmethod
