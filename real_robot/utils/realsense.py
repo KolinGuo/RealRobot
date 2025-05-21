@@ -18,7 +18,7 @@ from .camera import pose_CV_ROS
 from .multiprocessing import SharedObject, ctx, signal_process_ready
 
 # https://www.intelrealsense.com/compare-depth-cameras/
-SUPPORTED_RS_PRODUCTS = ("D415", "D435", "L515")
+SUPPORTED_RS_PRODUCTS = ("D415", "D435", "D435I", "L515")
 
 RS_DEVICES = None  # {device_sn: rs.device}
 
@@ -85,7 +85,7 @@ def get_default_stream_config(
     """
     if product_type == "D415":
         return 1280, 720, 30
-    elif product_type == "D435":
+    elif product_type in ["D435", "D435I"]:
         return 848, 480, 30
     elif product_type == "L515":
         return {"Depth": (640, 480, 30), "Color": (1280, 720, 30)}
