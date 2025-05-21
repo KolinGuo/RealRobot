@@ -1,8 +1,7 @@
 import uuid
 
-from test_shared_object.utils import create_random_object
-
 from real_robot.utils.multiprocessing import SharedObject
+from test_shared_object.utils import create_random_object
 
 
 class TestAssign:

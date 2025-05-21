@@ -7,12 +7,13 @@ import pytest
 from transforms3d.euler import euler2quat
 
 from real_robot.utils.multiprocessing import SharedObject
+from real_robot.utils.multiprocessing.shared_object_metas import NP_DTYPES
 
 NDARRAY_NBYTES_LIMIT = 20 * 1024**2  # 20 MiB
 
 
 def create_random_ndarray(
-    dtype: Union[SharedObject._np_dtypes],  # type: ignore
+    dtype: Union[NP_DTYPES],  # type: ignore
     shape: tuple[int, ...],
 ) -> np.ndarray:
     rng = np.random.default_rng()
@@ -60,8 +61,8 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
         from sapien import Pose
 
         return Pose(
-            p=rng.uniform(-10, 10, size=3),
-            q=euler2quat(*rng.uniform([0, 0, 0], [np.pi * 2, np.pi, np.pi * 2])),
+            p=rng.uniform(-10, 10, size=3),  # type: ignore
+            q=euler2quat(*rng.uniform([0, 0, 0], [np.pi * 2, np.pi, np.pi * 2])),  # type: ignore
         )
     elif object_type_idx == SharedObject._object_types.index(str):  # str
         str_len = random.randrange(51)
@@ -77,8 +78,8 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
         while size > NDARRAY_NBYTES_LIMIT:
             ndim = random.randint(1, 5)
             shape = tuple(random.randint(1, 1000) for _ in range(ndim))
-            dtype = random.choice(SharedObject._np_dtypes)
-            size = dtype().itemsize * np.prod(shape, dtype=np.uint64)
+            dtype = random.choice(NP_DTYPES)
+            size = dtype().itemsize * np.prod(shape, dtype=np.uint64)  # type: ignore
         return create_random_ndarray(dtype, shape)  # type: ignore
     else:
         raise ValueError(f"Unknown {object_type_idx = }")

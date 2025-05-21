@@ -4,6 +4,7 @@ import uuid
 import numpy as np
 
 from real_robot.utils.multiprocessing import SharedObject
+from real_robot.utils.multiprocessing.shared_object_metas import NP_DTYPES
 from test_shared_object.utils import (
     NDARRAY_NBYTES_LIMIT,
     create_random_ndarray,
@@ -210,7 +211,7 @@ class TestNDArray:
             while size > NDARRAY_NBYTES_LIMIT:
                 ndim = random.randint(1, 5)
                 shape = tuple(random.randint(1, 1000) for _ in range(ndim))
-                dtype = random.choice(SharedObject._np_dtypes)
+                dtype = random.choice(NP_DTYPES)
                 size = dtype().itemsize * np.prod(shape, dtype=np.uint64)
 
             for i in range(10):
@@ -245,7 +246,7 @@ class TestNDArray:
             while size > NDARRAY_NBYTES_LIMIT:
                 ndim = random.randint(1, 5)
                 shape = tuple(random.randint(1, 1000) for _ in range(ndim))
-                dtype = random.choice(SharedObject._np_dtypes)
+                dtype = random.choice(NP_DTYPES)
                 size = dtype().itemsize * np.prod(shape, dtype=np.uint64)
 
             data = create_random_ndarray(dtype, shape)  # type: ignore
@@ -253,7 +254,7 @@ class TestNDArray:
             so = SharedObject(uuid.uuid4().hex, data=data)
 
             # Changed np dtype
-            for new_dtype in SharedObject._np_dtypes:
+            for new_dtype in NP_DTYPES:
                 if new_dtype != dtype:  # type: ignore
                     data = create_random_ndarray(new_dtype, shape)  # type: ignore
                     try:

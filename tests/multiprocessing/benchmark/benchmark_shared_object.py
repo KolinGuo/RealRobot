@@ -16,11 +16,10 @@ from sapien import Pose
 from transforms3d.euler import euler2quat
 
 from real_robot.utils.multiprocessing import SharedObject
+from real_robot.utils.multiprocessing.shared_object_metas import NP_DTYPES
 
 
-def create_random_ndarray(
-    dtype: Union[SharedObject._np_dtypes], shape: tuple[int, ...]
-):
+def create_random_ndarray(dtype: Union[NP_DTYPES], shape: tuple[int, ...]):
     if np.issubdtype(dtype, np.bool_):
         data = np.random.randint(2, size=shape, dtype=dtype)
     elif np.issubdtype(dtype, np.integer):
