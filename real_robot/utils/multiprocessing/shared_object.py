@@ -208,61 +208,86 @@ class SharedObject:
 
     @staticmethod
     def _fetch_None(
-        buf: memoryview, fn: Callable[[None.__class__], Any] | None, *args
+        buf: memoryview,
+        fn: Callable[[None.__class__], Any] | None,
+        *args,
+        offset: int = 9,
     ) -> Any:
         return None if fn is None else fn(None)
 
     @staticmethod
-    def _fetch_bool(buf: memoryview, fn: Callable[[bool], Any] | None, *args) -> Any:
-        return bool(buf[9]) if fn is None else fn(bool(buf[9]))
+    def _fetch_bool(
+        buf: memoryview, fn: Callable[[bool], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        return bool(buf[offset]) if fn is None else fn(bool(buf[offset]))
 
     @staticmethod
-    def _fetch_int(buf: memoryview, fn: Callable[[int], Any] | None, *args) -> Any:
-        v = struct.unpack_from("q", buf, offset=9)[0]
+    def _fetch_int(
+        buf: memoryview, fn: Callable[[int], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        v = struct.unpack_from("q", buf, offset=offset)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_float(buf: memoryview, fn: Callable[[float], Any] | None, *args) -> Any:
-        v = struct.unpack_from("d", buf, offset=9)[0]
+    def _fetch_float(
+        buf: memoryview, fn: Callable[[float], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        v = struct.unpack_from("d", buf, offset=offset)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
     def _fetch_complex(
-        buf: memoryview, fn: Callable[[complex], Any] | None, *args
+        buf: memoryview, fn: Callable[[complex], Any] | None, *args, offset: int = 9
     ) -> Any:
-        v = complex(*struct.unpack_from("2d", buf, offset=9))
+        v = complex(*struct.unpack_from("2d", buf, offset=offset))
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_pose(buf: memoryview, fn: Callable[[Pose], Any] | None, *args) -> Any:
+    def _fetch_pose(
+        buf: memoryview, fn: Callable[[Pose], Any] | None, *args, offset: int = 9
+    ) -> Any:
         """Fetch and construct a sapien.Pose (using __setstate__)"""
         pose = Pose.__new__(Pose)
-        pose.__setstate__(struct.unpack_from("7f", buf, offset=9))
+        pose.__setstate__(struct.unpack_from("7f", buf, offset=offset))
         return pose if fn is None else fn(pose)
 
     @staticmethod
-    def _fetch_str(buf: memoryview, fn: Callable[[str], Any] | None, *args) -> Any:
-        buf_size = struct.unpack_from("q", buf, offset=9)[0]
-        v = buf[17 : 17 + buf_size].tobytes().rstrip(b"\x00")[:-1].decode(_encoding)
+    def _fetch_str(
+        buf: memoryview, fn: Callable[[str], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        buf_size = struct.unpack_from("q", buf, offset=offset)[0]  # (N + 1) bytes
+        v = (
+            buf[offset + 8 : offset + 8 + buf_size]
+            .tobytes()
+            .rstrip(b"\x00")[:-1]
+            .decode(_encoding)
+        )
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_bytes(buf: memoryview, fn: Callable[[bytes], Any] | None, *args) -> Any:
-        buf_size = struct.unpack_from("q", buf, offset=9)[0]
-        v = buf[17 : 17 + buf_size].tobytes().rstrip(b"\x00")[:-1]
+    def _fetch_bytes(
+        buf: memoryview, fn: Callable[[bytes], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        buf_size = struct.unpack_from("q", buf, offset=offset)[0]  # (N + 1) bytes
+        v = buf[offset + 8 : offset + 8 + buf_size].tobytes().rstrip(b"\x00")[:-1]
         return v if fn is None else fn(v)
 
     @staticmethod
     def _fetch_bytearray(
-        buf: memoryview, fn: Callable[[bytearray], Any] | None, *args
+        buf: memoryview, fn: Callable[[bytearray], Any] | None, *args, offset: int = 9
     ) -> Any:
-        buf_size = struct.unpack_from("q", buf, offset=9)[0]
-        v = bytearray(buf[17 : 18 + buf_size].tobytes().rstrip(b"\x00")[:-1])
+        buf_size = struct.unpack_from("q", buf, offset=offset)[0]  # (N + 1) bytes
+        v = bytearray(
+            buf[offset + 8 : offset + 8 + buf_size].tobytes().rstrip(b"\x00")[:-1]
+        )
         return v if fn is None else fn(v)
 
     @staticmethod
     def _fetch_ndarray(
-        buf: memoryview, fn: Callable[[np.ndarray], Any] | None, data_buf_ro: np.ndarray
+        buf: memoryview,
+        fn: Callable[[np.ndarray], Any] | None,
+        data_buf_ro: np.ndarray,
+        offset: int = 9,
     ) -> Any:
         """Always return a copy of the underlying buffer
         Examples (ordered from fastest to slowest, benchmarked with 480x848x3 np.uint8):
@@ -312,10 +337,15 @@ class SharedObject:
 
     @staticmethod
     def _assign_np_metas(
-        buf: memoryview, np_dtype_idx: int, data_ndim: int, data_shape: tuple
+        buf: memoryview,
+        np_dtype_idx: int,
+        data_ndim: int,
+        data_shape: tuple,
+        *,
+        offset: int = 9,
     ):
         struct.pack_into(
-            "=BQ" + "Q" * data_ndim, buf, 9, np_dtype_idx, data_ndim, *data_shape
+            "=BQ" + "Q" * data_ndim, buf, offset, np_dtype_idx, data_ndim, *data_shape
         )
 
     @staticmethod
@@ -323,35 +353,41 @@ class SharedObject:
         pass
 
     @staticmethod
-    def _assign_bool(buf: memoryview, data: bool, *args):
-        buf[9] = data
+    def _assign_bool(buf: memoryview, data: bool, *args, offset: int = 9):
+        buf[offset] = data
 
     @staticmethod
-    def _assign_int(buf: memoryview, data: int, *args):
-        struct.pack_into("q", buf, 9, data)
+    def _assign_int(buf: memoryview, data: int, *args, offset: int = 9):
+        struct.pack_into("q", buf, offset, data)
 
     @staticmethod
-    def _assign_float(buf: memoryview, data: float, *args):
-        struct.pack_into("d", buf, 9, data)
+    def _assign_float(buf: memoryview, data: float, *args, offset: int = 9):
+        struct.pack_into("d", buf, offset, data)
 
     @staticmethod
-    def _assign_complex(buf: memoryview, data: complex, *args):
-        struct.pack_into("2d", buf, 9, data.real, data.imag)
+    def _assign_complex(buf: memoryview, data: complex, *args, offset: int = 9):
+        struct.pack_into("2d", buf, offset, data.real, data.imag)
 
     @staticmethod
-    def _assign_pose(buf: memoryview, pose: Pose, *args):
-        struct.pack_into("7f", buf, 9, *pose.__getstate__())
+    def _assign_pose(buf: memoryview, pose: Pose, *args, offset: int = 9):
+        struct.pack_into("7f", buf, offset, *pose.__getstate__())
 
     @staticmethod
-    def _assign_bytes(buf: memoryview, enc_data: bytes, buf_nbytes: int, *args):
+    def _assign_bytes(
+        buf: memoryview, enc_data: bytes, buf_size: int, *args, offset: int = 9
+    ):
         """
-        :param buf_nbytes: the buffer size (w/ termination byte) (i.e., N+1)
+        :param buf_size: the buffer size (w/ termination byte) (i.e., N+1)
         """
-        struct.pack_into(f"q{buf_nbytes - 17}s", buf, 9, buf_nbytes, enc_data + b"\xff")
+        struct.pack_into(f"q{buf_size}s", buf, offset, buf_size, enc_data + b"\xff")
 
     @staticmethod
     def _assign_ndarray(
-        buf: memoryview, data: np.ndarray, buf_nbytes: int, data_buf: np.ndarray
+        buf: memoryview,
+        data: np.ndarray,
+        buf_size: int,
+        data_buf: np.ndarray,
+        offset: int = 9,
     ):
         data_buf[:] = data
 
