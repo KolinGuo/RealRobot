@@ -133,8 +133,11 @@ class SharedObject:
       For `int` / `float`, 8 bytes data.
       For `complex`, 16 bytes data.
       For `sapien.Pose`, 7*4 = 28 bytes data ([xyz, wxyz], float32).
-      For `str` / `bytes` / `bytearray`, (N + 1) bytes data.
-        N is str / bytes / bytearray length, 1 is for termination (b"\xff").
+      For `str` / `bytes` / `bytearray`, (8 + N + 1) bytes data.
+        - 8 bytes: length of the string / bytes / bytearray buffer (N+1)
+        - N bytes: data buffer
+        - 1 byte: termination byte (b"\xff")
+        - padded zero bytes until length indicated in the first 8 bytes.
       For `np.ndarray`,
 
       - 1 byte: array dtype index, stored as 'B'
@@ -169,9 +172,9 @@ class SharedObject:
     @staticmethod
     def _get_bytes_size(enc_str: bytes, init_size: int) -> int:
         if (sz := len(enc_str) << 1) >= init_size:
-            return sz + 10
+            return sz + 18  # 8 + 1 + 8 + N + 1
         else:
-            return init_size + 10
+            return init_size + 18  # 8 + 1 + 8 + N + 1
 
     _object_sizes = (
         9,  # NoneType
@@ -239,19 +242,22 @@ class SharedObject:
 
     @staticmethod
     def _fetch_str(buf: memoryview, fn: Callable[[str], Any] | None, *args) -> Any:
-        v = buf[9:].tobytes().rstrip(b"\x00")[:-1].decode(_encoding)
+        buf_size = struct.unpack_from("q", buf, offset=9)[0]
+        v = buf[17 : 17 + buf_size].tobytes().rstrip(b"\x00")[:-1].decode(_encoding)
         return v if fn is None else fn(v)
 
     @staticmethod
     def _fetch_bytes(buf: memoryview, fn: Callable[[bytes], Any] | None, *args) -> Any:
-        v = buf[9:].tobytes().rstrip(b"\x00")[:-1]
+        buf_size = struct.unpack_from("q", buf, offset=9)[0]
+        v = buf[17 : 17 + buf_size].tobytes().rstrip(b"\x00")[:-1]
         return v if fn is None else fn(v)
 
     @staticmethod
     def _fetch_bytearray(
         buf: memoryview, fn: Callable[[bytearray], Any] | None, *args
     ) -> Any:
-        v = bytearray(buf[9:].tobytes().rstrip(b"\x00")[:-1])
+        buf_size = struct.unpack_from("q", buf, offset=9)[0]
+        v = bytearray(buf[17 : 18 + buf_size].tobytes().rstrip(b"\x00")[:-1])
         return v if fn is None else fn(v)
 
     @staticmethod
@@ -338,7 +344,10 @@ class SharedObject:
 
     @staticmethod
     def _assign_bytes(buf: memoryview, enc_data: bytes, buf_nbytes: int, *args):
-        struct.pack_into(f"{buf_nbytes - 9}s", buf, 9, enc_data + b"\xff")
+        """
+        :param buf_nbytes: the buffer size (w/ termination byte) (i.e., N+1)
+        """
+        struct.pack_into(f"q{buf_nbytes - 17}s", buf, 9, buf_nbytes, enc_data + b"\xff")
 
     @staticmethod
     def _assign_ndarray(
