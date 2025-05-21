@@ -1,3 +1,4 @@
+# ruff: noqa: UP007
 from __future__ import annotations
 
 import multiprocessing as mp
@@ -19,17 +20,21 @@ from real_robot.utils.multiprocessing import SharedObject
 from real_robot.utils.multiprocessing.shared_object_metas import NP_DTYPES
 
 
-def create_random_ndarray(dtype: Union[NP_DTYPES], shape: tuple[int, ...]):
+def create_random_ndarray(
+    dtype: Union[NP_DTYPES],  # type: ignore
+    shape: tuple[int, ...],
+) -> np.ndarray:
+    rng = np.random.default_rng()
     if np.issubdtype(dtype, np.bool_):
-        data = np.random.randint(2, size=shape, dtype=dtype)
+        data = rng.integers(2, size=shape, dtype=dtype)
     elif np.issubdtype(dtype, np.integer):
         info = np.iinfo(dtype)
         min, max = info.min, info.max
-        data = np.random.randint(min, max + 1, size=shape, dtype=dtype)
+        data = rng.integers(min, max + 1, size=shape, dtype=dtype)
     elif np.issubdtype(dtype, np.inexact):
         info = np.finfo(np.float32)  # cannot sample uniform for float128
         min, max = info.min, info.max
-        data = np.random.uniform(min, max, size=shape).astype(dtype)
+        data = rng.uniform(min, max, size=shape).astype(dtype)
     else:
         raise TypeError(f"Unknown numpy {dtype = }")
     return data
@@ -37,7 +42,9 @@ def create_random_ndarray(dtype: Union[NP_DTYPES], shape: tuple[int, ...]):
 
 def create_random_object(
     object_type_idx: int, bytes_len=50, dtype=np.uint8, shape=(480, 848, 3)
-) -> Union[SharedObject._object_types]:
+) -> Union[SharedObject._object_types]:  # type: ignore
+    rng = np.random.default_rng()
+
     if object_type_idx == 0:  # None.__class__
         return None
     elif object_type_idx == 1:  # bool
@@ -52,8 +59,8 @@ def create_random_object(
         )
     elif object_type_idx == 4:  # sapien.Pose
         return Pose(
-            p=np.random.uniform(-10, 10, size=3),
-            q=euler2quat(*np.random.uniform([0, 0, 0], [np.pi * 2, np.pi, np.pi * 2])),
+            p=rng.uniform(-10, 10, size=3),  # type: ignore
+            q=euler2quat(*rng.uniform([0, 0, 0], [np.pi * 2, np.pi, np.pi * 2])),  # type: ignore
         )
     elif object_type_idx == 5:  # str
         return "".join(random.choices(string.printable, k=bytes_len))
@@ -88,7 +95,7 @@ def benchmark_object_create(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 def benchmark_object_fetch(
@@ -116,7 +123,7 @@ def benchmark_object_fetch(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 def benchmark_object_assign(
@@ -147,7 +154,7 @@ def benchmark_object_assign(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 def benchmark_object_create_ref(
@@ -176,7 +183,7 @@ def benchmark_object_create_ref(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 def benchmark_object_modified(
@@ -204,7 +211,7 @@ def benchmark_object_modified(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 def benchmark_object_triggered(
@@ -232,7 +239,7 @@ def benchmark_object_triggered(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 def benchmark_object_trigger(
@@ -260,7 +267,7 @@ def benchmark_object_trigger(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 def child_benchmark_object_fetch_assign(object_type_idx: int, p_idx: int):
@@ -300,7 +307,7 @@ def benchmark_object_2_proc_fetch_assign(
 
     times_ns = []
     procs = [
-        ctx.Process(
+        ctx.Process(  # type: ignore
             target=child_benchmark_object_fetch_assign, args=(object_type_idx, 0)
         )
         for _ in range(n_iters)
@@ -338,7 +345,7 @@ def benchmark_object_2_proc_fetch_assign(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 def benchmark_object_5_proc_fetch_assign(
@@ -353,7 +360,7 @@ def benchmark_object_5_proc_fetch_assign(
 
     times_ns = []
     procs = [
-        ctx.Process(
+        ctx.Process(  # type: ignore
             target=child_benchmark_object_fetch_assign, args=(object_type_idx, i % 5)
         )
         for i in range(n_iters * 5)
@@ -394,7 +401,7 @@ def benchmark_object_5_proc_fetch_assign(
         out_str = f"{SharedObject._object_types[object_type_idx]}: "
     print(out_str + f"{n_iters} iterations take {total_time_ns / 1e9:.4g} seconds")
 
-    return np.mean(times_ns), np.std(times_ns)
+    return float(np.mean(times_ns)), float(np.std(times_ns))
 
 
 if __name__ == "__main__":
@@ -419,13 +426,19 @@ if __name__ == "__main__":
     n_iters = 500
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_create(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["create"] = (mean_ns, std_ns)
     n_iters = 10
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_create(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["create"] = (mean_ns, std_ns)
 
@@ -443,13 +456,19 @@ if __name__ == "__main__":
     results[f"ndarray {dtype} {shape}"]["fetch"] = (mean_ns, std_ns)
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_fetch(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["fetch"] = (mean_ns, std_ns)
     n_iters = 20
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_fetch(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["fetch"] = (mean_ns, std_ns)
 
@@ -467,13 +486,19 @@ if __name__ == "__main__":
     results[f"ndarray {dtype} {shape}"]["assign"] = (mean_ns, std_ns)
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_assign(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["assign"] = (mean_ns, std_ns)
     n_iters = 50
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_assign(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["assign"] = (mean_ns, std_ns)
 
@@ -493,13 +518,19 @@ if __name__ == "__main__":
     results[f"ndarray {dtype} {shape}"]["create_ref"] = (mean_ns, std_ns)
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_create_ref(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["create_ref"] = (mean_ns, std_ns)
     n_iters = 50
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_create_ref(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["create_ref"] = (mean_ns, std_ns)
 
@@ -517,13 +548,19 @@ if __name__ == "__main__":
     results[f"ndarray {dtype} {shape}"]["modified"] = (mean_ns, std_ns)
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_modified(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["modified"] = (mean_ns, std_ns)
     n_iters = 50
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_modified(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["modified"] = (mean_ns, std_ns)
 
@@ -541,13 +578,19 @@ if __name__ == "__main__":
     results[f"ndarray {dtype} {shape}"]["triggered"] = (mean_ns, std_ns)
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_triggered(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["triggered"] = (mean_ns, std_ns)
     n_iters = 50
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_triggered(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["triggered"] = (mean_ns, std_ns)
 
@@ -565,13 +608,19 @@ if __name__ == "__main__":
     results[f"ndarray {dtype} {shape}"]["trigger"] = (mean_ns, std_ns)
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_trigger(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["trigger"] = (mean_ns, std_ns)
     n_iters = 50
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_trigger(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["trigger"] = (mean_ns, std_ns)
 
@@ -596,13 +645,19 @@ if __name__ == "__main__":
     results[f"ndarray {dtype} {shape}"]["2 proc fetch_assign"] = (mean_ns, std_ns)
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_2_proc_fetch_assign(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["2 proc fetch_assign"] = (mean_ns, std_ns)
     n_iters = 10
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_2_proc_fetch_assign(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["2 proc fetch_assign"] = (mean_ns, std_ns)
 
@@ -627,13 +682,19 @@ if __name__ == "__main__":
     results[f"ndarray {dtype} {shape}"]["5 proc fetch_assign"] = (mean_ns, std_ns)
     dtype, shape = np.float64, (720, 1280, 3)
     mean_ns, std_ns = benchmark_object_5_proc_fetch_assign(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["5 proc fetch_assign"] = (mean_ns, std_ns)
     n_iters = 10
     dtype, shape = np.float64, (10000, 10000)
     mean_ns, std_ns = benchmark_object_5_proc_fetch_assign(
-        7, n_iters=n_iters, dtype=dtype, shape=shape
+        7,
+        n_iters=n_iters,
+        dtype=dtype,  # type: ignore
+        shape=shape,
     )
     results[f"ndarray {dtype} {shape}"]["5 proc fetch_assign"] = (mean_ns, std_ns)
 
@@ -727,4 +788,4 @@ if __name__ == "__main__":
     print(results_diff_table)
 
     # ----- generate results npz ----- #
-    np.savez(cur_dir / "benchmark_shared_object_result.npz", results)
+    np.savez(cur_dir / "benchmark_shared_object_result.npz", results)  # type: ignore
