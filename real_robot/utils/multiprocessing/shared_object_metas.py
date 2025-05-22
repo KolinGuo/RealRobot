@@ -258,7 +258,7 @@ class DictMeta:
     def assign_buf(self, buf: memoryview, *, offset: int = 9) -> None:
         """Assign metadata to buffer"""
         struct.pack_into("Q", buf, offset, self.buf_size - 17)
-        offset = 17
+        offset += 8  # dict, buf_size
         for (key_obj_type_idx, key_meta), (value_obj_type_idx, value_meta) in zip(
             self.keys_metas, self.values_metas
         ):
@@ -306,7 +306,7 @@ class DictMeta:
     def from_buf(cls, buf: memoryview, *, offset: int = 9) -> DictMeta:
         """Construct metadata from buffer"""
         data_buf_size = struct.unpack_from("Q", buf, offset=offset)[0]
-        offset = 17
+        offset += 8  # dict, buf_size
         end = offset + data_buf_size
 
         # FIXME: remove

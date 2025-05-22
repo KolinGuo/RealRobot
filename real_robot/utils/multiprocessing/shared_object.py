@@ -275,7 +275,7 @@ class SharedObject:
         buf: memoryview,
         fn: Callable[[np.ndarray], Any] | None,
         data_buf_ro: np.ndarray,
-        *,
+        *args,
         offset: int = 9,
     ) -> Any:
         """
@@ -312,6 +312,39 @@ class SharedObject:
         else:
             return data_buf_ro.copy()
 
+    @staticmethod
+    def _fetch_dict(
+        buf: memoryview,
+        fn: Callable[[dict], Any] | None,
+        data_buf_ro: np.ndarray,
+        metadata: DictMeta,
+        offset: int = 9,
+    ) -> Any:
+        data = {}
+        offset += 8  # dict, buf_size
+
+        for (key_obj_type_idx, key_meta), (value_obj_type_idx, value_meta) in zip(
+            metadata.keys_metas, metadata.values_metas
+        ):
+            key = SharedObject._fetch_objects[key_obj_type_idx](
+                buf, None, offset=offset + 1
+            )
+            if key_meta:
+                offset += key_meta.buf_size - 8  # mtime
+            else:
+                offset += OBJECT_BUF_SIZES[key_obj_type_idx] - 8  # mtime
+
+            value = SharedObject._fetch_objects[value_obj_type_idx](
+                buf, None, data_buf_ro, offset=offset + 1
+            )
+            if value_meta:
+                offset += value_meta.buf_size - 8  # mtime
+            else:
+                offset += OBJECT_BUF_SIZES[value_obj_type_idx] - 8  # mtime
+            data[key] = value
+
+        return data if fn is None else fn(data)
+
     _fetch_objects = (
         _fetch_None.__func__,  # type: ignore
         _fetch_bool.__func__,  # type: ignore
@@ -323,6 +356,7 @@ class SharedObject:
         _fetch_bytes.__func__,  # type: ignore
         _fetch_bytearray.__func__,  # type: ignore
         _fetch_ndarray.__func__,  # type: ignore
+        _fetch_dict.__func__,  # type: ignore
     )
 
     @staticmethod
@@ -371,6 +405,42 @@ class SharedObject:
     ):
         data_buf[:] = data
 
+    @staticmethod
+    def _assign_dict(
+        buf: memoryview,
+        data: dict,
+        metadata: DictMeta,
+        np_data_buf: np.ndarray,
+        offset: int = 9,
+    ):
+        offset += 8  # dict, buf_size
+
+        for (key, value), (key_obj_type_idx, key_meta), (
+            value_obj_type_idx,
+            value_meta,
+        ) in zip(data.items(), metadata.keys_metas, metadata.values_metas):
+            # FIXME: Do not encode again
+            if isinstance(key, str):
+                key = key.encode(_encoding)  # encode strings into bytes
+            SharedObject._assign_objects[key_obj_type_idx](
+                buf, key, key_meta, offset=offset + 1
+            )
+            if key_meta:
+                offset += key_meta.buf_size - 8  # mtime
+            else:
+                offset += OBJECT_BUF_SIZES[key_obj_type_idx] - 8  # mtime
+
+            # FIXME: Do not encode again
+            if isinstance(value, str):
+                value = value.encode(_encoding)  # encode strings into bytes
+            SharedObject._assign_objects[value_obj_type_idx](
+                buf, value, value_meta, np_data_buf, offset=offset + 1
+            )
+            if value_meta:
+                offset += value_meta.buf_size - 8  # mtime
+            else:
+                offset += OBJECT_BUF_SIZES[value_obj_type_idx] - 8  # mtime
+
     _assign_objects = (
         _assign_None.__func__,  # type: ignore
         _assign_bool.__func__,  # type: ignore
@@ -382,6 +452,7 @@ class SharedObject:
         _assign_bytes.__func__,  # type: ignore
         _assign_bytes.__func__,  # type: ignore
         _assign_ndarray.__func__,  # type: ignore
+        _assign_dict.__func__,  # type: ignore
     )
 
     def __init__(self, name: str, *, data: Union[_object_types] = None, init_size=100):  # type: ignore
@@ -446,7 +517,9 @@ class SharedObject:
             # Create a read-only view for fetch()
             self.np_ndarray_ro = self.np_ndarray.view()
             self.np_ndarray_ro.setflags(write=False)
-        elif self.object_type_idx == 10:  # dict
+        elif (
+            self.object_type_idx == 10 and self.metadata.ndarray_meta  # type: ignore
+        ):  # dict
             self.np_ndarray = np.ndarray(
                 self.metadata.ndarray_meta.shape,  # type: ignore
                 dtype=NP_DTYPES[self.metadata.ndarray_meta.dtype_idx],  # type: ignore
@@ -543,7 +616,7 @@ class SharedObject:
         # Update modified timestamp
         self.mtime = struct.unpack_from("Q", self.shm.buf, offset=0)[0]
         data = self._fetch_objects[self.object_type_idx](
-            self.shm.buf, fn, self.np_ndarray_ro
+            self.shm.buf, fn, self.np_ndarray_ro, self.metadata
         )
         self._readers_lock.release()
         return data
