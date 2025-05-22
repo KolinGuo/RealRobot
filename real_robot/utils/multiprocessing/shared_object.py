@@ -187,6 +187,8 @@ class SharedObject:
             metadata = BytesMeta.from_buf(shm.buf)
         elif object_type_idx == 9:  # np.ndarray
             metadata = NDArrayMeta.from_buf(shm.buf)
+        elif object_type_idx == 10:  # dict
+            metadata = DictMeta.from_buf(shm.buf)
         return object_type_idx, nbytes, metadata, mtime
 
     _fetch_fn_type = "Callable[[Union[_object_types]], Any] | None"
@@ -273,9 +275,11 @@ class SharedObject:
         buf: memoryview,
         fn: Callable[[np.ndarray], Any] | None,
         data_buf_ro: np.ndarray,
+        *,
         offset: int = 9,
     ) -> Any:
-        """Always return a copy of the underlying buffer
+        """
+        Always return a copy of the underlying buffer
         Examples (ordered from fastest to slowest, benchmarked with 480x848x3 np.uint8):
 
             # Apply operation only
@@ -438,6 +442,16 @@ class SharedObject:
                 dtype=NP_DTYPES[self.metadata.dtype_idx],  # type: ignore
                 buffer=self.shm.buf,
                 offset=self.metadata.ndim * 8 + 18,  # type: ignore
+            )
+            # Create a read-only view for fetch()
+            self.np_ndarray_ro = self.np_ndarray.view()
+            self.np_ndarray_ro.setflags(write=False)
+        elif self.object_type_idx == 10:  # dict
+            self.np_ndarray = np.ndarray(
+                self.metadata.ndarray_meta.shape,  # type: ignore
+                dtype=NP_DTYPES[self.metadata.ndarray_meta.dtype_idx],  # type: ignore
+                buffer=self.shm.buf,
+                offset=self.metadata.ndarray_offset,  # type: ignore
             )
             # Create a read-only view for fetch()
             self.np_ndarray_ro = self.np_ndarray.view()
@@ -624,6 +638,8 @@ class SharedDynamicObject(SharedObject):
             metadata = BytesMeta.from_buf(shm.buf)
         elif object_type_idx == 9:  # np.ndarray
             metadata = NDArrayMeta.from_buf(shm.buf)
+        elif object_type_idx == 10:  # dict
+            metadata = DictMeta.from_buf(shm.buf)
         return object_type_idx, nbytes, metadata, mtime
 
     def __init__(self, *args, **kwargs):

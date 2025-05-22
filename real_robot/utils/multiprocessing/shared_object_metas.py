@@ -178,6 +178,13 @@ class DictMeta:
     values_metas: list[tuple[int, META_TYPES]]
     """List of meta for values, as a tuple of (value_object_type_idx, value Metadata)"""
 
+    # FIXME: remove this hack that only supports 1 ndarray
+    ndarray_offset: int
+    """Offset for ndarray"""
+
+    # FIXME: remove this hack that only supports 1 ndarray
+    ndarray_meta: NDArrayMeta | None
+
     @staticmethod
     def preprocess_data(
         data: Union[_object_types],  # type: ignore  # noqa: F821
@@ -213,6 +220,10 @@ class DictMeta:
 
     @classmethod
     def from_data(cls, data: dict, init_size=100) -> DictMeta:
+        # FIXME: remove
+        ndarray_offset = 0
+        ndarray_meta = None
+
         buf_size = 17  # 8 + 1 + 8
         keys_metas = []
         values_metas = []
@@ -229,7 +240,20 @@ class DictMeta:
             buf_size += nbytes - 8  # 8 bytes mtime
             values_metas.append((object_type_idx, metadata))
 
-        return cls(buf_size=buf_size, keys_metas=keys_metas, values_metas=values_metas)
+            # FIXME: remove
+            if isinstance(metadata, NDArrayMeta):
+                if ndarray_meta:
+                    raise NotImplementedError("Only support 1 ndarray in dict")
+                ndarray_offset = buf_size - metadata.data_buf_size
+                ndarray_meta = metadata
+
+        return cls(
+            buf_size=buf_size,
+            keys_metas=keys_metas,
+            values_metas=values_metas,
+            ndarray_offset=ndarray_offset,
+            ndarray_meta=ndarray_meta,
+        )
 
     def assign_buf(self, buf: memoryview, *, offset: int = 9) -> None:
         """Assign metadata to buffer"""
@@ -285,6 +309,10 @@ class DictMeta:
         offset = 17
         end = offset + data_buf_size
 
+        # FIXME: remove
+        ndarray_offset = 0
+        ndarray_meta = None
+
         keys_metas = []
         values_metas = []
         while offset < end:
@@ -293,10 +321,19 @@ class DictMeta:
             offset, value_obj_type_idx, metadata = cls._from_buf(buf, offset=offset)
             values_metas.append((value_obj_type_idx, metadata))
 
+            # FIXME: remove
+            if isinstance(metadata, NDArrayMeta):
+                if ndarray_meta:
+                    raise NotImplementedError("Only support 1 ndarray in dict")
+                ndarray_offset = offset - metadata.data_buf_size
+                ndarray_meta = metadata
+
         return cls(
             buf_size=data_buf_size + 17,
             keys_metas=keys_metas,
             values_metas=values_metas,
+            ndarray_offset=ndarray_offset,
+            ndarray_meta=ndarray_meta,
         )
 
 
