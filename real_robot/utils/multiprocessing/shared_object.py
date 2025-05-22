@@ -143,7 +143,7 @@ class SharedObject:
       For `complex`, 16 bytes data.
       For `sapien.Pose`, 7*4 = 28 bytes data ([xyz, wxyz], float32).
       For `str` / `bytes` / `bytearray`, (8 + N + 1) bytes data.
-        - 8 bytes: length of the string / bytes / bytearray buffer (N+1)
+        - 8 bytes: size of the string / bytes / bytearray buffer (N + 1)
         - N bytes: data buffer
         - 1 byte: termination byte (b"\xff")
         - padded zero bytes until length indicated in the first 8 bytes.
@@ -175,7 +175,7 @@ class SharedObject:
         # tuple,  # 10
         # list,  # 11
         # set,  # 12
-        # dict,  # 13
+        dict,  # 13
     )
 
     @staticmethod
@@ -480,6 +480,9 @@ class SharedObject:
             nbytes = metadata.buf_size
         elif object_type_idx == 9:  # np.ndarray
             metadata = NDArrayMeta.from_data(data)
+            nbytes = metadata.buf_size
+        elif object_type_idx == 10:  # dict
+            metadata = DictMeta.from_data(data, self.init_size)
             nbytes = metadata.buf_size
         else:
             raise ValueError(f"Unknown {object_type_idx = }")
