@@ -32,7 +32,11 @@ def create_random_ndarray(
     return data
 
 
-def create_random_object(object_type_idx: int) -> Union[SharedObject._object_types]:  # type: ignore
+def create_random_object(
+    object_type_idx: int,
+    *,
+    data_sample: Union[SharedObject._object_types] = None,  # type: ignore
+) -> Union[SharedObject._object_types]:  # type: ignore
     rng = np.random.default_rng()
 
     if object_type_idx == SharedObject._object_types.index(None.__class__):
@@ -74,13 +78,36 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
         bytes_len = random.randrange(51)
         return bytearray(random.randbytes(bytes_len))
     elif object_type_idx == SharedObject._object_types.index(np.ndarray):  # np.ndarray
-        size = NDARRAY_NBYTES_LIMIT + 1
-        while size > NDARRAY_NBYTES_LIMIT:
-            ndim = random.randint(1, 5)
-            shape = tuple(random.randint(1, 1000) for _ in range(ndim))
-            dtype = random.choice(NP_DTYPES)
-            size = dtype().itemsize * np.prod(shape, dtype=np.uint64)  # type: ignore
+        if data_sample is not None:
+            dtype, shape = data_sample.dtype, data_sample.shape
+        else:
+            size = NDARRAY_NBYTES_LIMIT + 1
+            while size > NDARRAY_NBYTES_LIMIT:
+                ndim = random.randint(1, 5)
+                shape = tuple(random.randint(1, 1000) for _ in range(ndim))
+                dtype = random.choice(NP_DTYPES)
+                size = dtype().itemsize * np.prod(shape, dtype=np.uint64)  # type: ignore
         return create_random_ndarray(dtype, shape)  # type: ignore
+    elif object_type_idx == SharedObject._object_types.index(dict):  # dict
+        has_np_ndarray = False
+        data = {}
+        if data_sample is not None:
+            for k, v in data_sample.items():
+                data[
+                    create_random_object(SharedObject._object_types.index(type(k)))
+                ] = create_random_object(
+                    SharedObject._object_types.index(type(v)), data_sample=v
+                )
+        else:
+            for _ in range(random.randrange(10)):
+                key_obj_type_idx = random.randrange(8)  # No bytearray, np.ndarray
+                key = create_random_object(key_obj_type_idx)
+                value_obj_type_idx = random.randrange(9 if has_np_ndarray else 10)
+                if value_obj_type_idx == SharedObject._object_types.index(np.ndarray):
+                    has_np_ndarray = True
+                value = create_random_object(value_obj_type_idx)
+                data[key] = value
+        return data
     else:
         raise ValueError(f"Unknown {object_type_idx = }")
 

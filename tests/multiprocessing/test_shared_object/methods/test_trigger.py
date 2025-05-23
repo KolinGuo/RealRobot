@@ -1,13 +1,7 @@
 import uuid
 
-import numpy as np
-
 from real_robot.utils.multiprocessing import SharedObject
-from test_shared_object.utils import (
-    check_object_equal,
-    create_random_ndarray,
-    create_random_object,
-)
+from test_shared_object.utils import check_object_equal, create_random_object
 
 
 class TestTrigger:
@@ -35,10 +29,7 @@ class TestTrigger:
             assert not so2.triggered
             check_object_equal(so, so2, data)
 
-            if object_type_idx == SharedObject._object_types.index(np.ndarray):
-                new_data = create_random_ndarray(data.dtype, data.shape)
-            else:
-                new_data = create_random_object(object_type_idx)
+            new_data = create_random_object(object_type_idx, data_sample=data)
             so2.trigger()
             assert so2.triggered
             assert not so2.triggered
@@ -51,10 +42,7 @@ class TestTrigger:
             assert not so2.triggered
             check_object_equal(so, so2, new_data)
 
-            if object_type_idx == SharedObject._object_types.index(np.ndarray):
-                new_data = create_random_ndarray(data.dtype, data.shape)
-            else:
-                new_data = create_random_object(object_type_idx)
+            new_data = create_random_object(object_type_idx, data_sample=data)
             so.trigger()
             assert so.triggered
             assert not so.triggered
@@ -77,10 +65,7 @@ class TestTrigger:
                 assert not so2.triggered
                 check_object_equal(so, so2, data)
 
-            if object_type_idx == SharedObject._object_types.index(np.ndarray):
-                new_data = create_random_ndarray(data.dtype, data.shape)
-            else:
-                new_data = create_random_object(object_type_idx)
+            new_data = create_random_object(object_type_idx, data_sample=data)
             so.trigger()
             assert so.triggered
             assert not so.triggered
@@ -96,10 +81,7 @@ class TestTrigger:
                 check_object_equal(so, so2, new_data)
 
             for so2 in sos:
-                if object_type_idx == SharedObject._object_types.index(np.ndarray):
-                    new_data = create_random_ndarray(data.dtype, data.shape)
-                else:
-                    new_data = create_random_object(object_type_idx)
+                new_data = create_random_object(object_type_idx, data_sample=data)
                 so2.trigger()
                 assert so2.triggered
                 assert not so2.triggered

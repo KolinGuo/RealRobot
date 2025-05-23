@@ -360,7 +360,7 @@ class SharedObject:
     )
 
     @staticmethod
-    def _assign_None(*args):
+    def _assign_None(*args, offset: int = 9):
         pass
 
     @staticmethod

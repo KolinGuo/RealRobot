@@ -26,11 +26,10 @@ class TestDict:
             "timestamp": time.time_ns(),
             "image": rng.integers(0, 256, size=(848, 480, 3), dtype=np.uint8),
         }
-        so_name = uuid.uuid4().hex
-        so = SharedObject(so_name, data=data)
+        so = SharedObject(uuid.uuid4().hex, data=data)
         check_object_equal(so, data)
 
-        so2 = SharedObject(so_name)
+        so2 = SharedObject(so.name)
         check_object_equal(so, so2, data)
 
     def test_assign(self):

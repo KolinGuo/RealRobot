@@ -3,11 +3,7 @@ import uuid
 import numpy as np
 
 from real_robot.utils.multiprocessing import SharedObject
-from test_shared_object.utils import (
-    check_object_equal,
-    create_random_ndarray,
-    create_random_object,
-)
+from test_shared_object.utils import check_object_equal, create_random_object
 
 
 class TestModified:
@@ -22,10 +18,7 @@ class TestModified:
             assert not so2.modified
             check_object_equal(so, so2, data)
 
-            if object_type_idx == SharedObject._object_types.index(np.ndarray):
-                new_data = create_random_ndarray(data.dtype, data.shape)
-            else:
-                new_data = create_random_object(object_type_idx)
+            new_data = create_random_object(object_type_idx, data_sample=data)
             so2.assign(new_data)
             assert so.modified
             assert not so2.modified
@@ -35,10 +28,7 @@ class TestModified:
             assert not so2.modified
             check_object_equal(so, so2, new_data)
 
-            if object_type_idx == SharedObject._object_types.index(np.ndarray):
-                new_data = create_random_ndarray(data.dtype, data.shape)
-            else:
-                new_data = create_random_object(object_type_idx)
+            new_data = create_random_object(object_type_idx, data_sample=data)
             so.assign(new_data)
             assert not so.modified
             assert so2.modified
@@ -58,10 +48,7 @@ class TestModified:
                 assert not so2.modified
                 check_object_equal(so, so2, data)
 
-            if object_type_idx == SharedObject._object_types.index(np.ndarray):
-                new_data = create_random_ndarray(data.dtype, data.shape)
-            else:
-                new_data = create_random_object(object_type_idx)
+            new_data = create_random_object(object_type_idx, data_sample=data)
             so.assign(new_data)
             assert not so.modified
             so.fetch()
@@ -73,10 +60,7 @@ class TestModified:
                 check_object_equal(so, so2, new_data)
 
             for so2 in sos:
-                if object_type_idx == SharedObject._object_types.index(np.ndarray):
-                    new_data = create_random_ndarray(data.dtype, data.shape)
-                else:
-                    new_data = create_random_object(object_type_idx)
+                new_data = create_random_object(object_type_idx, data_sample=data)
                 so2.assign(new_data)
                 assert not so2.modified
                 assert so.modified

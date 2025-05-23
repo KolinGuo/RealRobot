@@ -212,7 +212,7 @@ class TestNDArray:
                 ndim = random.randint(1, 5)
                 shape = tuple(random.randint(1, 1000) for _ in range(ndim))
                 dtype = random.choice(NP_DTYPES)
-                size = dtype().itemsize * np.prod(shape, dtype=np.uint64)
+                size = dtype().itemsize * np.prod(shape, dtype=np.uint64)  # type: ignore
 
             for i in range(10):
                 data = create_random_ndarray(dtype, shape)  # type: ignore
@@ -247,7 +247,7 @@ class TestNDArray:
                 ndim = random.randint(1, 5)
                 shape = tuple(random.randint(1, 1000) for _ in range(ndim))
                 dtype = random.choice(NP_DTYPES)
-                size = dtype().itemsize * np.prod(shape, dtype=np.uint64)
+                size = dtype().itemsize * np.prod(shape, dtype=np.uint64)  # type: ignore
 
             data = create_random_ndarray(dtype, shape)  # type: ignore
 
