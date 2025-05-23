@@ -85,34 +85,45 @@ def create_random_object(object_type_idx: int) -> Union[SharedObject._object_typ
         raise ValueError(f"Unknown {object_type_idx = }")
 
 
-def check_object_equal(obj1: SharedObject, obj2: SharedObject, data=None):
-    assert obj1.object_type_idx == obj2.object_type_idx
-    if data is not None:
-        assert type(data) is SharedObject._object_types[obj1.object_type_idx]
+def check_object_equal(
+    obj1: SharedObject | Union[SharedObject._object_types],  # type: ignore
+    obj2: SharedObject | Union[SharedObject._object_types],  # type: ignore
+    data: Union[SharedObject._object_types] = None,  # type: ignore
+):
+    if isinstance(obj1, SharedObject):
+        obj1 = obj1.fetch()
+    if isinstance(obj2, SharedObject):
+        obj2 = obj2.fetch()
 
-    if obj1.object_type_idx == SharedObject._object_types.index(None.__class__):
-        assert obj1.fetch() is None and obj2.fetch() is None
-    elif obj1.object_type_idx in [
-        SharedObject._object_types.index(bool),
-        SharedObject._object_types.index(int),
-        SharedObject._object_types.index(float),
-        SharedObject._object_types.index(complex),
-        SharedObject._object_types.index(str),
-        SharedObject._object_types.index(bytes),
-        SharedObject._object_types.index(bytearray),
-    ]:
-        assert obj1.fetch() == obj2.fetch()
+    # Check object type
+    assert type(obj1) is type(obj2)
+    if data is not None:
+        assert type(data) is type(obj1)
+
+    # Check object value
+    if isinstance(
+        obj1, (None.__class__, bool, int, float, complex, str, bytes, bytearray)
+    ):
+        assert obj1 == obj2
         if data is not None:
-            assert obj1.fetch() == data
-    elif obj1.object_type_idx == 5:  # sapien.Pose
-        np.testing.assert_equal(
-            obj1.fetch().__getstate__(), obj2.fetch().__getstate__()
-        )
+            assert obj1 == data
+    elif type(obj1).__name__ == "Pose" and type(obj1).__module__.startswith(
+        "sapien"
+    ):  # sapien.Pose
+        np.testing.assert_equal(obj1.__getstate__(), obj2.__getstate__())
         if data is not None:
-            np.testing.assert_equal(obj1.fetch().__getstate__(), data.__getstate__())
-    elif obj1.object_type_idx == SharedObject._object_types.index(np.ndarray):
-        np.testing.assert_equal(obj1.fetch(), obj2.fetch())
+            np.testing.assert_equal(obj1.__getstate__(), data.__getstate__())
+    elif isinstance(obj1, np.ndarray):
+        np.testing.assert_equal(obj1, obj2)
         if data is not None:
-            np.testing.assert_equal(obj1.fetch(), data)
+            np.testing.assert_equal(obj1, data)
+    elif isinstance(obj1, dict):
+        for (key1, value1), (key2, value2) in zip(obj1.items(), obj2.items()):  # type: ignore
+            check_object_equal(key1, key2)
+            check_object_equal(value1, value2)
+        if data is not None:
+            for (key1, value1), (key2, value2) in zip(obj1.items(), data.items()):  # type: ignore
+                check_object_equal(key1, key2)
+                check_object_equal(value1, value2)
     else:
         raise ValueError(f"Unknown {obj1.object_type_idx = }")
