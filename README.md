@@ -90,7 +90,8 @@ following `UserWarning` when `Ctrl-C` your program:
   - [ ] `list`
   - [ ] `set`
   - [ ] `dict`
-- [ ] Add string length? A 8-bytes length of strings is `2**(8*8-1)-1 = 8 exa bytes`, which should be enough.
+    - [x] [Preliminary] Support only 1 `np.ndarray` as values
+- [x] Add string length? A 8-bytes length of strings is `2**(8*8-1)-1 = 8 exa bytes`, which should be enough.
 - [ ] Ensure compound data types works with recursive compound structure
 - [ ] Add prefixes for all `SharedMemory` created.
 - [ ] Proper clean up zombie `SharedMemory` before or after multiprocessing code
