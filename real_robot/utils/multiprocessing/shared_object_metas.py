@@ -276,7 +276,7 @@ class DictMeta:
             offset += 1
             if value_meta:
                 value_meta.assign_buf(buf, offset=offset)
-                offset = value_meta.buf_size - 9  # mtime + object_type_idx
+                offset += value_meta.buf_size - 9  # mtime + object_type_idx
             else:
                 offset += (
                     OBJECT_BUF_SIZES[value_obj_type_idx] - 9  # mtime + object_type_idx
