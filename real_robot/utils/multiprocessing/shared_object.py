@@ -50,6 +50,15 @@ import numpy as np
 
 from real_robot import LOGGER
 
+from .shared_object_metas import (
+    META_TYPES,
+    NP_DTYPES,
+    OBJECT_BUF_SIZES,
+    BytesMeta,
+    DictMeta,
+    NDArrayMeta,
+)
+
 try:
     from sapien import Pose  # type: ignore
 except ModuleNotFoundError:
@@ -131,95 +140,146 @@ class SharedObject:
       For `NoneType`, data area is ignored.
       For `bool`, 1 byte data.
       For `int` / `float`, 8 bytes data.
+      For `complex`, 16 bytes data.
       For `sapien.Pose`, 7*4 = 28 bytes data ([xyz, wxyz], float32).
-      For `str` / `bytes`, (N + 1) bytes data, N is str / bytes length,
-      1 is for termination.
+      For `str` / `bytes` / `bytearray`, (8 + N + 1) bytes data.
+        - 8 bytes: size of the string / bytes / bytearray buffer (N + 1)
+        - N bytes: data buffer
+        - 1 byte: termination byte (b"\xff")
+        - padded zero bytes until length indicated in the first 8 bytes.
       For `np.ndarray`,
 
       - 1 byte: array dtype index, stored as 'B'
       - 8 bytes: array ndim, stored as 'Q'
       - (K * 8) bytes: array shape for each dimension, stored as 'Q'
       - D bytes: array data buffer
+
+      For compound data types (`tuple` / `list` / `set` / `dict`),
+      the buffer is organized as follows:
+
+      -
     """
 
-    # object_type_idx:     0          1     2     3     4     5     6        7
-    _object_types = (None.__class__, bool, int, float, Pose, str, bytes, np.ndarray)
-
-    @staticmethod
-    def _get_bytes_size(enc_str: bytes, init_size: int) -> int:
-        if (sz := len(enc_str) << 1) >= init_size:
-            return sz + 10
-        else:
-            return init_size + 10
-
-    _object_sizes = (
-        9,  # NoneType
-        10,  # bool
-        17,  # int
-        17,  # float
-        37,  # sapien.Pose
-        _get_bytes_size.__func__,  # str # type: ignore
-        _get_bytes_size.__func__,  # bytes # type: ignore
-        lambda array, ndim: array.nbytes + ndim * 8 + 18,  # ndarray
+    # object_type_idx:
+    _object_types = (
+        None.__class__,  # 0
+        bool,  # 1
+        int,  # 2
+        float,  # 3
+        complex,  # 4
+        Pose,  # 5
+        str,  # 6
+        bytes,  # 7
+        bytearray,  # 8
+        np.ndarray,  # 9
+        # tuple,  # 10
+        # list,  # 11
+        # set,  # 12
+        dict,  # 13
     )
 
     @staticmethod
-    def _fetch_metas(shm: SharedMemory) -> tuple:
+    def _fetch_metas(shm: SharedMemory) -> tuple[int, int, META_TYPES, int]:
         nbytes = shm._size  # type: ignore
         mtime, object_type_idx = struct.unpack_from("QB", shm.buf, offset=0)
-        np_metas = ()
-        if object_type_idx == 7:  # np.ndarray
-            np_metas = SharedObject._fetch_np_metas(shm.buf)
-        return nbytes, mtime, object_type_idx, np_metas
-
-    @staticmethod
-    def _fetch_np_metas(buf) -> tuple:
-        np_dtype_idx, data_ndim = struct.unpack_from("=BQ", buf, offset=9)
-        data_shape = struct.unpack_from("Q" * data_ndim, buf, offset=18)
-        return np_dtype_idx, data_ndim, data_shape
+        metadata = None
+        if 6 <= object_type_idx <= 8:  # str / bytes / bytearray
+            metadata = BytesMeta.from_buf(shm.buf)
+        elif object_type_idx == 9:  # np.ndarray
+            metadata = NDArrayMeta.from_buf(shm.buf)
+        elif object_type_idx == 10:  # dict
+            metadata = DictMeta.from_buf(shm.buf)
+        return object_type_idx, nbytes, metadata, mtime
 
     _fetch_fn_type = "Callable[[Union[_object_types]], Any] | None"
 
     @staticmethod
-    def _fetch_None(buf, fn: Callable[[None.__class__], Any] | None, *args) -> Any:
+    def _fetch_None(
+        buf: memoryview,
+        fn: Callable[[None.__class__], Any] | None,
+        *args,
+        offset: int = 9,
+    ) -> Any:
         return None if fn is None else fn(None)
 
     @staticmethod
-    def _fetch_bool(buf, fn: Callable[[bool], Any] | None, *args) -> Any:
-        return bool(buf[9]) if fn is None else fn(bool(buf[9]))
+    def _fetch_bool(
+        buf: memoryview, fn: Callable[[bool], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        return bool(buf[offset]) if fn is None else fn(bool(buf[offset]))
 
     @staticmethod
-    def _fetch_int(buf, fn: Callable[[int], Any] | None, *args) -> Any:
-        v = struct.unpack_from("q", buf, offset=9)[0]
+    def _fetch_int(
+        buf: memoryview, fn: Callable[[int], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        v = struct.unpack_from("q", buf, offset=offset)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_float(buf, fn: Callable[[float], Any] | None, *args) -> Any:
-        v = struct.unpack_from("d", buf, offset=9)[0]
+    def _fetch_float(
+        buf: memoryview, fn: Callable[[float], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        v = struct.unpack_from("d", buf, offset=offset)[0]
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_pose(buf, fn: Callable[[Pose], Any] | None, *args) -> Any:
+    def _fetch_complex(
+        buf: memoryview, fn: Callable[[complex], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        v = complex(*struct.unpack_from("2d", buf, offset=offset))
+        return v if fn is None else fn(v)
+
+    @staticmethod
+    def _fetch_pose(
+        buf: memoryview, fn: Callable[[Pose], Any] | None, *args, offset: int = 9
+    ) -> Any:
         """Fetch and construct a sapien.Pose (using __setstate__)"""
         pose = Pose.__new__(Pose)
-        pose.__setstate__(struct.unpack_from("7f", buf, offset=9))
+        pose.__setstate__(struct.unpack_from("7f", buf, offset=offset))
         return pose if fn is None else fn(pose)
 
     @staticmethod
-    def _fetch_str(buf, fn: Callable[[str], Any] | None, *args) -> Any:
-        v = buf[9:].tobytes().rstrip(b"\x00")[:-1].decode(_encoding)
+    def _fetch_str(
+        buf: memoryview, fn: Callable[[str], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        # TODO: does it need to unpack buf_size
+        data_buf_size = struct.unpack_from("Q", buf, offset=offset)[0]  # (N + 1) bytes
+        v = (
+            buf[offset + 8 : offset + 8 + data_buf_size]
+            .tobytes()
+            .rstrip(b"\x00")[:-1]
+            .decode(_encoding)
+        )
         return v if fn is None else fn(v)
 
     @staticmethod
-    def _fetch_bytes(buf, fn: Callable[[bytes], Any] | None, *args) -> Any:
-        v = buf[9:].tobytes().rstrip(b"\x00")[:-1]
+    def _fetch_bytes(
+        buf: memoryview, fn: Callable[[bytes], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        data_buf_size = struct.unpack_from("Q", buf, offset=offset)[0]  # (N + 1) bytes
+        v = buf[offset + 8 : offset + 8 + data_buf_size].tobytes().rstrip(b"\x00")[:-1]
+        return v if fn is None else fn(v)
+
+    @staticmethod
+    def _fetch_bytearray(
+        buf: memoryview, fn: Callable[[bytearray], Any] | None, *args, offset: int = 9
+    ) -> Any:
+        data_buf_size = struct.unpack_from("Q", buf, offset=offset)[0]  # (N + 1) bytes
+        v = bytearray(
+            buf[offset + 8 : offset + 8 + data_buf_size].tobytes().rstrip(b"\x00")[:-1]
+        )
         return v if fn is None else fn(v)
 
     @staticmethod
     def _fetch_ndarray(
-        buf, fn: Callable[[np.ndarray], Any] | None, data_buf_ro: np.ndarray
+        buf: memoryview,
+        fn: Callable[[np.ndarray], Any] | None,
+        data_buf_ro: np.ndarray,
+        *args,
+        offset: int = 9,
     ) -> Any:
-        """Always return a copy of the underlying buffer
+        """
+        Always return a copy of the underlying buffer
         Examples (ordered from fastest to slowest, benchmarked with 480x848x3 np.uint8):
 
             # Apply operation only
@@ -252,78 +312,147 @@ class SharedObject:
         else:
             return data_buf_ro.copy()
 
+    @staticmethod
+    def _fetch_dict(
+        buf: memoryview,
+        fn: Callable[[dict], Any] | None,
+        data_buf_ro: np.ndarray,
+        metadata: DictMeta,
+        offset: int = 9,
+    ) -> Any:
+        data = {}
+        offset += 8  # dict, buf_size
+
+        for (key_obj_type_idx, key_meta), (value_obj_type_idx, value_meta) in zip(
+            metadata.keys_metas, metadata.values_metas
+        ):
+            key = SharedObject._fetch_objects[key_obj_type_idx](
+                buf, None, offset=offset + 1
+            )
+            if key_meta:
+                offset += key_meta.buf_size - 8  # mtime
+            else:
+                offset += OBJECT_BUF_SIZES[key_obj_type_idx] - 8  # mtime
+
+            value = SharedObject._fetch_objects[value_obj_type_idx](
+                buf, None, data_buf_ro, offset=offset + 1
+            )
+            if value_meta:
+                offset += value_meta.buf_size - 8  # mtime
+            else:
+                offset += OBJECT_BUF_SIZES[value_obj_type_idx] - 8  # mtime
+            data[key] = value
+
+        return data if fn is None else fn(data)
+
     _fetch_objects = (
         _fetch_None.__func__,  # type: ignore
         _fetch_bool.__func__,  # type: ignore
         _fetch_int.__func__,  # type: ignore
         _fetch_float.__func__,  # type: ignore
+        _fetch_complex.__func__,  # type: ignore
         _fetch_pose.__func__,  # type: ignore
         _fetch_str.__func__,  # type: ignore
         _fetch_bytes.__func__,  # type: ignore
+        _fetch_bytearray.__func__,  # type: ignore
         _fetch_ndarray.__func__,  # type: ignore
+        _fetch_dict.__func__,  # type: ignore
     )
 
     @staticmethod
-    def _assign_np_metas(buf, np_dtype_idx: int, data_ndim: int, data_shape: tuple):
-        struct.pack_into(
-            "=BQ" + "Q" * data_ndim, buf, 9, np_dtype_idx, data_ndim, *data_shape
-        )
-
-    @staticmethod
-    def _assign_None(*args):
+    def _assign_None(*args, offset: int = 9):
         pass
 
     @staticmethod
-    def _assign_bool(buf, data: bool, *args):
-        buf[9] = data
+    def _assign_bool(buf: memoryview, data: bool, *args, offset: int = 9):
+        buf[offset] = data
 
     @staticmethod
-    def _assign_int(buf, data: int, *args):
-        struct.pack_into("q", buf, 9, data)
+    def _assign_int(buf: memoryview, data: int, *args, offset: int = 9):
+        struct.pack_into("q", buf, offset, data)
 
     @staticmethod
-    def _assign_float(buf, data: float, *args):
-        struct.pack_into("d", buf, 9, data)
+    def _assign_float(buf: memoryview, data: float, *args, offset: int = 9):
+        struct.pack_into("d", buf, offset, data)
 
     @staticmethod
-    def _assign_pose(buf, pose: Pose, *args):
-        struct.pack_into("7f", buf, 9, *pose.__getstate__())
+    def _assign_complex(buf: memoryview, data: complex, *args, offset: int = 9):
+        struct.pack_into("2d", buf, offset, data.real, data.imag)
 
     @staticmethod
-    def _assign_bytes(buf, enc_data: bytes, buf_nbytes: int, *args):
-        struct.pack_into(f"{buf_nbytes - 9}s", buf, 9, enc_data + b"\xff")
+    def _assign_pose(buf: memoryview, pose: Pose, *args, offset: int = 9):
+        struct.pack_into("7f", buf, offset, *pose.__getstate__())
 
     @staticmethod
-    def _assign_ndarray(buf, data: np.ndarray, buf_nbytes: int, data_buf: np.ndarray):
+    def _assign_bytes(
+        buf: memoryview, enc_data: bytes, metadata: BytesMeta, *args, offset: int = 9
+    ):
+        """
+        :param metadata: metadata.data_buf_size is the bytes buffer size
+            (w/ termination byte) (i.e., N + 1)
+        """
+        struct.pack_into(
+            f"{metadata.data_buf_size}s", buf, offset + 8, enc_data + b"\xff"
+        )
+
+    @staticmethod
+    def _assign_ndarray(
+        buf: memoryview,
+        data: np.ndarray,
+        metadata: NDArrayMeta,
+        data_buf: np.ndarray,
+        offset: int = 9,
+    ):
         data_buf[:] = data
+
+    @staticmethod
+    def _assign_dict(
+        buf: memoryview,
+        data: dict,
+        metadata: DictMeta,
+        np_data_buf: np.ndarray,
+        offset: int = 9,
+    ):
+        offset += 8  # dict, buf_size
+
+        for (key, value), (key_obj_type_idx, key_meta), (
+            value_obj_type_idx,
+            value_meta,
+        ) in zip(data.items(), metadata.keys_metas, metadata.values_metas):
+            # FIXME: Do not encode again
+            if isinstance(key, str):
+                key = key.encode(_encoding)  # encode strings into bytes
+            SharedObject._assign_objects[key_obj_type_idx](
+                buf, key, key_meta, offset=offset + 1
+            )
+            if key_meta:
+                offset += key_meta.buf_size - 8  # mtime
+            else:
+                offset += OBJECT_BUF_SIZES[key_obj_type_idx] - 8  # mtime
+
+            # FIXME: Do not encode again
+            if isinstance(value, str):
+                value = value.encode(_encoding)  # encode strings into bytes
+            SharedObject._assign_objects[value_obj_type_idx](
+                buf, value, value_meta, np_data_buf, offset=offset + 1
+            )
+            if value_meta:
+                offset += value_meta.buf_size - 8  # mtime
+            else:
+                offset += OBJECT_BUF_SIZES[value_obj_type_idx] - 8  # mtime
 
     _assign_objects = (
         _assign_None.__func__,  # type: ignore
         _assign_bool.__func__,  # type: ignore
         _assign_int.__func__,  # type: ignore
         _assign_float.__func__,  # type: ignore
+        _assign_complex.__func__,  # type: ignore
         _assign_pose.__func__,  # type: ignore
         _assign_bytes.__func__,  # type: ignore
         _assign_bytes.__func__,  # type: ignore
+        _assign_bytes.__func__,  # type: ignore
         _assign_ndarray.__func__,  # type: ignore
-    )
-    _np_dtypes = (
-        np.bool_,
-        np.int8,
-        np.uint8,
-        np.int16,
-        np.uint16,
-        np.int32,
-        np.uint32,
-        np.int64,
-        np.uint64,
-        np.float16,
-        np.float32,
-        np.float64,
-        np.float128,
-        np.complex64,
-        np.complex128,
-        np.complex256,
+        _assign_dict.__func__,  # type: ignore
     )
 
     def __init__(self, name: str, *, data: Union[_object_types] = None, init_size=100):  # type: ignore
@@ -346,7 +475,7 @@ class SharedObject:
                           The buffer is expanded with exponential growth rate of 2
         """
         self.init_size = init_size
-        data, object_type_idx, nbytes, np_metas = self._preprocess_data(data)
+        data, object_type_idx, nbytes, metadata = self._preprocess_data(data)
 
         try:
             self.shm = SharedMemory(name)
@@ -359,32 +488,43 @@ class SharedObject:
         self._writer_lock = WriterLock(self.shm._fd)  # type: ignore
 
         if created:
-            self.nbytes = nbytes
-            self.mtime = time.time_ns()
             self.object_type_idx = object_type_idx
-            self.np_metas = np_metas
+            self.nbytes = nbytes
+            self.metadata = metadata
+            self.mtime = time.time_ns()
             # Assign object_type, np_metas to init object meta info
             self._writer_lock.acquire()
             self.shm.buf[8] = object_type_idx
-            if object_type_idx == 7:  # np.ndarray
-                self._assign_np_metas(self.shm.buf, *np_metas)
+            if metadata is not None:
+                metadata.assign_buf(self.shm.buf)
             self._writer_lock.release()
         else:
             self._readers_lock.acquire()
-            self.nbytes, self.mtime, self.object_type_idx, self.np_metas = (
+            self.object_type_idx, self.nbytes, self.metadata, self.mtime = (
                 self._fetch_metas(self.shm)
             )
             self._readers_lock.release()
 
         # Create np.ndarray here to save frequent np.ndarray construction
         self.np_ndarray, self.np_ndarray_ro = None, None
-        if self.object_type_idx == 7:  # np.ndarray
-            np_dtype_idx, data_ndim, data_shape = self.np_metas
+        if self.object_type_idx == 9:  # np.ndarray
             self.np_ndarray = np.ndarray(
-                data_shape,
-                dtype=self._np_dtypes[np_dtype_idx],
+                self.metadata.shape,  # type: ignore
+                dtype=NP_DTYPES[self.metadata.dtype_idx],  # type: ignore
                 buffer=self.shm.buf,
-                offset=data_ndim * 8 + 18,
+                offset=self.metadata.ndim * 8 + 18,  # type: ignore
+            )
+            # Create a read-only view for fetch()
+            self.np_ndarray_ro = self.np_ndarray.view()
+            self.np_ndarray_ro.setflags(write=False)
+        elif (
+            self.object_type_idx == 10 and self.metadata.ndarray_meta  # type: ignore
+        ):  # dict
+            self.np_ndarray = np.ndarray(
+                self.metadata.ndarray_meta.shape,  # type: ignore
+                dtype=NP_DTYPES[self.metadata.ndarray_meta.dtype_idx],  # type: ignore
+                buffer=self.shm.buf,
+                offset=self.metadata.ndarray_offset,  # type: ignore
             )
             # Create a read-only view for fetch()
             self.np_ndarray_ro = self.np_ndarray.view()
@@ -394,15 +534,18 @@ class SharedObject:
         if data is not None:
             if not created:
                 LOGGER.warning("Implicitly overwriting data of {!r}", self)
-            self._assign(data, object_type_idx, nbytes, np_metas)
+            self._assign(data, object_type_idx, nbytes, metadata)
 
-    def _preprocess_data(self, data: Union[_object_types]) -> tuple:  # type: ignore
+    def _preprocess_data(
+        self,
+        data: Union[_object_types],  # type: ignore
+    ) -> tuple[Union[_object_types], int, int, META_TYPES]:  # type: ignore
         """Preprocess object data and return useful informations
 
         :return data: processed data. Only changed for str (=> encoded bytes)
         :return object_type_idx: object type index
         :return nbytes: number of bytes needed for SharedMemory
-        :return np_metas: numpy meta info, (np_dtype_idx, data_ndim, data_shape)
+        :return metadata: metadata info
         """
         try:
             object_type_idx = self._object_types.index(type(data))
@@ -410,27 +553,28 @@ class SharedObject:
             raise TypeError(f"Not supported object_type: {type(data)}") from e
 
         # Get shared memory size in bytes
-        np_metas = ()
-        if object_type_idx <= 4:  # NoneType, bool, int, float, sapien.Pose
-            nbytes = self._object_sizes[object_type_idx]
-        elif object_type_idx == 5:  # str
+        metadata = None
+        if object_type_idx <= 5:  # NoneType, bool, int, float, complex, sapien.Pose
+            nbytes = OBJECT_BUF_SIZES[object_type_idx]
+        elif object_type_idx == 6:  # str
             data = data.encode(_encoding)  # encode strings into bytes
-            nbytes = self._object_sizes[object_type_idx](data, self.init_size)
-        elif object_type_idx == 6:  # bytes
-            nbytes = self._object_sizes[object_type_idx](data, self.init_size)
-        elif object_type_idx == 7:  # np.ndarray
-            try:
-                np_dtype_idx = self._np_dtypes.index(data.dtype)
-            except ValueError as e:
-                raise TypeError(f"Not supported numpy dtype: {data.dtype}") from e
-            data_ndim = data.ndim
-            np_metas = (np_dtype_idx, data_ndim, data.shape)
-
-            nbytes = self._object_sizes[object_type_idx](data, data_ndim)
+            # TODO: Change self.init_size to str
+            # TODO: Allow filling up to the full data_buf_size w/o expanding on assign()
+            metadata = BytesMeta.from_data(data, self.init_size)
+            nbytes = metadata.buf_size
+        elif 7 <= object_type_idx <= 8:  # bytes, bytearray
+            metadata = BytesMeta.from_data(data, self.init_size)
+            nbytes = metadata.buf_size
+        elif object_type_idx == 9:  # np.ndarray
+            metadata = NDArrayMeta.from_data(data)
+            nbytes = metadata.buf_size
+        elif object_type_idx == 10:  # dict
+            metadata = DictMeta.from_data(data, self.init_size)
+            nbytes = metadata.buf_size
         else:
             raise ValueError(f"Unknown {object_type_idx = }")
 
-        return data, object_type_idx, nbytes, np_metas
+        return data, object_type_idx, nbytes, metadata
 
     @property
     def modified(self) -> bool:
@@ -472,7 +616,7 @@ class SharedObject:
         # Update modified timestamp
         self.mtime = struct.unpack_from("Q", self.shm.buf, offset=0)[0]
         data = self._fetch_objects[self.object_type_idx](
-            self.shm.buf, fn, self.np_ndarray_ro
+            self.shm.buf, fn, self.np_ndarray_ro, self.metadata
         )
         self._readers_lock.release()
         return data
@@ -490,7 +634,7 @@ class SharedObject:
         return self._assign(*self._preprocess_data(data))
 
     def _assign(
-        self, data, object_type_idx: int, nbytes: int, np_metas: tuple
+        self, data, object_type_idx: int, nbytes: int, metadata: META_TYPES
     ) -> SharedObject:
         """Inner function for assigning data (protected by writer lock)
         For SharedObject, object_type_idx, nbytes, and np_metas cannot be modified
@@ -498,13 +642,13 @@ class SharedObject:
         if (
             object_type_idx != self.object_type_idx
             or nbytes > self.nbytes
-            or np_metas != self.np_metas
+            or metadata != self.metadata
         ):
             raise BufferError(
                 f"Casting object type (new={self._object_types[object_type_idx]}, "
                 f"old={self._object_types[self.object_type_idx]}) OR "
                 f"Buffer overflow (new={nbytes} > {self.nbytes}=old) OR "
-                f"Changed numpy meta (new={np_metas}, old={self.np_metas}) in {self!r}"
+                f"Changed metadata (new={metadata}, old={self.metadata}) in {self!r}"
             )
 
         self._writer_lock.acquire()
@@ -514,7 +658,7 @@ class SharedObject:
 
         # Assign object data
         self._assign_objects[self.object_type_idx](
-            self.shm.buf, data, self.nbytes, self.np_ndarray
+            self.shm.buf, data, self.metadata, self.np_ndarray
         )
         self._writer_lock.release()
         return self
@@ -557,15 +701,19 @@ class SharedDynamicObject(SharedObject):
     """
 
     @staticmethod
-    def _fetch_metas(shm: SharedMemory) -> tuple:
+    def _fetch_metas(shm: SharedMemory) -> tuple[int, int, META_TYPES, int]:
         nbytes = (
             shm._mmap.size()  # type: ignore
         )  # _mmap size will be updated by os.ftruncate()
         mtime, object_type_idx = struct.unpack_from("QB", shm.buf, offset=0)
-        np_metas = ()
-        if object_type_idx == 7:  # np.ndarray
-            np_metas = SharedObject._fetch_np_metas(shm.buf)
-        return nbytes, mtime, object_type_idx, np_metas
+        metadata = None
+        if 6 <= object_type_idx <= 8:  # str / bytes / bytearray
+            metadata = BytesMeta.from_buf(shm.buf)
+        elif object_type_idx == 9:  # np.ndarray
+            metadata = NDArrayMeta.from_buf(shm.buf)
+        elif object_type_idx == 10:  # dict
+            metadata = DictMeta.from_buf(shm.buf)
+        return object_type_idx, nbytes, metadata, mtime
 
     def __init__(self, *args, **kwargs):
         raise NotImplementedError("Implementation not complete")
@@ -577,7 +725,7 @@ class SharedDynamicObject(SharedObject):
         """
         self._readers_lock.acquire()
         # Fetch shm info
-        self.nbytes, self.mtime, self.object_type_idx, self.np_metas = (
+        self.object_type_idx, self.nbytes, self.metadata, self.mtime = (
             self._fetch_metas(self.shm)
         )
 
@@ -592,16 +740,16 @@ class SharedDynamicObject(SharedObject):
         :param reallocate: whether to force reallocation
         """
         # Check object type
-        data, object_type_idx, nbytes, np_metas = self._preprocess_data(data)  # noqa: F841
+        data, object_type_idx, nbytes, metadata = self._preprocess_data(data)  # noqa: F841
 
         self._writer_lock.acquire()
         # Fetch shm info
-        self.nbytes, self.mtime, self.object_type_idx, self.np_metas = (
+        self.object_type_idx, self.nbytes, self.metadata, self.mtime = (
             self._fetch_metas(self.shm)
         )
 
         # Reallocate if necessary
-        if reallocate or nbytes > self.nbytes or np_metas != self.np_metas:
+        if reallocate or nbytes > self.nbytes or metadata != self.metadata:
             # NOTE: Cannot use unlink() to reallocate SharedMemory
             # Otherwise, existing SharedObject instances to the same SharedMemory
             # will not be updated

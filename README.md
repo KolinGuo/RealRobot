@@ -22,6 +22,12 @@ If you need to install the optional `xarm` dependency, you must install from Git
 python3 -m pip install -U real_robot[all,xarm]@git+https://github.com/KolinGuo/RealRobot.git
 ```
 
+Run unittests with
+```bash
+python3 -m pip install -U pytest
+python3 -m pytest [--collect-only]
+```
+
 ---
 
 Calibrated camera poses are stored in [real_robot/assets/hec_camera_poses/](real_robot/assets/hec_camera_poses) and
@@ -75,6 +81,20 @@ following `UserWarning` when `Ctrl-C` your program:
   ```bash
   python3 -m real_robot.tools.convert_rosbag_to_frames <bag_path>
   ```
+
+## TODO
+- Add type support for `SharedObject`
+  - [x] `complex`
+  - [x] `bytearray`
+  - [ ] `tuple`
+  - [ ] `list`
+  - [ ] `set`
+  - [ ] `dict`
+- [ ] Add string length? A 8-bytes length of strings is `2**(8*8-1)-1 = 8 exa bytes`, which should be enough.
+- [ ] Ensure compound data types works with recursive compound structure
+- [ ] Add prefixes for all `SharedMemory` created.
+- [ ] Proper clean up zombie `SharedMemory` before or after multiprocessing code
+
 
 ## Notes
 
