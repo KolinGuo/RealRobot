@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import os
 from collections import OrderedDict
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Sequence, SupportsFloat, Union
+from typing import Any, SupportsFloat, Union
 
 import gymnasium as gym
 import numpy as np
-import pyrealsense2 as rs
 
 from ..agents import XArm7
 from ..sensors.camera import (

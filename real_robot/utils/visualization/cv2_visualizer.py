@@ -27,7 +27,7 @@ class CV2Visualizer:
 
     images: list[np.ndarray] = []  # images being visualized
     # images boundaries [[[x_min, x_max+1], [y_min, y_max+1]]]
-    image_boundaries: np.ndarray = np.empty((0, 2, 2), dtype=np.floating)
+    image_boundaries: np.ndarray = np.empty((0, 2, 2), dtype=float)
 
     class DrawingMode(Enum):
         """Drawing mode when draw_with_mouse()"""

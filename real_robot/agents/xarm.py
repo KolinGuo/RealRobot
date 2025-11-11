@@ -9,7 +9,6 @@ import math
 from collections import OrderedDict
 
 import numpy as np
-import pyrealsense2 as rs
 from gymnasium import spaces
 from sapien import Pose
 from scipy.spatial.transform import Rotation

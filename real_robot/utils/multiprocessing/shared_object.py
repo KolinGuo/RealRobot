@@ -55,7 +55,6 @@ from .shared_object_metas import (
     NP_DTYPES,
     OBJECT_BUF_SIZES,
     BytesMeta,
-    DictMeta,
     NDArrayMeta,
 )
 

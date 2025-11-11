@@ -1,5 +1,4 @@
 import os
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -8,7 +7,7 @@ from sapien import Pose
 
 from real_robot import ASSET_DIR
 from real_robot.sensors.camera import CALIB_CAMERA_POSES, Camera, CameraConfig
-from real_robot.utils.camera import depth2xyz, transform_points
+from real_robot.utils.camera import depth2xyz
 from real_robot.utils.realsense import get_connected_rs_devices
 from real_robot.utils.visualization import Visualizer
 
